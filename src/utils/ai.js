@@ -187,6 +187,7 @@ export function generateRoutine(opts) {
 
     return {
       name: cats.map(c => labelOf(c)).join(" + "),
+      cats,
       base: plan,
       t: null,
       kind: "pesas",
@@ -195,6 +196,83 @@ export function generateRoutine(opts) {
 
   return sessions;
 }
+
+// ─── Build session from custom categories (for plan editor) ──────
+// Like generateRoutine but for a single day with given cats array
+export function buildSessionFromCats(cats, opts = {}) {
+  const { goal = "musculo", time = 60, place = "gym",
+          availableEq = GYM_DEFAULT, priorities = [] } = opts;
+
+  const repSchemeMap = {
+    fuerza: { s: 5, r: 5, rest: 150 },
+    grasa:  { s: 3, r: 15, rest: 45 },
+    musculo: { s: 4, r: 10, rest: 75 },
+  };
+  const repScheme = repSchemeMap[goal] || repSchemeMap.musculo;
+
+  const exercisesForDay = [];
+  cats.forEach(cat => {
+    const pool = EX.filter(e =>
+      e.cat === cat &&
+      canDo(e, availableEq) &&
+      (place === "gym" || e.home_friendly)
+    );
+    if (pool.length === 0) return;
+
+    pool.sort((a, b) => {
+      const sA = (a.stimulus_score || 3) + (a.hypertrophy_eff || 3) + (priorities.includes(cat) ? 2 : 0);
+      const sB = (b.stimulus_score || 3) + (b.hypertrophy_eff || 3) + (priorities.includes(cat) ? 2 : 0);
+      return sB - sA;
+    });
+
+    const compounds = pool.filter(e => e.type === "comp" || e.type === "mach");
+    const isolations = pool.filter(e => e.type === "iso" || e.type === "body");
+
+    const picked = [];
+    if (compounds[0]) picked.push(compounds[0]);
+    if (compounds[1] && cats.length === 1) picked.push(compounds[1]);
+    if (isolations[0] && picked.length < (priorities.includes(cat) ? 3 : 2)) picked.push(isolations[0]);
+
+    picked.forEach(p => {
+      const overlap = exercisesForDay.find(e => e.pattern && e.pattern === p.pattern && e.cat === p.cat);
+      if (!overlap) exercisesForDay.push(p);
+    });
+  });
+
+  let plan = exercisesForDay.map(e => ({
+    id: e.id, sets: repScheme.s, reps: repScheme.r, rest: repScheme.rest
+  }));
+  while (plan.length > 0 && estimateMin(plan) > time) plan.pop();
+
+  return {
+    name: cats.map(c => labelOf(c)).join(" + "),
+    cats,
+    base: plan,
+    t: null,
+    kind: "pesas",
+  };
+}
+
+// ─── Infer cats from an existing session's exercises ────────────
+export function inferCats(session) {
+  if (session.cats && session.cats.length > 0) return session.cats;
+  const seen = new Set();
+  (session.base || []).forEach(item => {
+    const ex = byId(item.id);
+    if (ex?.cat) seen.add(ex.cat);
+  });
+  return [...seen];
+}
+
+// Publicly accessible label map
+export const CAT_LABELS_MAP = {
+  pecho:"Pecho", espalda:"Espalda", hombro:"Hombro", trapecio:"Trapecio",
+  biceps:"Bíceps", triceps:"Tríceps", antebrazo:"Antebrazo",
+  cuadriceps:"Cuádriceps", isquios:"Isquios", gluteos:"Glúteos",
+  abductores:"Abductores", aductores:"Aductores", gemelos:"Gemelos",
+  core:"Core", abdominales:"Abdominales", oblicuos:"Oblicuos", lumbar:"Lumbar",
+  cuello:"Cuello", cardio:"Cardio", movilidad:"Movilidad", estiramiento:"Estiramientos",
+};
 
 function estimateMin(plan) {
   let m = 0;

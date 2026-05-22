@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useApp } from "../store/AppContext";
 import { EX, TECH, CARDIO, SPLITS, byId, cById, primary } from "../data/exercises";
 import { buildSchedule, buildSession, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
-import { recommendSubstitutes, generateRoutine, analyzeRoutine, GYM_DEFAULT, HOME_DEFAULT } from "../utils/ai";
+import { recommendSubstitutes, generateRoutine, buildSessionFromCats, inferCats, analyzeRoutine, GYM_DEFAULT, HOME_DEFAULT, CAT_LABELS_MAP } from "../utils/ai";
 
 const C = {
   card:  { background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 16, marginBottom: 12 },
@@ -106,6 +106,153 @@ function PRModal({ exercise, history, onSave, onClose }) {
           disabled={!weight || !reps}
           style={{ ...C.btnA, opacity: !weight || !reps ? .5 : 1 }}>
           Guardar PR
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Plan Editor (customize muscle groups per day) ─────────────────
+const ALL_CATS = [
+  ["pecho","💪 Pecho"],["espalda","🦾 Espalda"],["hombro","⬆️ Hombro"],
+  ["trapecio","🔺 Trapecio"],["biceps","💪 Bíceps"],["triceps","👊 Tríceps"],
+  ["antebrazo","🤜 Antebrazo"],["cuadriceps","🦵 Cuádriceps"],["isquios","🦵 Isquios"],
+  ["gluteos","🍑 Glúteos"],["abductores","↔️ Abductores"],["aductores","↔️ Aductores"],
+  ["gemelos","🦶 Gemelos"],["core","🎯 Core"],["abdominales","⚡ Abdominales"],
+  ["oblicuos","〽️ Oblicuos"],["lumbar","🔙 Lumbar"],["cardio","🏃 Cardio"],
+];
+
+function PlanEditor({ seq, training, onSave, onClose }) {
+  // Start with current cats per day (inferred if not stored)
+  const [days, setDays] = useState(() =>
+    seq.map(s => ({ name: s.name, cats: inferCats(s) }))
+  );
+  const [addingTo, setAddingTo] = useState(null); // index of day we're adding to
+  const [dragging, setDragging] = useState(null); // { dayIdx, cat }
+
+  const removeFromDay = (dayIdx, cat) => {
+    setDays(d => d.map((day, i) =>
+      i !== dayIdx ? day : { ...day, cats: day.cats.filter(c => c !== cat) }
+    ));
+  };
+
+  const addToDay = (dayIdx, cat) => {
+    setDays(d => d.map((day, i) => {
+      if (i !== dayIdx) return day;
+      if (day.cats.includes(cat)) return day;
+      return { ...day, cats: [...day.cats, cat] };
+    }));
+    setAddingTo(null);
+  };
+
+  const moveToDay = (fromDayIdx, cat, toDayIdx) => {
+    setDays(d => d.map((day, i) => {
+      if (i === fromDayIdx) return { ...day, cats: day.cats.filter(c => c !== cat) };
+      if (i === toDayIdx && !day.cats.includes(cat)) return { ...day, cats: [...day.cats, cat] };
+      return day;
+    }));
+  };
+
+  const save = () => {
+    const equipment = training.equipment && training.equipment.length > 0
+      ? training.equipment : (training.place === "casa" ? HOME_DEFAULT : GYM_DEFAULT);
+    const newSeq = days.map(day => buildSessionFromCats(day.cats, {
+      goal: training.goal, time: training.time,
+      place: training.place, availableEq: equipment,
+    }));
+    onSave(newSeq);
+  };
+
+  const catLabel = (c) => CAT_LABELS_MAP[c] || c;
+  const usedCats = new Set(days.flatMap(d => d.cats));
+
+  return (
+    <div style={{ background: "#080d08", minHeight: "100vh" }}>
+      {/* Header */}
+      <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.06)", position: "sticky", top: 0, background: "#080d08", zIndex: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase" }}>Personalizar plan</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>Elige tus grupos musculares</div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
+      </div>
+
+      <div style={{ padding: "12px 16px 120px" }}>
+        <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+          Toca <span style={{ color: "#ef4444" }}>✕</span> para quitar un grupo. Toca <span style={{ color: "#4ade80" }}>+</span> para añadir. Mantén una chip para moverla a otro día.
+        </p>
+
+        {days.map((day, di) => (
+          <div key={di} style={{ ...C.card, marginBottom: 12, position: "relative" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                Día {di + 1}
+              </div>
+              <div style={{ fontSize: 10, color: "#475569" }}>{day.cats.length} grupo{day.cats.length !== 1 ? "s" : ""}</div>
+            </div>
+
+            {/* Muscle group chips */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+              {day.cats.length === 0 && (
+                <span style={{ fontSize: 12, color: "#475569", padding: "6px 0" }}>Sin grupos asignados</span>
+              )}
+              {day.cats.map(cat => (
+                <div key={cat}
+                  draggable
+                  onDragStart={() => setDragging({ dayIdx: di, cat })}
+                  onDragEnd={() => setDragging(null)}
+                  style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 20, padding: "6px 10px 6px 12px", cursor: "grab" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#c4b5fd" }}>{catLabel(cat)}</span>
+                  <button onClick={() => removeFromDay(di, cat)}
+                    style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "0 0 0 2px", fontFamily: "inherit" }}>✕</button>
+                </div>
+              ))}
+
+              {/* Drop zone when dragging from another day */}
+              {dragging && dragging.dayIdx !== di && (
+                <div onDragOver={e => e.preventDefault()}
+                  onDrop={() => { moveToDay(dragging.dayIdx, dragging.cat, di); setDragging(null); }}
+                  style={{ border: "2px dashed rgba(167,139,250,0.4)", borderRadius: 20, padding: "6px 14px", fontSize: 12, color: "#a78bfa" }}>
+                  Soltar aquí
+                </div>
+              )}
+
+              {/* Add button */}
+              <button onClick={() => setAddingTo(addingTo === di ? null : di)}
+                style={{ background: "rgba(74,222,128,0.1)", border: "1px dashed rgba(74,222,128,0.3)", borderRadius: 20, padding: "6px 12px", fontSize: 12, color: "#4ade80", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                + Añadir
+              </button>
+            </div>
+
+            {/* Category picker for this day */}
+            {addingTo === di && (
+              <div style={{ marginTop: 10, padding: 10, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", marginBottom: 8 }}>AÑADIR GRUPO MUSCULAR</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {ALL_CATS.map(([cat, label]) => {
+                    const alreadyIn = day.cats.includes(cat);
+                    return (
+                      <button key={cat} onClick={() => !alreadyIn && addToDay(di, cat)} disabled={alreadyIn}
+                        style={{ background: alreadyIn ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "5px 10px", fontSize: 11, color: alreadyIn ? "#334155" : "#e2e8f0", cursor: alreadyIn ? "default" : "pointer", fontFamily: "inherit" }}>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <p style={{ fontSize: 11, color: "#475569", textAlign: "center", marginBottom: 16 }}>
+          Los ejercicios se regeneran automáticamente según los grupos que elijas.
+        </p>
+      </div>
+
+      {/* Save bar */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 16px calc(env(safe-area-inset-bottom) + 12px)", background: "#0a130a", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        <button onClick={save} style={{ ...C.btnA, background: "linear-gradient(135deg,#a78bfa,#7c3aed)", color: "#fff" }}>
+          ✓ Guardar y regenerar ejercicios
         </button>
       </div>
     </div>
@@ -348,7 +495,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 export default function Entrenamiento({ onNavigate }) {
   const { state, setState, markTrained, todayLog } = useApp();
   const training = state.training;
-  const [view, setView] = useState("home"); // home | playing
+  const [view, setView] = useState("home"); // home | playing | plan-editor
   const [kcalInput, setKcalInput] = useState("");
   const [showKcal, setShowKcal] = useState(false);
 
@@ -424,6 +571,17 @@ export default function Entrenamiento({ onNavigate }) {
     );
   }
 
+  if (view === "plan-editor") {
+    return (
+      <PlanEditor seq={seq} training={training}
+        onSave={(newSeq) => {
+          setState(s => ({ ...s, training: { ...s.training, seq: newSeq, cursor: 0 } }));
+          setView("home");
+        }}
+        onClose={() => setView("home")} />
+    );
+  }
+
   return (
     <div style={{ background: "#080d08", minHeight: "100vh" }}>
       <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 10px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
@@ -468,7 +626,13 @@ export default function Entrenamiento({ onNavigate }) {
 
         {/* Sequence */}
         <div style={C.card}>
-          <span style={C.lbl}>Tu secuencia de entrenos</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <span style={C.lbl}>Tu secuencia de entrenos</span>
+            <button onClick={() => setView("plan-editor")}
+              style={{ fontSize: 11, color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 9, padding: "5px 11px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, whiteSpace: "nowrap" }}>
+              ✏️ Personalizar
+            </button>
+          </div>
           <p style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>No es por días fijos. Avanza cuando completes cada sesión.</p>
           {seq.map((e, i) => {
             const pos = cursor % seq.length;
