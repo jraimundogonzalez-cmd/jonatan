@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useApp } from "../store/AppContext";
 import { EX, TECH, CARDIO, SPLITS, byId, cById, primary } from "../data/exercises";
 import { buildSchedule, buildSession, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
+import { recommendSubstitutes, generateRoutine, analyzeRoutine, GYM_DEFAULT, HOME_DEFAULT } from "../utils/ai";
 
 const C = {
   card:  { background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 16, marginBottom: 12 },
@@ -111,10 +112,60 @@ function PRModal({ exercise, history, onSave, onClose }) {
   );
 }
 
+// ── Swap (substitute exercise) Modal ──────────────────────────────
+function SwapModal({ exerciseId, training, onPick, onClose }) {
+  const availableEq = training.equipment && training.equipment.length > 0
+    ? training.equipment
+    : (training.place === "casa" ? HOME_DEFAULT : GYM_DEFAULT);
+  const suggestions = recommendSubstitutes(exerciseId, {
+    availableEq, location: training.place, maxResults: 8,
+  });
+  const original = byId(exerciseId);
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.78)", zIndex: 220, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
+        <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Sustituir ejercicio · IA</div>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", margin: 0 }}>{original?.n}</h2>
+            <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>Alternativas según tu equipo y objetivo</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
+        </div>
+
+        {suggestions.length === 0 ? (
+          <p style={{ color: "#64748b", fontSize: 13, textAlign: "center", padding: "20px 0" }}>
+            No encontramos alternativas con tu equipo disponible.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {suggestions.map(({ ex, reason, score }) => (
+              <div key={ex.id} onClick={() => { onPick(ex.id); onClose(); }}
+                style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "12px 14px", cursor: "pointer", background: "rgba(255,255,255,0.025)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{ex.n}</div>
+                  <div style={{ fontSize: 10, color: "#f59e0b", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{score}</div>
+                </div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>{ex.m?.join(" · ")}</div>
+                {reason && <div style={{ fontSize: 11, color: "#4ade80" }}>{reason}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ ...C.btnS, width: "100%", marginTop: 18 }}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Session Player ────────────────────────────────────────────────
 function SessionPlayer({ entry, training, onComplete, onExit }) {
   const { logPR, state } = useApp();
-  const plan = buildSession(entry, training);
+  const initialPlan = buildSession(entry, training);
+  const [plan, setPlan] = useState(initialPlan);
   const [done, setDone] = useState([]);
   const [restIdx, setRestIdx] = useState(null);
   const [restTime, setRestTime] = useState(0);
@@ -122,6 +173,10 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const [techModal, setTechModal] = useState(null);
   const [swapModal, setSwapModal] = useState(null);
   const intervalRef = useRef(null);
+
+  const swapExercise = (idx, newId) => {
+    setPlan(p => p.map((x, i) => i === idx ? { ...x, id: newId } : x));
+  };
 
   const startRest = (secs) => {
     setRestTime(secs);
@@ -216,6 +271,10 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
                     style={{ fontSize: 11, color: "#64748b", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>
                     ℹ Técnica
                   </button>
+                  <button onClick={() => setSwapModal({ idx, id: x.id })}
+                    style={{ fontSize: 11, color: "#a78bfa", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                    🔄 Sustituir
+                  </button>
                 </div>
               </div>
               <button onClick={() => toggleDone(idx)}
@@ -274,6 +333,13 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
           </div>
         </div>
       )}
+
+      {/* Swap (substitute exercise) Modal */}
+      {swapModal && (
+        <SwapModal exerciseId={swapModal.id} training={training}
+          onPick={(newId) => swapExercise(swapModal.idx, newId)}
+          onClose={() => setSwapModal(null)} />
+      )}
     </div>
   );
 }
@@ -293,8 +359,33 @@ export default function Entrenamiento({ onNavigate }) {
   const nextWO    = seq[cursor % seq.length];
 
   const finishSetup = (answers) => {
-    const newTraining = buildSchedule({ ...training, ...answers, streak: 0, hist: {}, done: [], chat: [] });
+    const merged = { ...training, ...answers, streak: 0, hist: {}, done: [], chat: [] };
+    // Set default equipment based on place if not configured
+    if (!merged.equipment || merged.equipment.length === 0) {
+      merged.equipment = merged.place === "casa" ? HOME_DEFAULT : GYM_DEFAULT;
+    }
+    const newTraining = buildSchedule(merged);
     setState(s => ({ ...s, training: newTraining }));
+  };
+
+  const regenerateWithAI = () => {
+    if (!window.confirm("¿Generar una rutina nueva con IA basada en tu equipo, objetivo y tiempo?")) return;
+    const equipment = training.equipment && training.equipment.length > 0
+      ? training.equipment
+      : (training.place === "casa" ? HOME_DEFAULT : GYM_DEFAULT);
+    const sessions = generateRoutine({
+      goal: training.goal,
+      days: training.days,
+      time: training.time,
+      level: training.level,
+      place: training.place,
+      availableEq: equipment,
+      priorities: [],
+    });
+    setState(s => ({
+      ...s,
+      training: { ...s.training, seq: sessions, cursor: 0, weekStarted: false, done: [], streak: 0, equipment }
+    }));
   };
 
   const completeWorkout = () => {
@@ -411,9 +502,15 @@ export default function Entrenamiento({ onNavigate }) {
           </div>
         )}
 
+        {/* AI regenerate */}
+        <button onClick={regenerateWithAI}
+          style={{ ...C.btnA, background: "linear-gradient(135deg,#a78bfa,#7c3aed)", color: "#fff", marginTop: 4 }}>
+          🤖 Generar rutina inteligente con IA
+        </button>
+
         {/* Reset */}
         <button onClick={() => { if (window.confirm("¿Regenerar el plan desde cero?")) { finishSetup({ place: training.place, goal: training.goal, days: training.days, time: training.time, level: training.level }); }}}
-          style={{ ...C.btnS, width: "100%", marginTop: 4 }}>🔄 Regenerar secuencia</button>
+          style={{ ...C.btnS, width: "100%", marginTop: 8 }}>🔄 Regenerar plantilla clásica</button>
       </div>
     </div>
   );
