@@ -20,8 +20,17 @@ class ErrorBoundary extends Component {
   }
 }
 
-function UpdateBanner() {
-  const [show, setShow] = useState(false);
+const doHardReload = () => {
+  if ("caches" in window) {
+    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload(true));
+  } else {
+    window.location.reload(true);
+  }
+};
+
+function useUpdateCheck() {
+  const [updateReady, setUpdateReady] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     const currentScript = document.querySelector('script[src*="assets/index-"]');
@@ -34,15 +43,38 @@ function UpdateBanner() {
         const res = await fetch("/jonatan/index.html?_=" + Date.now(), { cache: "no-store" });
         const html = await res.text();
         const servedHash = html.match(/assets\/index-([^.]+)\.js/)?.[1];
-        if (servedHash && servedHash !== currentHash) setShow(true);
+        if (servedHash && servedHash !== currentHash) setUpdateReady(true);
       } catch {}
     };
 
-    const t = setTimeout(check, 10000); // first check after 10s
-    const interval = setInterval(check, 5 * 60 * 1000); // then every 5min
-    return () => { clearTimeout(t); clearInterval(interval); };
+    const t = setTimeout(check, 8000);
+    const interval = setInterval(check, 5 * 60 * 1000);
+
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => { clearTimeout(t); clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
 
+  const checkNow = async () => {
+    setChecking(true);
+    const currentScript = document.querySelector('script[src*="assets/index-"]');
+    const currentHash = currentScript?.src.match(/index-([^.]+)\.js/)?.[1];
+    try {
+      const res = await fetch("/jonatan/index.html?_=" + Date.now(), { cache: "no-store" });
+      const html = await res.text();
+      const servedHash = html.match(/assets\/index-([^.]+)\.js/)?.[1];
+      if (servedHash && servedHash !== currentHash) { setUpdateReady(true); }
+      else { setChecking(false); }
+    } catch { setChecking(false); }
+  };
+
+  return { updateReady, checking, checkNow };
+}
+
+function UpdateBanner({ updateReady }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => { if (updateReady) setShow(true); }, [updateReady]);
   if (!show) return null;
   return (
     <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, zIndex: 200, padding: "0 12px", paddingTop: "env(safe-area-inset-top)" }}>
@@ -50,8 +82,7 @@ function UpdateBanner() {
         <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>🔄 Nueva versión disponible</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShow(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "5px 10px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Ignorar</button>
-          <button onClick={() => { if ("caches" in window) caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload()); else window.location.reload(); }}
-            style={{ background: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", color: "#16a34a", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={doHardReload} style={{ background: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", color: "#16a34a", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
             Actualizar
           </button>
         </div>
@@ -90,12 +121,13 @@ const C = {
 function Shell() {
   const [tab, setTab] = useState("hoy");
   const { state } = useApp();
+  const { updateReady, checking, checkNow } = useUpdateCheck();
 
   const accentColor = C.accent[tab] || "#4ade80";
 
   return (
     <div style={{ minHeight: "100dvh", background: "#080d08", fontFamily: "'DM Sans', sans-serif", color: "#e2e8f0", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", position: "relative" }}>
-      <UpdateBanner />
+      <UpdateBanner updateReady={updateReady} />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -115,7 +147,7 @@ function Shell() {
       {/* Screens */}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 72 }}>
         <ErrorBoundary key={tab}>
-          {tab === "hoy"     && <Hoy     onNavigate={setTab} accentColor={accentColor} />}
+          {tab === "hoy"     && <Hoy     onNavigate={setTab} accentColor={accentColor} updateReady={updateReady} checking={checking} onCheckUpdate={checkNow} />}
           {tab === "nutri"   && <Nutricion accentColor={C.accent.nutri} />}
           {tab === "entreno" && <Entrenamiento accentColor={C.accent.entreno} onNavigate={setTab} />}
           {tab === "progreso"&& <Progreso accentColor={C.accent.progreso} />}

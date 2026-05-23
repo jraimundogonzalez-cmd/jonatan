@@ -3,6 +3,14 @@ import { useApp } from "../store/AppContext";
 import { getDailyQuote } from "../data/quotes";
 import { analyzeFood, getApiKey, saveApiKey } from "../utils/aiVision";
 
+const doHardReload = () => {
+  if ("caches" in window) {
+    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload(true));
+  } else {
+    window.location.reload(true);
+  }
+};
+
 const S = {
   card:   { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: 16, marginBottom: 12 },
   lbl:    { color: "#475569", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8, display: "block" },
@@ -238,7 +246,7 @@ function FoodScanner({ todayLog, setTodayLog }) {
   );
 }
 
-export default function Hoy({ onNavigate }) {
+export default function Hoy({ onNavigate, updateReady, checking, onCheckUpdate }) {
   const { state, todayLog, setTodayLog, getEffectiveMacros } = useApp();
   const [watchInput, setWatchInput] = useState(todayLog.watchKcal || 0);
   const [showWatchEdit, setShowWatchEdit] = useState(false);
@@ -390,6 +398,21 @@ export default function Hoy({ onNavigate }) {
 
       {/* Food photo analyzer */}
       <FoodScanner todayLog={todayLog} setTodayLog={setTodayLog} />
+
+      {/* Update button */}
+      <div style={{ marginBottom: 12 }}>
+        {updateReady ? (
+          <button onClick={doHardReload}
+            style={{ width: "100%", padding: "13px", background: "#16a34a", border: "none", borderRadius: 13, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+            🔄 Actualizar app — nueva versión disponible
+          </button>
+        ) : (
+          <button onClick={onCheckUpdate} disabled={checking}
+            style={{ width: "100%", padding: "11px", background: "transparent", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 13, color: checking ? "#475569" : "#64748b", fontWeight: 500, fontSize: 12, cursor: checking ? "default" : "pointer", fontFamily: "inherit" }}>
+            {checking ? "Buscando actualización…" : "🔄 Buscar actualización"}
+          </button>
+        )}
+      </div>
 
       {/* Quick links */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
