@@ -364,6 +364,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const [prModal, setPrModal] = useState(null);
   const [techModal, setTechModal] = useState(null);
   const [swapModal, setSwapModal] = useState(null);
+  const [ytModal, setYtModal] = useState(null);
   const intervalRef = useRef(null);
 
   const swapExercise = (idx, newId) => {
@@ -467,6 +468,10 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
                     style={{ fontSize: 11, color: "#a78bfa", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
                     🔄 Sustituir
                   </button>
+                  <button onClick={() => setYtModal(ex)}
+                    style={{ fontSize: 11, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                    ▶ Ver
+                  </button>
                 </div>
               </div>
               <button onClick={() => toggleDone(idx)}
@@ -531,6 +536,26 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
         <SwapModal exerciseId={swapModal.id} training={training}
           onPick={(newId) => swapExercise(swapModal.idx, newId)}
           onClose={() => setSwapModal(null)} />
+      )}
+
+      {/* YouTube Tutorial Modal */}
+      {ytModal && (
+        <div onClick={() => setYtModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#0d0d0d", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "20px 20px 0 0", padding: "20px 18px 40px", width: "100%" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 18px" }} />
+            <div style={{ fontSize: 10, color: "#f87171", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>Tutorial de ejercicio</div>
+            <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>{ytModal.n}</h2>
+            <p style={{ fontSize: 12, color: "#64748b", marginBottom: 22 }}>{ytModal.m?.join(", ")}</p>
+            <a
+              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ytModal.n + " ejercicio técnica correcta")}&hl=es`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "15px 16px", background: "#dc2626", borderRadius: 13, color: "#fff", fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 10 }}>
+              <span style={{ fontSize: 20 }}>▶</span> Buscar en YouTube
+            </a>
+            <button onClick={() => setYtModal(null)} style={{ ...C.btnS, width: "100%", textAlign: "center", padding: "12px" }}>Cerrar</button>
+          </div>
+        </div>
       )}
     </div>
   );
