@@ -1,4 +1,4 @@
-import { useState, Component } from "react";
+import { useState, useEffect, Component } from "react";
 import { AppProvider, useApp } from "./store/AppContext";
 import Hoy from "./screens/Hoy";
 import Nutricion from "./screens/Nutricion";
@@ -18,6 +18,46 @@ class ErrorBoundary extends Component {
     );
     return this.props.children;
   }
+}
+
+function UpdateBanner() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const currentScript = document.querySelector('script[src*="assets/index-"]');
+    if (!currentScript) return;
+    const currentHash = currentScript.src.match(/index-([^.]+)\.js/)?.[1];
+    if (!currentHash) return;
+
+    const check = async () => {
+      try {
+        const res = await fetch("/jonatan/index.html?_=" + Date.now(), { cache: "no-store" });
+        const html = await res.text();
+        const servedHash = html.match(/assets\/index-([^.]+)\.js/)?.[1];
+        if (servedHash && servedHash !== currentHash) setShow(true);
+      } catch {}
+    };
+
+    const t = setTimeout(check, 10000); // first check after 10s
+    const interval = setInterval(check, 5 * 60 * 1000); // then every 5min
+    return () => { clearTimeout(t); clearInterval(interval); };
+  }, []);
+
+  if (!show) return null;
+  return (
+    <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, zIndex: 200, padding: "0 12px", paddingTop: "env(safe-area-inset-top)" }}>
+      <div style={{ background: "#16a34a", borderRadius: "0 0 14px 14px", padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>🔄 Nueva versión disponible</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShow(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "5px 10px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Ignorar</button>
+          <button onClick={() => { if ("caches" in window) caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload()); else window.location.reload(); }}
+            style={{ background: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", color: "#16a34a", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            Actualizar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const TABS = [
@@ -55,6 +95,7 @@ function Shell() {
 
   return (
     <div style={{ minHeight: "100dvh", background: "#080d08", fontFamily: "'DM Sans', sans-serif", color: "#e2e8f0", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", position: "relative" }}>
+      <UpdateBanner />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}

@@ -123,14 +123,15 @@ const ALL_CATS = [
 ];
 
 function PlanEditor({ seq, training, onSave, onClose }) {
-  // Start with current cats per day (inferred if not stored)
   const [days, setDays] = useState(() =>
     seq.map(s => ({ name: s.name, cats: inferCats(s) }))
   );
-  const [addingTo, setAddingTo] = useState(null); // index of day we're adding to
-  const [dragging, setDragging] = useState(null); // { dayIdx, cat }
+  const [addingTo, setAddingTo] = useState(null);
+  // tap-to-move: { dayIdx, cat } — selected chip waiting to be placed
+  const [moving, setMoving] = useState(null);
 
   const removeFromDay = (dayIdx, cat) => {
+    setMoving(null);
     setDays(d => d.map((day, i) =>
       i !== dayIdx ? day : { ...day, cats: day.cats.filter(c => c !== cat) }
     ));
@@ -145,12 +146,25 @@ function PlanEditor({ seq, training, onSave, onClose }) {
     setAddingTo(null);
   };
 
-  const moveToDay = (fromDayIdx, cat, toDayIdx) => {
+  const selectForMove = (dayIdx, cat) => {
+    if (moving?.dayIdx === dayIdx && moving?.cat === cat) {
+      setMoving(null); // tap again to deselect
+    } else {
+      setMoving({ dayIdx, cat });
+      setAddingTo(null);
+    }
+  };
+
+  const placeInDay = (toDayIdx) => {
+    if (!moving) return;
+    const { dayIdx: from, cat } = moving;
+    if (from === toDayIdx) { setMoving(null); return; }
     setDays(d => d.map((day, i) => {
-      if (i === fromDayIdx) return { ...day, cats: day.cats.filter(c => c !== cat) };
+      if (i === from) return { ...day, cats: day.cats.filter(c => c !== cat) };
       if (i === toDayIdx && !day.cats.includes(cat)) return { ...day, cats: [...day.cats, cat] };
       return day;
     }));
+    setMoving(null);
   };
 
   const save = () => {
@@ -164,7 +178,6 @@ function PlanEditor({ seq, training, onSave, onClose }) {
   };
 
   const catLabel = (c) => CAT_LABELS_MAP[c] || c;
-  const usedCats = new Set(days.flatMap(d => d.cats));
 
   return (
     <div style={{ background: "#080d08", minHeight: "100vh" }}>
@@ -177,72 +190,84 @@ function PlanEditor({ seq, training, onSave, onClose }) {
         <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
       </div>
 
+      {/* Move mode banner */}
+      {moving && (
+        <div style={{ margin: "10px 16px 0", padding: "10px 14px", background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.4)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#c4b5fd", fontWeight: 700 }}>
+            ✋ Moviendo: <strong style={{ color: "#fff" }}>{catLabel(moving.cat)}</strong> → toca el día destino
+          </span>
+          <button onClick={() => setMoving(null)} style={{ background: "none", border: "none", color: "#64748b", fontSize: 18, cursor: "pointer" }}>×</button>
+        </div>
+      )}
+
       <div style={{ padding: "12px 16px 120px" }}>
         <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
-          Toca <span style={{ color: "#ef4444" }}>✕</span> para quitar un grupo. Toca <span style={{ color: "#4ade80" }}>+</span> para añadir. Mantén una chip para moverla a otro día.
+          Toca <span style={{ color: "#ef4444" }}>✕</span> para quitar · <span style={{ color: "#a78bfa" }}>toca el nombre</span> del chip para moverlo a otro día
         </p>
 
-        {days.map((day, di) => (
-          <div key={di} style={{ ...C.card, marginBottom: 12, position: "relative" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
-                Día {di + 1}
+        {days.map((day, di) => {
+          const isTarget = moving && moving.dayIdx !== di;
+          const isSource = moving?.dayIdx === di;
+          return (
+            <div key={di}
+              onClick={isTarget ? () => placeInDay(di) : undefined}
+              style={{ ...C.card, marginBottom: 12, position: "relative", border: isTarget ? "1.5px solid rgba(167,139,250,0.6)" : isSource ? "1.5px solid rgba(167,139,250,0.3)" : C.card.border, background: isTarget ? "rgba(167,139,250,0.08)" : C.card.background, cursor: isTarget ? "pointer" : "default", transition: "all .15s" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: isTarget ? "#c4b5fd" : "#a78bfa", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                  {isTarget ? "👉 " : ""}Día {di + 1}
+                </div>
+                <div style={{ fontSize: 10, color: "#475569" }}>{day.cats.length} grupo{day.cats.length !== 1 ? "s" : ""}</div>
               </div>
-              <div style={{ fontSize: 10, color: "#475569" }}>{day.cats.length} grupo{day.cats.length !== 1 ? "s" : ""}</div>
-            </div>
 
-            {/* Muscle group chips */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
-              {day.cats.length === 0 && (
-                <span style={{ fontSize: 12, color: "#475569", padding: "6px 0" }}>Sin grupos asignados</span>
-              )}
-              {day.cats.map(cat => (
-                <div key={cat}
-                  draggable
-                  onDragStart={() => setDragging({ dayIdx: di, cat })}
-                  onDragEnd={() => setDragging(null)}
-                  style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 20, padding: "6px 10px 6px 12px", cursor: "grab" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#c4b5fd" }}>{catLabel(cat)}</span>
-                  <button onClick={() => removeFromDay(di, cat)}
-                    style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "0 0 0 2px", fontFamily: "inherit" }}>✕</button>
-                </div>
-              ))}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+                {day.cats.length === 0 && (
+                  <span style={{ fontSize: 12, color: isTarget ? "#a78bfa" : "#475569", padding: "6px 0" }}>
+                    {isTarget ? "Soltar aquí" : "Sin grupos asignados"}
+                  </span>
+                )}
+                {day.cats.map(cat => {
+                  const isSelected = moving?.dayIdx === di && moving?.cat === cat;
+                  return (
+                    <div key={cat}
+                      style={{ display: "flex", alignItems: "center", gap: 5, background: isSelected ? "rgba(167,139,250,0.35)" : "rgba(167,139,250,0.12)", border: `1px solid ${isSelected ? "rgba(167,139,250,0.8)" : "rgba(167,139,250,0.25)"}`, borderRadius: 20, padding: "6px 10px 6px 12px", cursor: "pointer", transition: "all .15s" }}>
+                      <span
+                        onClick={e => { e.stopPropagation(); selectForMove(di, cat); }}
+                        style={{ fontSize: 12, fontWeight: 600, color: isSelected ? "#fff" : "#c4b5fd", userSelect: "none" }}>
+                        {isSelected ? "✋ " : ""}{catLabel(cat)}
+                      </span>
+                      <button onClick={e => { e.stopPropagation(); removeFromDay(di, cat); }}
+                        style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "0 0 0 2px", fontFamily: "inherit" }}>✕</button>
+                    </div>
+                  );
+                })}
 
-              {/* Drop zone when dragging from another day */}
-              {dragging && dragging.dayIdx !== di && (
-                <div onDragOver={e => e.preventDefault()}
-                  onDrop={() => { moveToDay(dragging.dayIdx, dragging.cat, di); setDragging(null); }}
-                  style={{ border: "2px dashed rgba(167,139,250,0.4)", borderRadius: 20, padding: "6px 14px", fontSize: 12, color: "#a78bfa" }}>
-                  Soltar aquí
-                </div>
-              )}
-
-              {/* Add button */}
-              <button onClick={() => setAddingTo(addingTo === di ? null : di)}
-                style={{ background: "rgba(74,222,128,0.1)", border: "1px dashed rgba(74,222,128,0.3)", borderRadius: 20, padding: "6px 12px", fontSize: 12, color: "#4ade80", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
-                + Añadir
-              </button>
-            </div>
-
-            {/* Category picker for this day */}
-            {addingTo === di && (
-              <div style={{ marginTop: 10, padding: 10, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", marginBottom: 8 }}>AÑADIR GRUPO MUSCULAR</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {ALL_CATS.map(([cat, label]) => {
-                    const alreadyIn = day.cats.includes(cat);
-                    return (
-                      <button key={cat} onClick={() => !alreadyIn && addToDay(di, cat)} disabled={alreadyIn}
-                        style={{ background: alreadyIn ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "5px 10px", fontSize: 11, color: alreadyIn ? "#334155" : "#e2e8f0", cursor: alreadyIn ? "default" : "pointer", fontFamily: "inherit" }}>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+                {!moving && (
+                  <button onClick={e => { e.stopPropagation(); setAddingTo(addingTo === di ? null : di); }}
+                    style={{ background: "rgba(74,222,128,0.1)", border: "1px dashed rgba(74,222,128,0.3)", borderRadius: 20, padding: "6px 12px", fontSize: 12, color: "#4ade80", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                    + Añadir
+                  </button>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+
+              {addingTo === di && !moving && (
+                <div style={{ marginTop: 10, padding: 10, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", marginBottom: 8 }}>AÑADIR GRUPO MUSCULAR</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {ALL_CATS.map(([cat, label]) => {
+                      const alreadyIn = day.cats.includes(cat);
+                      return (
+                        <button key={cat} onClick={() => !alreadyIn && addToDay(di, cat)} disabled={alreadyIn}
+                          style={{ background: alreadyIn ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "5px 10px", fontSize: 11, color: alreadyIn ? "#334155" : "#e2e8f0", cursor: alreadyIn ? "default" : "pointer", fontFamily: "inherit" }}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         <p style={{ fontSize: 11, color: "#475569", textAlign: "center", marginBottom: 16 }}>
           Los ejercicios se regeneran automáticamente según los grupos que elijas.
