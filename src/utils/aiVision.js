@@ -1,4 +1,27 @@
+const compressImage = (dataUrl) => new Promise((resolve) => {
+  const img = new Image();
+  img.onload = () => {
+    const MAX = 1024;
+    let { width, height } = img;
+    if (width > MAX || height > MAX) {
+      if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+      else { width = Math.round(width * MAX / height); height = MAX; }
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+    resolve(canvas.toDataURL("image/jpeg", 0.82));
+  };
+  img.src = dataUrl;
+});
+
 export const analyzeFood = async (imageBase64, mediaType, apiKey) => {
+  // Compress before sending to avoid "Load failed" on large phone photos
+  const dataUrl = `data:${mediaType};base64,${imageBase64}`;
+  const compressed = await compressImage(dataUrl);
+  const base64 = compressed.split(",")[1];
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -13,7 +36,7 @@ export const analyzeFood = async (imageBase64, mediaType, apiKey) => {
       messages: [{
         role: "user",
         content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
           { type: "text", text: `Eres un nutricionista experto. Analiza esta imagen de comida y estima sus macronutrientes.
 
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin texto adicional antes ni después.
