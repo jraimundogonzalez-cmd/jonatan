@@ -1,9 +1,24 @@
-import { useState } from "react";
+import { useState, Component } from "react";
 import { AppProvider, useApp } from "./store/AppContext";
 import Hoy from "./screens/Hoy";
 import Nutricion from "./screens/Nutricion";
 import Entrenamiento from "./screens/Entrenamiento";
 import Progreso from "./screens/Progreso";
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    if (this.state.err) return (
+      <div style={{ padding: 32, textAlign: "center", color: "#f87171" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 14, color: "#94a3b8", marginBottom: 16 }}>Algo salió mal en esta sección.</div>
+        <button onClick={() => this.setState({ err: null })} style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Reintentar</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 
 const TABS = [
   { id: "hoy",    label: "Hoy",     icon: (on) => (
@@ -58,10 +73,12 @@ function Shell() {
 
       {/* Screens */}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 72 }}>
-        {tab === "hoy"     && <Hoy     onNavigate={setTab} accentColor={accentColor} />}
-        {tab === "nutri"   && <Nutricion accentColor={C.accent.nutri} />}
-        {tab === "entreno" && <Entrenamiento accentColor={C.accent.entreno} onNavigate={setTab} />}
-        {tab === "progreso"&& <Progreso accentColor={C.accent.progreso} />}
+        <ErrorBoundary key={tab}>
+          {tab === "hoy"     && <Hoy     onNavigate={setTab} accentColor={accentColor} />}
+          {tab === "nutri"   && <Nutricion accentColor={C.accent.nutri} />}
+          {tab === "entreno" && <Entrenamiento accentColor={C.accent.entreno} onNavigate={setTab} />}
+          {tab === "progreso"&& <Progreso accentColor={C.accent.progreso} />}
+        </ErrorBoundary>
       </div>
 
       {/* Tab bar */}

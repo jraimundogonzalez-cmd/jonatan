@@ -90,7 +90,7 @@ function ShoppingList({ planData }) {
           ))}
         </div>
       ))}
-      <p style={{ fontSize: 11, color: "#475569", marginTop: 8, fontStyle: "italic" }}>Cantidades totales para 7 días (peso en crudo). Añade 10-15% por mermas de cocción.</p>
+      <p style={{ fontSize: 11, color: "#475569", marginTop: 8, fontStyle: "italic" }}>Cantidades totales para {planData?.days?.length ?? 7} días (peso en crudo). Añade 10-15% por mermas de cocción.</p>
     </div>
   );
 }
@@ -116,6 +116,7 @@ export default function Nutricion() {
   const [shakeProt, setShakeProt] = useState(saved.shakeProt || 27);
   const [shakeDays, setShakeDays] = useState(saved.shakeDays || []);
   const [planData, setPlanData] = useState(saved.planData || null);
+  const [planDays, setPlanDays] = useState(saved.planDays || 7);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -157,9 +158,9 @@ export default function Nutricion() {
     setLoading(true); setError("");
     await new Promise(r => setTimeout(r, 200));
     try {
-      const data = buildPlan({ macros, meals, mealNames, selFoods, refeedOn, refeedDays, refeedCarbs, refeedFat, shakeOn, shakeProt, shakeDays, priorities, postWorkoutMeal });
+      const data = buildPlan({ macros, meals, mealNames, selFoods, refeedOn, refeedDays, refeedCarbs, refeedFat, shakeOn, shakeProt, shakeDays, priorities, postWorkoutMeal, planDays });
       setPlanData(data);
-      save({ planData: data });
+      save({ planData: data, planDays });
       setStep(3);
     } catch (e) { setError(e.message || "Error generando el plan"); }
     finally { setLoading(false); }
@@ -372,6 +373,23 @@ export default function Nutricion() {
           <div style={{ fontSize: 11, color: "#4ade80", textAlign: "center", marginTop: 8 }}>{mealNames.join(" · ")}</div>
         </div>
 
+        {/* Nº días */}
+        <div style={C.card}>
+          <span style={C.lbl}>DÍAS DEL PLAN</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5 }}>
+            {[1,2,3,4,5,6,7].map(n => (
+              <div key={n} onClick={() => setPlanDays(n)}
+                style={{ border: `1px solid ${planDays === n ? "#a78bfa" : "rgba(255,255,255,0.08)"}`, background: planDays === n ? "rgba(167,139,250,0.12)" : "transparent", borderRadius: 9, padding: "9px 3px", cursor: "pointer", textAlign: "center" }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: planDays === n ? "#a78bfa" : "#475569" }}>{n}</div>
+                <div style={{ fontSize: 8, color: planDays === n ? "#c4b5fd" : "#334155", marginTop: 2 }}>{n === 1 ? "día" : "días"}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "#a78bfa", textAlign: "center", marginTop: 8 }}>
+            {planDays === 1 ? "Plan de un solo día · ideal para planificar hoy" : planDays <= 3 ? `${planDays} días · planificación corta` : planDays === 7 ? "Semana completa" : `${planDays} días`}
+          </div>
+        </div>
+
         {/* Shake */}
         <div style={{ ...C.card, borderColor: shakeOn ? "rgba(96,165,250,0.3)" : "rgba(255,255,255,0.07)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -426,11 +444,13 @@ export default function Nutricion() {
       <div style={{ padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9", margin: "0 0 2px" }}>Tu plan semanal</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9", margin: "0 0 2px" }}>
+              {planDays === 1 ? "Tu plan de hoy" : planDays === 7 ? "Tu plan semanal" : `Tu plan de ${planDays} días`}
+            </h1>
             <p style={{ color: "#475569", fontSize: 11, margin: 0 }}>{macros.proteina}g P · {macros.carbos}g HC · {macros.grasas}g G · {meals} comidas</p>
           </div>
           <button onClick={() => { setStep(1); setPlanData(null); save({ planData: null }); }}
-            style={{ ...C.btnS, fontSize: 10, padding: "6px 10px" }}>Nueva semana</button>
+            style={{ ...C.btnS, fontSize: 10, padding: "6px 10px" }}>Nuevo plan</button>
         </div>
 
         {/* Tabs: plan / shopping */}

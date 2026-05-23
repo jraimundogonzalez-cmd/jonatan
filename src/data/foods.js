@@ -1651,7 +1651,14 @@ export const FOODS = [
 ];
 
 export const ALLERGIES_OPT = ["lactosa","gluten","frutos secos","mariscos","huevo","soja","pescado"];
-export const MEALS_NAMES = ["Desayuno","Snack 1","Comida","Merienda","Cena"];
+export const MEALS_NAMES = {
+  1: ["Comida única"],
+  2: ["Comida","Cena"],
+  3: ["Desayuno","Comida","Cena"],
+  4: ["Desayuno","Comida","Merienda","Cena"],
+  5: ["Desayuno","Snack mañana","Comida","Merienda","Cena"],
+  6: ["Desayuno","Snack mañana","Comida","Merienda","Cena","Post-entreno"],
+};
 export const DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 export const GOALS = {
   perder: { name: "Perder grasa", kcalAdj: -500, pFactor: 2.2 },

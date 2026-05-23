@@ -150,8 +150,9 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   return { items, totals };
 };
 
-export const buildPlan = ({ macros, meals, mealNames, selFoods, refeedOn, refeedDays, refeedCarbs, refeedFat, shakeOn, shakeProt, shakeDays, priorities, postWorkoutMeal }) => {
-  const DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+export const buildPlan = ({ macros, meals, mealNames, selFoods, refeedOn, refeedDays, refeedCarbs, refeedFat, shakeOn, shakeProt, shakeDays, priorities, postWorkoutMeal, planDays = 7 }) => {
+  const ALL_DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+  const DAYS = ALL_DAYS.slice(0, Math.min(7, Math.max(1, planDays)));
   const w = mealNames.length;
   const baseWeights = mealNames.map((_, i) => w === 1 ? 1 : (/almuerzo|cena|comida/i.test(mealNames[i]) ? 1.3 : 0.8));
   const baseSum = baseWeights.reduce((a, b) => a + b, 0);
