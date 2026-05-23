@@ -46,7 +46,12 @@ const YOGURT_IDS = [46, 121];
 const PROT_CATS = new Set(["aves","carnes","pescado","marisco","huevos","lacteos","quesos","fiambres","conservas"]);
 
 export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, usedFoodIds, usedCats, priorityFoods }) => {
-  const priorityList = (priorityFoods || []).map(id => selFoods.find(f => f.id === id)).filter(Boolean);
+  // Normalize unit-based foods (stored per-unit) to per-100g for algorithm correctness
+  const normFood = (f) => f.u ? { ...f, p: +(f.p * 100 / f.u).toFixed(1), c: +(f.c * 100 / f.u).toFixed(1), f: +(f.f * 100 / f.u).toFixed(1), cal: Math.round(f.cal * 100 / f.u) } : f;
+  const nFoods = selFoods.map(normFood);
+  const origById = Object.fromEntries(selFoods.map(f => [f.id, f]));
+
+  const priorityList = (priorityFoods || []).map(id => nFoods.find(f => f.id === id)).filter(Boolean);
   const forcedItems = [];
   const portionForPriority = (f) => {
     if (f.p >= 18) return 180; if (f.p >= 12) return 150;
@@ -56,7 +61,7 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   };
   priorityList.forEach(f => forcedItems.push({ food: f, grams: portionForPriority(f) }));
   const hasBerry = priorityList.some(f => BERRY_IDS.includes(f.id));
-  const yogurtInSelected = selFoods.find(f => YOGURT_IDS.includes(f.id));
+  const yogurtInSelected = nFoods.find(f => YOGURT_IDS.includes(f.id));
   if (hasBerry && yogurtInSelected && !forcedItems.some(it => it.food.id === yogurtInSelected.id))
     forcedItems.push({ food: yogurtInSelected, grams: 150 });
 
@@ -83,12 +88,13 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
     return pick[offset % pick.length];
   };
 
-  const lean = selFoods.filter(f => (PROT_CATS.has(f.cat) || f.p >= 10) && f.f <= 20).sort((a, b) => b.p - a.p || a.f - b.f);
-  const protPool = lean.length ? lean : selFoods.filter(f => PROT_CATS.has(f.cat) || f.p >= 7).sort((a, b) => b.p - a.p);
-  const carbPool = selFoods.filter(f => f.c >= 15).sort((a, b) => b.c - a.c);
+  // Use normalized foods for pool building (correct per-100g values)
+  const lean = nFoods.filter(f => (PROT_CATS.has(f.cat) || f.p >= 10) && f.f <= 20).sort((a, b) => b.p - a.p || a.f - b.f);
+  const protPool = lean.length ? lean : nFoods.filter(f => PROT_CATS.has(f.cat) || f.p >= 7).sort((a, b) => b.p - a.p);
+  const carbPool = nFoods.filter(f => f.c >= 15).sort((a, b) => b.c - a.c);
   const carbPoolNF = carbPool.filter(f => f.cat !== "frutas");
-  const fatPool  = selFoods.filter(f => f.f >= 25).sort((a, b) => b.f - a.f);
-  const vegPool  = selFoods.filter(f => f.cat === "verduras" && f.cal <= 40 && f.c < 12 && f.f < 3);
+  const fatPool  = nFoods.filter(f => f.f >= 25).sort((a, b) => b.f - a.f);
+  const vegPool  = nFoods.filter(f => f.cat === "verduras" && f.cal <= 40 && f.c < 12 && f.f < 3);
 
   const needPro  = remP > 15 && protPool.length > 0;
   const needCarb = remC > 10 && (carbPoolNF.length > 0 || carbPool.length > 0);
@@ -139,8 +145,12 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   const items = [];
   const push = (food, grams) => {
     if (grams < 5) return;
-    items.push({ id: food.id, name: food.name, cat: food.cat, grams,
-      p: +(grams * food.p / 100).toFixed(1), c: +(grams * food.c / 100).toFixed(1), f: +(grams * food.f / 100).toFixed(1) });
+    const orig = origById[food.id] || food;
+    // Round grams to nearest unit boundary when food is unit-based
+    const roundedGrams = orig.u ? Math.max(orig.u, Math.round(grams / orig.u) * orig.u) : grams;
+    items.push({ id: food.id, name: food.name, cat: food.cat, grams: roundedGrams,
+      u: orig.u || null, uLabel: orig.uLabel || null,
+      p: +(roundedGrams * food.p / 100).toFixed(1), c: +(roundedGrams * food.c / 100).toFixed(1), f: +(roundedGrams * food.f / 100).toFixed(1) });
   };
   forcedItems.forEach(it => push(it.food, it.grams));
   if (pf) push(pf, pg);

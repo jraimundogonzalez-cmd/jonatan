@@ -524,12 +524,17 @@ export default function Nutricion() {
                       </button>
                     </div>
 
-                    {m.items.map((it, ii) => (
-                      <div key={ii} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 4px 8px", fontSize: 12 }}>
-                        <span style={{ color: "#cbd5e1" }}>• {it.name} — <strong style={{ color: "#e2e8f0" }}>{it.grams}g</strong></span>
-                        <span style={{ fontSize: 10, color: "#475569" }}>P{Math.round(it.p)} C{Math.round(it.c)} G{Math.round(it.f)}</span>
-                      </div>
-                    ))}
+                    {m.items.map((it, ii) => {
+                      const qty = it.u
+                        ? (() => { const n = Math.max(1, Math.round(it.grams / it.u)); return `${n} ${it.uLabel || "ud"}${n > 1 ? "s" : ""}`; })()
+                        : `${it.grams}g`;
+                      return (
+                        <div key={ii} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 4px 8px", fontSize: 12 }}>
+                          <span style={{ color: "#cbd5e1" }}>• {it.name} — <strong style={{ color: "#e2e8f0" }}>{qty}</strong></span>
+                          <span style={{ fontSize: 10, color: "#475569" }}>P{Math.round(it.p)} C{Math.round(it.c)} G{Math.round(it.f)}</span>
+                        </div>
+                      );
+                    })}
                     <div style={{ fontSize: 10, color: "#475569", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
                       {Math.round(m.totals.p)}g P · {Math.round(m.totals.c)}g HC · {Math.round(m.totals.f)}g G · {m.totals.kcal} kcal
                     </div>
