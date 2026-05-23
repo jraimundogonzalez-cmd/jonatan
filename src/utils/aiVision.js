@@ -1,7 +1,7 @@
 const compressImage = (dataUrl) => new Promise((resolve) => {
   const img = new Image();
   img.onload = () => {
-    const MAX = 1024;
+    const MAX = 1600;
     let { width, height } = img;
     if (width > MAX || height > MAX) {
       if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
@@ -11,13 +11,12 @@ const compressImage = (dataUrl) => new Promise((resolve) => {
     canvas.width = width;
     canvas.height = height;
     canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-    resolve(canvas.toDataURL("image/jpeg", 0.82));
+    resolve(canvas.toDataURL("image/jpeg", 0.92));
   };
   img.src = dataUrl;
 });
 
 export const analyzeFood = async (imageBase64, mediaType, apiKey) => {
-  // Compress before sending to avoid "Load failed" on large phone photos
   const dataUrl = `data:${mediaType};base64,${imageBase64}`;
   const compressed = await compressImage(dataUrl);
   const base64 = compressed.split(",")[1];
@@ -37,11 +36,19 @@ export const analyzeFood = async (imageBase64, mediaType, apiKey) => {
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
-          { type: "text", text: `Eres un nutricionista experto. Analiza esta imagen de comida y estima sus macronutrientes.
+          { type: "text", text: `Eres un nutricionista experto analizando una imagen de comida o producto alimentario.
+
+INSTRUCCIONES POR ORDEN DE PRIORIDAD:
+
+1. Si ves una ETIQUETA NUTRICIONAL en el envase (tabla de "Información nutricional", "Valores nutricionales" o similar): LEE los valores exactos de la etiqueta. Usa los valores POR 100g si están disponibles, o calcula a partir de la porción indicada.
+
+2. Si ves un ENVASE SIN etiqueta visible pero puedes identificar el producto: usa los datos nutricionales conocidos de ese producto comercial exacto.
+
+3. Si es un PLATO PREPARADO o alimento sin etiqueta: estima visualmente con la mayor precisión posible.
 
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin texto adicional antes ni después.
 
-{"descripcion":"nombre del plato o alimento","porcion":"cantidad estimada ej: 1 plato, 200g, 1 unidad","proteina":0,"carbos":0,"grasas":0,"kcal":0,"confianza":"alta|media|baja","nota":"observación breve si procede"}
+{"descripcion":"nombre exacto del producto o plato","porcion":"indica si es por 100g, por bolsa entera, por ración, etc.","proteina":0,"carbos":0,"grasas":0,"kcal":0,"confianza":"alta|media|baja","nota":"indica si leíste la etiqueta o estimaste"}
 
 Si no puedes identificar comida en la imagen, responde: {"error":"No se detecta comida en la imagen"}` }
         ]
