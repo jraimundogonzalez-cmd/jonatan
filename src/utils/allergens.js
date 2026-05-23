@@ -28,6 +28,9 @@ export const getFoodAllergens = (food) => {
   if (inc(n, ["macadamia"])) r.push("macadamia");
   if (inc(n, ["piñon", "piñones", "pinon", "pinones"])) r.push("piñon");
 
+  // Legumbre
+  if (cat === "legumbres" || inc(n, ["lenteja", "lentejas", "garbanzo", "garbanzos", "judía", "judias", "alubia", "alubias", "guisante", "guisantes", "frijol", "frijoles", "haba", "habas", "lupino", "lupinos"])) r.push("legumbre");
+
   // Soja
   if (inc(n, ["soja", "tofu", "edamame", "tempeh"])) r.push("soja");
 

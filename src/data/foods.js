@@ -1657,6 +1657,7 @@ export const ALLERGIES_OPT = [
   { id: "huevo",     label: "🥚 Huevo",      group: "main" },
   { id: "pescado",   label: "🐟 Pescado",    group: "main" },
   { id: "soja",      label: "🫘 Soja",       group: "main" },
+  { id: "legumbre",  label: "🌱 Legumbre",   group: "main" },
   { id: "sesamo",    label: "🌿 Sésamo",     group: "main" },
   { id: "cacahuete", label: "🥜 Cacahuete",  group: "nuts" },
   { id: "almendra",  label: "🌰 Almendra",   group: "nuts" },
