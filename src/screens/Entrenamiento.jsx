@@ -167,6 +167,16 @@ function PlanEditor({ seq, training, onSave, onClose }) {
     setMoving(null);
   };
 
+  const moveDay = (fromIdx, toIdx) => {
+    if (toIdx < 0 || toIdx >= days.length) return;
+    setDays(d => {
+      const next = [...d];
+      const [removed] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, removed);
+      return next;
+    });
+  };
+
   const save = () => {
     const equipment = training.equipment && training.equipment.length > 0
       ? training.equipment : (training.place === "casa" ? HOME_DEFAULT : GYM_DEFAULT);
@@ -216,7 +226,17 @@ function PlanEditor({ seq, training, onSave, onClose }) {
                 <div style={{ fontSize: 11, color: isTarget ? "#c4b5fd" : "#a78bfa", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
                   {isTarget ? "👉 " : ""}Día {di + 1}
                 </div>
-                <div style={{ fontSize: 10, color: "#475569" }}>{day.cats.length} grupo{day.cats.length !== 1 ? "s" : ""}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "#475569" }}>{day.cats.length} grupo{day.cats.length !== 1 ? "s" : ""}</span>
+                  {!moving && (
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <button onClick={e => { e.stopPropagation(); moveDay(di, di - 1); }} disabled={di === 0}
+                        style={{ background: di === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 26, height: 26, color: di === 0 ? "#334155" : "#94a3b8", fontSize: 13, cursor: di === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>↑</button>
+                      <button onClick={e => { e.stopPropagation(); moveDay(di, di + 1); }} disabled={di === days.length - 1}
+                        style={{ background: di === days.length - 1 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 26, height: 26, color: di === days.length - 1 ? "#334155" : "#94a3b8", fontSize: 13, cursor: di === days.length - 1 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>↓</button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
