@@ -43,6 +43,7 @@ const r5 = (x) => Math.max(0, Math.round(x / 5) * 5);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const BERRY_IDS = [102, 103];
 const YOGURT_IDS = [46, 121];
+const PROT_CATS = new Set(["aves","carnes","pescado","marisco","huevos","lacteos","quesos","fiambres","conservas"]);
 
 export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, usedFoodIds, usedCats, priorityFoods }) => {
   const priorityList = (priorityFoods || []).map(id => selFoods.find(f => f.id === id)).filter(Boolean);
@@ -71,8 +72,10 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   const blockedIds = new Set([...usedFoodIds, ...forcedIds]);
   const blockedCats = new Set([...usedCats, ...forcedCats]);
 
-  const freeBlocked = (list) => list.filter(f => !blockedIds.has(f.id) && !blockedCats.has(f.cat));
-  const freeBlockedRelaxed = (list) => list.filter(f => !blockedIds.has(f.id));
+  // With few foods, allow repeating rather than leaving meals empty
+  const tinyPool = selFoods.length <= 5;
+  const freeBlocked = (list) => tinyPool ? list.filter(f => !forcedIds.has(f.id)) : list.filter(f => !blockedIds.has(f.id) && !blockedCats.has(f.cat));
+  const freeBlockedRelaxed = (list) => tinyPool ? list : list.filter(f => !blockedIds.has(f.id));
   const pickBlocked = (pool, offset) => {
     let pick = freeBlocked(pool);
     if (!pick.length) pick = freeBlockedRelaxed(pool);
@@ -80,9 +83,9 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
     return pick[offset % pick.length];
   };
 
-  const lean = selFoods.filter(f => f.p >= 12 && f.f <= 12).sort((a, b) => a.f - b.f || b.p - a.p);
-  const protPool = lean.length ? lean : selFoods.filter(f => f.p >= 12).sort((a, b) => a.f - b.f);
-  const carbPool = selFoods.filter(f => f.c >= 20).sort((a, b) => b.c - a.c);
+  const lean = selFoods.filter(f => (PROT_CATS.has(f.cat) || f.p >= 10) && f.f <= 20).sort((a, b) => b.p - a.p || a.f - b.f);
+  const protPool = lean.length ? lean : selFoods.filter(f => PROT_CATS.has(f.cat) || f.p >= 7).sort((a, b) => b.p - a.p);
+  const carbPool = selFoods.filter(f => f.c >= 15).sort((a, b) => b.c - a.c);
   const carbPoolNF = carbPool.filter(f => f.cat !== "frutas");
   const fatPool  = selFoods.filter(f => f.f >= 25).sort((a, b) => b.f - a.f);
   const vegPool  = selFoods.filter(f => f.cat === "verduras" && f.cal <= 40 && f.c < 12 && f.f < 3);
@@ -107,12 +110,14 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   const vf = (isMain && vegPool.length && !forcedItems.some(it => it.food.cat === "verduras"))
     ? pickBlocked(vegPool, dayIdx + mealIdx) : null;
 
-  let pg = pf ? 150 : 0, cg = cf ? 70 : 0, c2g = cf2 ? 50 : 0, fg = ff ? 8 : 0;
+  // Start with a higher initial gram estimate for low-density protein foods (eggs, dairy)
+  const pgInit = pf ? (pf.p < 10 ? 250 : 150) : 0;
+  let pg = pgInit, cg = cf ? 80 : 0, c2g = cf2 ? 50 : 0, fg = ff ? 8 : 0;
   const vg = vf ? 150 : 0;
   const vP = vf ? vg * vf.p / 100 : 0, vC = vf ? vg * vf.c / 100 : 0, vF = vf ? vg * vf.f / 100 : 0;
 
   if (pf || cf || ff) {
-    const pMax = pf ? Math.min(clamp((remP / (pf.p / 100 || 1)) * 1.3, 150, 400), 400) : 0;
+    const pMax = pf ? Math.min(clamp((remP / (pf.p / 100 || 1)) * 1.3, 150, 600), 600) : 0;
     const cMax = cf ? Math.min(clamp((remC / (cf.c / 100 || 1)) * 1.3, 150, 350), 350) : 0;
     const fMax = ff ? Math.min(clamp((remF / (ff.f / 100 || 1)) * 1.4, 25, 60), 60) : 0;
     for (let it = 0; it < 30; it++) {

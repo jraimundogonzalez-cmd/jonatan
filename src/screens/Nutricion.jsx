@@ -292,7 +292,7 @@ export default function Nutricion() {
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 8, maxHeight: 340, overflowY: "auto", marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 8, maxHeight: 300, overflowY: "auto", marginBottom: 12 }}>
           {visible.map(food => {
             const on = selected.includes(food.id);
             return (
@@ -305,6 +305,34 @@ export default function Nutricion() {
             );
           })}
         </div>
+
+        {/* Selected foods panel */}
+        {selFoods.length > 0 && (() => {
+          const totP = selFoods.reduce((a, f) => a + f.p, 0);
+          const totC = selFoods.reduce((a, f) => a + f.c, 0);
+          const totF = selFoods.reduce((a, f) => a + f.f, 0);
+          return (
+            <div style={{ ...C.card, borderColor: "rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.04)", marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ ...C.lbl, marginBottom: 0, color: "#4ade80" }}>✓ SELECCIONADOS ({selFoods.length})</span>
+                <div style={{ display: "flex", gap: 10, fontSize: 10, fontFamily: "'DM Mono',monospace" }}>
+                  <span style={{ color: "#86efac" }}>P{Math.round(totP)}</span>
+                  <span style={{ color: "#93c5fd" }}>C{Math.round(totC)}</span>
+                  <span style={{ color: "#fcd34d" }}>G{Math.round(totF)}</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {selFoods.map(f => (
+                  <div key={f.id} onClick={() => toggle(f.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)", borderRadius: 20, padding: "4px 10px", cursor: "pointer" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#4ade80" }}>{f.name.split(" ").slice(0, 3).join(" ")}</span>
+                    <span style={{ fontSize: 9, color: "#64748b" }}>×</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         <div style={C.card}>
           <span style={C.lbl}>RESTRICCIONES</span>
