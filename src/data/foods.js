@@ -1650,7 +1650,21 @@ export const FOODS = [
   {id:1627, name:"Zumo de Pura Naranja 100%natural Exprimido Hacendado", cat:"bebidas", p:0, c:9.9, f:0, cal:40},
 ];
 
-export const ALLERGIES_OPT = ["lactosa","gluten","frutos secos","mariscos","huevo","soja","pescado"];
+export const ALLERGIES_OPT = [
+  { id: "lactosa",   label: "🥛 Lactosa",   group: "main" },
+  { id: "gluten",    label: "🌾 Gluten",     group: "main" },
+  { id: "marisco",   label: "🦐 Marisco",    group: "main" },
+  { id: "huevo",     label: "🥚 Huevo",      group: "main" },
+  { id: "pescado",   label: "🐟 Pescado",    group: "main" },
+  { id: "soja",      label: "🫘 Soja",       group: "main" },
+  { id: "sesamo",    label: "🌿 Sésamo",     group: "main" },
+  { id: "cacahuete", label: "🥜 Cacahuete",  group: "nuts" },
+  { id: "almendra",  label: "🌰 Almendra",   group: "nuts" },
+  { id: "avellana",  label: "🌰 Avellana",   group: "nuts" },
+  { id: "nuez",      label: "🌰 Nuez",       group: "nuts" },
+  { id: "pistacho",  label: "🌰 Pistacho",   group: "nuts" },
+  { id: "anacardo",  label: "🌰 Anacardo",   group: "nuts" },
+];
 export const MEALS_NAMES = {
   1: ["Comida única"],
   2: ["Comida","Cena"],

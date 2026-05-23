@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useApp } from "../store/AppContext";
 import { FOODS, CATS, ALLERGIES_OPT, MEALS_NAMES, DAYS, GOALS, ACTIVITY } from "../data/foods";
 import { computeProfile, adjustMacros, buildPlan, buildShoppingList, generateRecipe } from "../utils/nutrition";
+import { foodAllergenMatch } from "../utils/allergens";
 
 const C = {
   wrap:  { minHeight: "100vh", background: "#080d08" },
@@ -295,12 +296,18 @@ export default function Nutricion() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 8, maxHeight: 300, overflowY: "auto", marginBottom: 12 }}>
           {visible.map(food => {
             const on = selected.includes(food.id);
+            const { direct, traces } = allergies.length ? foodAllergenMatch(food, allergies) : { direct: [], traces: [] };
+            const hasAlert = direct.length > 0;
+            const hasTrace = !hasAlert && traces.length > 0;
             return (
               <div key={food.id} onClick={() => toggle(food.id)}
-                style={{ border: `1px solid ${on ? "#4ade80" : "rgba(255,255,255,0.06)"}`, background: on ? "rgba(74,222,128,0.08)" : "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px 8px", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: on ? "#4ade80" : "#cbd5e1", lineHeight: 1.3, marginBottom: 4 }}>{food.name}</div>
+                style={{ border: `1px solid ${hasAlert ? "rgba(239,68,68,0.5)" : on ? "#4ade80" : "rgba(255,255,255,0.06)"}`, background: hasAlert ? "rgba(239,68,68,0.06)" : on ? "rgba(74,222,128,0.08)" : "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px 8px", cursor: "pointer", textAlign: "center", position: "relative" }}>
+                {hasAlert && <div style={{ position: "absolute", top: 4, right: 5, fontSize: 10 }}>⚠️</div>}
+                {hasTrace && !hasAlert && <div style={{ position: "absolute", top: 4, right: 5, fontSize: 10 }}>⚡</div>}
+                <div style={{ fontSize: 11, fontWeight: 600, color: hasAlert ? "#fca5a5" : on ? "#4ade80" : "#cbd5e1", lineHeight: 1.3, marginBottom: 4 }}>{food.name}</div>
                 <div style={{ fontSize: 9, color: "#475569" }}>P<span style={{ color: "#86efac" }}>{food.p}</span> C<span style={{ color: "#93c5fd" }}>{food.c}</span> G<span style={{ color: "#fcd34d" }}>{food.f}</span></div>
-                {on && <div style={{ color: "#4ade80", fontSize: 14, marginTop: 3, fontWeight: 800 }}>✓</div>}
+                {hasAlert && <div style={{ fontSize: 8, color: "#f87171", marginTop: 3, fontWeight: 700 }}>{direct.slice(0, 2).join(", ")}</div>}
+                {on && !hasAlert && <div style={{ color: "#4ade80", fontSize: 14, marginTop: 3, fontWeight: 800 }}>✓</div>}
               </div>
             );
           })}
@@ -335,12 +342,28 @@ export default function Nutricion() {
         })()}
 
         <div style={C.card}>
-          <span style={C.lbl}>RESTRICCIONES</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {ALLERGIES_OPT.map(a => (
-              <button key={a.id} onClick={() => toggleA(a.id)} style={{ ...C.tag, ...(allergies.includes(a.id) ? C.tagOn : {}) }}>{a.label}</button>
-            ))}
+          <span style={C.lbl}>ALERGIAS E INTOLERANCIAS</span>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, letterSpacing: ".06em", marginBottom: 6 }}>PRINCIPALES</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {ALLERGIES_OPT.filter(a => a.group === "main").map(a => (
+                <button key={a.id} onClick={() => toggleA(a.id)} style={{ ...C.tag, ...(allergies.includes(a.id) ? { ...C.tagOn, borderColor: "#f87171", background: "rgba(239,68,68,0.12)", color: "#f87171" } : {}) }}>{a.label}</button>
+              ))}
+            </div>
           </div>
+          <div>
+            <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, letterSpacing: ".06em", marginBottom: 6 }}>FRUTOS SECOS (individualizar)</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {ALLERGIES_OPT.filter(a => a.group === "nuts").map(a => (
+                <button key={a.id} onClick={() => toggleA(a.id)} style={{ ...C.tag, ...(allergies.includes(a.id) ? { ...C.tagOn, borderColor: "#f87171", background: "rgba(239,68,68,0.12)", color: "#f87171" } : {}) }}>{a.label}</button>
+              ))}
+            </div>
+          </div>
+          {allergies.length > 0 && (
+            <div style={{ marginTop: 10, padding: "8px 10px", background: "rgba(239,68,68,0.07)", borderRadius: 8, fontSize: 11, color: "#fca5a5" }}>
+              ⚠️ Los alimentos marcados en rojo contienen alguno de tus alérgenos. Los marcados con ⚡ pueden tener trazas.
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
@@ -528,10 +551,24 @@ export default function Nutricion() {
                       const qty = it.u
                         ? (() => { const n = Math.max(1, Math.round(it.grams / it.u)); return `${n} ${it.uLabel || "ud"}${n > 1 ? "s" : ""}`; })()
                         : `${it.grams}g`;
+                      const food = FOODS.find(f => f.id === it.id);
+                      const { direct: da, traces: ta } = food && allergies.length ? foodAllergenMatch(food, allergies) : { direct: [], traces: [] };
                       return (
-                        <div key={ii} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 4px 8px", fontSize: 12 }}>
-                          <span style={{ color: "#cbd5e1" }}>• {it.name} — <strong style={{ color: "#e2e8f0" }}>{qty}</strong></span>
-                          <span style={{ fontSize: 10, color: "#475569" }}>P{Math.round(it.p)} C{Math.round(it.c)} G{Math.round(it.f)}</span>
+                        <div key={ii}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 4px 8px", fontSize: 12 }}>
+                            <span style={{ color: da.length ? "#fca5a5" : "#cbd5e1" }}>• {it.name} — <strong style={{ color: da.length ? "#f87171" : "#e2e8f0" }}>{qty}</strong></span>
+                            <span style={{ fontSize: 10, color: "#475569" }}>P{Math.round(it.p)} C{Math.round(it.c)} G{Math.round(it.f)}</span>
+                          </div>
+                          {da.length > 0 && (
+                            <div style={{ margin: "2px 8px 4px", padding: "4px 8px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, fontSize: 10, color: "#f87171", fontWeight: 700 }}>
+                              🚨 CONTIENE: {da.join(", ").toUpperCase()}
+                            </div>
+                          )}
+                          {ta.length > 0 && !da.length && (
+                            <div style={{ margin: "2px 8px 4px", padding: "4px 8px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 6, fontSize: 10, color: "#fbbf24", fontWeight: 600 }}>
+                              ⚡ Puede contener trazas de: {ta.join(", ")}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
