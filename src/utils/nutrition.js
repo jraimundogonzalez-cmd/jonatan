@@ -14,8 +14,9 @@ export const computeProfile = (profile) => {
   const bmr = useKatch
     ? calcKatch(profile.weight, profile.bodyFat)
     : calcMifflin(profile.sex, profile.weight, profile.height, profile.age);
-  const tdee = Math.round(bmr * ACTIVITY[profile.activity].mult);
-  const goal = GOALS[profile.goal];
+  const act = ACTIVITY[profile.activity] || ACTIVITY["moderada"] || Object.values(ACTIVITY)[2];
+  const tdee = Math.round(bmr * act.mult);
+  const goal = GOALS[profile.goal] || GOALS["mantener"] || Object.values(GOALS)[0];
   const targetKcal = Math.round(tdee * (1 + goal.deficit));
   const prot = Math.round(profile.weight * goal.protPerKg);
   const fat  = Math.round(profile.weight * goal.fatPerKg);

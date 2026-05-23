@@ -1661,14 +1661,15 @@ export const MEALS_NAMES = {
 };
 export const DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 export const GOALS = {
-  perder: { name: "Perder grasa", kcalAdj: -500, pFactor: 2.2 },
-  mantener: { name: "Mantener peso", kcalAdj: 0, pFactor: 1.8 },
-  ganar: { name: "Ganar músculo", kcalAdj: 350, pFactor: 2.0 },
+  definicion: { label: "Definición",    emoji: "🔥", color: "#f87171", deficit: -0.15, protPerKg: 2.4, fatPerKg: 0.9 },
+  perder:     { label: "Perder grasa",  emoji: "📉", color: "#fb923c", deficit: -0.20, protPerKg: 2.2, fatPerKg: 0.8 },
+  mantener:   { label: "Mantenimiento", emoji: "⚖️", color: "#60a5fa", deficit:  0,    protPerKg: 1.8, fatPerKg: 1.0 },
+  ganar:      { label: "Ganar músculo", emoji: "💪", color: "#4ade80", deficit:  0.10, protPerKg: 2.0, fatPerKg: 1.1 },
 };
 export const ACTIVITY = {
-  sedentario: { name: "Sedentario", factor: 1.2 },
-  ligero: { name: "Actividad ligera", factor: 1.375 },
-  moderado: { name: "Actividad moderada", factor: 1.55 },
-  intenso: { name: "Actividad intensa", factor: 1.725 },
-  muy_intenso: { name: "Muy intenso", factor: 1.9 },
+  sedentaria:  { label: "Sedentario",            desc: "Trabajo de oficina, casi sin ejercicio",    mult: 1.2   },
+  ligera:      { label: "Algo activo",            desc: "Ejercicio ligero 1-3 días/semana",          mult: 1.375 },
+  moderada:    { label: "Moderadamente activo",   desc: "Ejercicio 3-5 días/semana",                 mult: 1.55  },
+  intensa:     { label: "Muy activo",             desc: "Ejercicio intenso 6-7 días/semana",         mult: 1.725 },
+  muy_intensa: { label: "Extremadamente activo",  desc: "Trabajo físico + entrenamiento intenso",    mult: 1.9   },
 };
