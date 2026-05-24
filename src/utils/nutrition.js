@@ -30,11 +30,26 @@ export const computeProfile = (profile) => {
   };
 };
 
-export const adjustMacros = (newMacros, changedKey, targetKcal) => {
+export const adjustMacros = (newMacros, changedKey, targetKcal, weight = null) => {
   const m = { ...newMacros };
-  if (changedKey === "carbos") return m;
-  const carbsKcal = Math.max(160, targetKcal - m.proteina * 4 - m.grasas * 9);
-  m.carbos = Math.round(carbsKcal / 4);
+
+  // Fat constraints: 0.8g/kg min (aggressive cut), 1.2g/kg max, fallback 30–180g
+  const fatMin = weight ? Math.round(weight * 0.8) : 30;
+  const fatMax = weight ? Math.round(weight * 1.2) : 180;
+
+  if (changedKey === "proteina" || changedKey === "grasas") {
+    // Clamp fat within healthy range
+    m.grasas = Math.min(fatMax, Math.max(fatMin, m.grasas));
+    // Carbs fill remaining kcal (min 40g = 160 kcal)
+    const remaining = Math.max(160, targetKcal - m.proteina * 4 - m.grasas * 9);
+    m.carbos = Math.round(remaining / 4);
+  } else if (changedKey === "carbos") {
+    // Carbs changed → adjust protein to maintain total kcal, fat stays in range
+    m.grasas = Math.min(fatMax, Math.max(fatMin, m.grasas));
+    const protKcal = Math.max(160, targetKcal - m.carbos * 4 - m.grasas * 9);
+    m.proteina = Math.round(protKcal / 4);
+  }
+
   return m;
 };
 

@@ -149,9 +149,13 @@ export default function Nutricion() {
 
   const toggle = id => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   const toggleA = id => setAllergies(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
+  const weight = profile.weight || null;
+  const fatMin = weight ? Math.round(weight * 0.8) : 30;
+  const fatMax = weight ? Math.round(weight * 1.2) : 180;
+
   const updateMacro = (key, value) => {
-    if (!targetKcal || key === "carbos") { setMacros(m => ({ ...m, [key]: value })); return; }
-    setMacros(m => adjustMacros({ ...m, [key]: value }, key, targetKcal));
+    if (!targetKcal) { setMacros(m => ({ ...m, [key]: value })); return; }
+    setMacros(m => adjustMacros({ ...m, [key]: value }, key, targetKcal, weight));
   };
 
   const generate = async () => {
@@ -388,21 +392,61 @@ export default function Nutricion() {
         {[
           { key: "proteina", label: "Proteína", color: "#4ade80", min: 60, max: 300, emoji: "💪" },
           { key: "carbos",   label: "Carbos",   color: "#60a5fa", min: 50, max: 500, emoji: "⚡" },
-          { key: "grasas",   label: "Grasas",   color: "#f59e0b", min: 30, max: 200, emoji: "🔥" },
-        ].map(({ key, label, color, min, max, emoji }) => (
-          <div key={key} style={C.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>{emoji} {label}</span>
-              <span style={{ ...C.mono, fontSize: 22, color, fontWeight: 700 }}>{macros[key]}<span style={{ fontSize: 11, color: "#475569" }}>g</span></span>
+          { key: "grasas",   label: "Grasas",   color: "#f59e0b", min: fatMin, max: Math.max(fatMax, 180), emoji: "🔥" },
+        ].map(({ key, label, color, min, max, emoji }) => {
+          const val = macros[key];
+          const fatBelowMin = key === "grasas" && val < fatMin;
+          const fatAboveMax = key === "grasas" && val > fatMax;
+          const sliderColor = fatBelowMin ? "#f87171" : fatAboveMax ? "#fbbf24" : color;
+          return (
+            <div key={key} style={{ ...C.card, borderColor: fatBelowMin ? "rgba(239,68,68,0.35)" : "rgba(255,255,255,0.07)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: "#94a3b8" }}>{emoji} {label}</span>
+                <span style={{ ...C.mono, fontSize: 22, color: sliderColor, fontWeight: 700 }}>{val}<span style={{ fontSize: 11, color: "#475569" }}>g</span></span>
+              </div>
+              {key === "grasas" && weight && (
+                <div style={{ fontSize: 10, color: "#475569", marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
+                  <span>Mín. {fatMin}g <span style={{ color: "#64748b" }}>(0,8g/kg)</span></span>
+                  <span>Recomendado {Math.round(weight)}g <span style={{ color: "#64748b" }}>(1g/kg)</span></span>
+                  <span>Máx. {fatMax}g <span style={{ color: "#64748b" }}>(1,2g/kg)</span></span>
+                </div>
+              )}
+              <input type="range" min={min} max={max} value={val} onChange={e => updateMacro(key, +e.target.value)} style={{ width: "100%", accentColor: sliderColor, color: sliderColor }} />
+              {fatBelowMin && (
+                <div style={{ marginTop: 8, padding: "6px 10px", background: "rgba(239,68,68,0.1)", borderRadius: 8, fontSize: 11, color: "#f87171", fontWeight: 600 }}>
+                  ⚠️ Por debajo del mínimo recomendado ({fatMin}g para tu peso). Puede afectar a hormonas y absorción de vitaminas.
+                </div>
+              )}
+              {fatAboveMax && (
+                <div style={{ marginTop: 8, padding: "6px 10px", background: "rgba(245,158,11,0.08)", borderRadius: 8, fontSize: 11, color: "#fbbf24" }}>
+                  💡 Por encima del máximo habitual para tu objetivo ({fatMax}g). Los carbos se ajustarán en consecuencia.
+                </div>
+              )}
             </div>
-            <input type="range" min={min} max={max} value={macros[key]} onChange={e => updateMacro(key, +e.target.value)} style={{ width: "100%", accentColor: color, color }} />
-          </div>
-        ))}
+          );
+        })}
 
-        <div style={{ ...C.card, display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(74,222,128,0.035)", borderColor: "rgba(74,222,128,0.12)" }}>
-          <span style={{ fontSize: 12, color: "#86efac" }}>⚡ Total estimado</span>
-          <span style={{ ...C.mono, color: "#4ade80", fontWeight: 700, fontSize: 20 }}>{kcal} <span style={{ fontSize: 12, color: "#64748b" }}>kcal/día</span></span>
-        </div>
+        {/* Kcal total + diferencia respecto al objetivo */}
+        {(() => {
+          const diff = targetKcal ? kcal - targetKcal : 0;
+          const ok = Math.abs(diff) <= 15;
+          return (
+            <div style={{ ...C.card, background: ok ? "rgba(74,222,128,0.035)" : "rgba(245,158,11,0.06)", borderColor: ok ? "rgba(74,222,128,0.12)" : "rgba(245,158,11,0.25)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: ok ? "#86efac" : "#fde68a" }}>⚡ Total estimado</span>
+                <span style={{ ...C.mono, color: ok ? "#4ade80" : "#fbbf24", fontWeight: 700, fontSize: 20 }}>{kcal} <span style={{ fontSize: 12, color: "#64748b" }}>kcal/día</span></span>
+              </div>
+              {targetKcal && !ok && (
+                <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 6 }}>
+                  {diff > 0 ? `+${diff}` : diff} kcal respecto al objetivo ({targetKcal} kcal) · Mueve un slider para rebalancear
+                </div>
+              )}
+              {targetKcal && ok && (
+                <div style={{ fontSize: 11, color: "#4ade80", marginTop: 4 }}>✓ Ajustado al objetivo de {targetKcal} kcal</div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Días descanso */}
         <div style={C.card}>
