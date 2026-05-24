@@ -24,32 +24,50 @@ const ONB = [
   { k:"level", q:"¿Tu nivel?",       o:[["ppal","🌱","Principiante","< 1 año"],["inter","📈","Intermedio","1-3 años"],["avz","🔺","Avanzado","+3 años"]] },
 ];
 
-function Onboarding({ onDone }) {
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState({});
+function Onboarding({ step, answers, onPick, onBack, onDone }) {
   const def = ONB[step];
 
   const pick = (k, v) => {
     const val = (k === "days" || k === "time") ? +v : v;
     const next = { ...answers, [k]: val };
-    if (step < ONB.length - 1) { setAnswers(next); setStep(s => s + 1); }
+    if (step < ONB.length - 1) { onPick(next, step + 1); }
     else onDone(next);
   };
 
   return (
     <div style={{ padding: "16px" }}>
       <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <button onClick={onBack} disabled={step === 0}
+            style={{ background: "none", border: "none", color: step === 0 ? "#334155" : "#94a3b8", fontSize: 13, cursor: step === 0 ? "default" : "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", gap: 4 }}>
+            ← Volver
+          </button>
+          <div style={{ display: "flex", gap: 5 }}>
+            {ONB.map((_, i) => (
+              <div key={i} style={{ width: 22, height: 22, borderRadius: "50%", background: step > i ? "#f59e0b" : step === i ? "#f59e0b" : "rgba(255,255,255,0.08)", color: step >= i ? "#000" : "#475569", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {step > i ? "✓" : i + 1}
+              </div>
+            ))}
+          </div>
+        </div>
         <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase" }}>Paso {step + 1} de {ONB.length}</div>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", margin: "6px 0 0" }}>{def.q}</h2>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {def.o.map(([v, ic, label, sub]) => (
-          <div key={v} onClick={() => pick(def.k, v)}
-            style={{ border: "1.5px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.025)" }}>
-            <span style={{ fontSize: 22 }}>{ic}</span>
-            <div><div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9" }}>{label}</div><div style={{ fontSize: 12, color: "#64748b" }}>{sub}</div></div>
-          </div>
-        ))}
+        {def.o.map(([v, ic, label, sub]) => {
+          const isSelected = answers[def.k] !== undefined && answers[def.k] === ((def.k === "days" || def.k === "time") ? +v : v);
+          return (
+            <div key={v} onClick={() => pick(def.k, v)}
+              style={{ border: `1.5px solid ${isSelected ? "#f59e0b" : "rgba(255,255,255,0.1)"}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, background: isSelected ? "rgba(245,158,11,0.08)" : "rgba(255,255,255,0.025)" }}>
+              <span style={{ fontSize: 22 }}>{ic}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: isSelected ? "#fbbf24" : "#f1f5f9" }}>{label}</div>
+                <div style={{ fontSize: 12, color: "#64748b" }}>{sub}</div>
+              </div>
+              {isSelected && <span style={{ color: "#f59e0b", fontSize: 18 }}>✓</span>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -294,10 +312,10 @@ function PlanEditor({ seq, training, onSave, onClose }) {
         </p>
       </div>
 
-      {/* Save bar */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 16px calc(env(safe-area-inset-bottom) + 12px)", background: "#0a130a", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-        <button onClick={save} style={{ ...C.btnA, background: "linear-gradient(135deg,#a78bfa,#7c3aed)", color: "#fff" }}>
-          ✓ Guardar y regenerar ejercicios
+      {/* Save bar — z-index 60 to appear above the tab bar (z-index 50) */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, padding: "12px 16px calc(env(safe-area-inset-bottom) + 80px)", background: "linear-gradient(transparent, #080d08 30%)", zIndex: 60 }}>
+        <button onClick={save} style={{ ...C.btnA, background: "linear-gradient(135deg,#a78bfa,#7c3aed)", color: "#fff", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>
+          ✓ Guardar cambios y regenerar entrenamiento
         </button>
       </div>
     </div>
@@ -565,24 +583,43 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 export default function Entrenamiento({ onNavigate }) {
   const { state, setState, markTrained, todayLog } = useApp();
   const training = state.training;
-  const [view, setView] = useState("home"); // home | playing | plan-editor
+  const [view, setView] = useState(() => state.training._view || "home");
+  const [onbStep, setOnbStep] = useState(() => state.training._onbStep || 0);
+  const [onbAnswers, setOnbAnswers] = useState(() => state.training._onbAnswers || {});
   const [kcalInput, setKcalInput] = useState("");
   const [showKcal, setShowKcal] = useState(false);
 
   const setupDone = training.seq && training.seq.length > 0;
-  const trained   = todayLog.trained === true;
+
+  // Only show "trained today" if a workout was actually completed today
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const trainedToday = (training.done || []).some(d => d.date?.slice(0, 10) === todayKey);
+
   const cursor    = training.cursor || 0;
   const seq       = training.seq || [];
   const nextWO    = seq[cursor % seq.length];
 
+  // Persist view & onboarding state across tab switches
+  const persistView = (v) => {
+    setView(v);
+    setState(s => ({ ...s, training: { ...s.training, _view: v } }));
+  };
+  const persistOnb = (answers, step) => {
+    setOnbAnswers(answers);
+    setOnbStep(step);
+    setState(s => ({ ...s, training: { ...s.training, _onbStep: step, _onbAnswers: answers } }));
+  };
+
   const finishSetup = (answers) => {
-    const merged = { ...training, ...answers, streak: 0, hist: {}, done: [], chat: [] };
-    // Set default equipment based on place if not configured
+    const merged = { ...training, ...answers, streak: 0, hist: {}, done: [], chat: [], _onbStep: 0, _onbAnswers: {}, _view: "home" };
     if (!merged.equipment || merged.equipment.length === 0) {
       merged.equipment = merged.place === "casa" ? HOME_DEFAULT : GYM_DEFAULT;
     }
     const newTraining = buildSchedule(merged);
     setState(s => ({ ...s, training: newTraining }));
+    setOnbStep(0);
+    setOnbAnswers({});
+    setView("home");
   };
 
   const regenerateWithAI = () => {
@@ -619,7 +656,7 @@ export default function Entrenamiento({ onNavigate }) {
         streak: (s.training.streak || 0) + 1,
       }
     }));
-    setView("home");
+    persistView("home");
     setKcalInput("");
   };
 
@@ -629,7 +666,13 @@ export default function Entrenamiento({ onNavigate }) {
         <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#f59e0b", letterSpacing: 2, fontWeight: 500 }}>ENTRENO</span>
         </div>
-        <Onboarding onDone={finishSetup} />
+        <Onboarding
+          step={onbStep}
+          answers={onbAnswers}
+          onPick={persistOnb}
+          onBack={() => persistOnb(onbAnswers, Math.max(0, onbStep - 1))}
+          onDone={finishSetup}
+        />
       </div>
     );
   }
@@ -637,7 +680,7 @@ export default function Entrenamiento({ onNavigate }) {
   if (view === "playing" && nextWO) {
     return (
       <SessionPlayer entry={nextWO} training={training}
-        onComplete={completeWorkout} onExit={() => setView("home")} />
+        onComplete={completeWorkout} onExit={() => persistView("home")} />
     );
   }
 
@@ -646,9 +689,9 @@ export default function Entrenamiento({ onNavigate }) {
       <PlanEditor seq={seq} training={training}
         onSave={(newSeq) => {
           setState(s => ({ ...s, training: { ...s.training, seq: newSeq, cursor: 0 } }));
-          setView("home");
+          persistView("home");
         }}
-        onClose={() => setView("home")} />
+        onClose={() => persistView("home")} />
     );
   }
 
@@ -660,7 +703,7 @@ export default function Entrenamiento({ onNavigate }) {
 
       <div style={{ padding: "16px" }}>
         {/* Today status */}
-        {trained ? (
+        {trainedToday ? (
           <div style={{ ...C.card, background: "rgba(74,222,128,0.05)", borderColor: "rgba(74,222,128,0.2)", textAlign: "center", padding: "24px 16px" }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: "#4ade80", margin: "0 0 6px" }}>Hoy ya entrenaste</h2>
@@ -690,7 +733,7 @@ export default function Entrenamiento({ onNavigate }) {
               )}
             </div>
 
-            <button onClick={() => setView("playing")} style={C.btnA}>Empezar entrenamiento →</button>
+            <button onClick={() => persistView("playing")} style={C.btnA}>Empezar entrenamiento →</button>
           </div>
         )}
 
@@ -698,7 +741,7 @@ export default function Entrenamiento({ onNavigate }) {
         <div style={C.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <span style={C.lbl}>Tu secuencia de entrenos</span>
-            <button onClick={() => setView("plan-editor")}
+            <button onClick={() => persistView("plan-editor")}
               style={{ fontSize: 11, color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 9, padding: "5px 11px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, whiteSpace: "nowrap" }}>
               ✏️ Personalizar
             </button>
