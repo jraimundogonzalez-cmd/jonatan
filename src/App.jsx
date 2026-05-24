@@ -118,16 +118,41 @@ const C = {
   accent: { hoy:"#60a5fa", nutri:"#4ade80", entreno:"#f59e0b", progreso:"#a78bfa" },
 };
 
+function WatchKcalBanner({ kcal, onDismiss }) {
+  if (!kcal) return null;
+  return (
+    <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, zIndex: 201, padding: "0 12px", paddingTop: "env(safe-area-inset-top)" }}>
+      <div style={{ background: "#f59e0b", borderRadius: "0 0 14px 14px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>⌚ {kcal} kcal del Watch guardadas automáticamente</span>
+        <button onClick={onDismiss} style={{ background: "rgba(0,0,0,0.15)", border: "none", borderRadius: 8, padding: "4px 10px", color: "#000", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+      </div>
+    </div>
+  );
+}
+
 function Shell() {
   const [tab, setTab] = useState("hoy");
-  const { state } = useApp();
+  const { state, setTodayLog } = useApp();
   const { updateReady, checking, checkNow } = useUpdateCheck();
+  const [watchBanner, setWatchBanner] = useState(null);
+
+  // Detect ?kcal=X injected by iOS Shortcut after workout ends
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const kcal = parseInt(params.get("kcal"), 10);
+    if (kcal > 0) {
+      setTodayLog({ watchKcal: kcal, trained: true });
+      window.history.replaceState({}, "", window.location.pathname);
+      setWatchBanner(kcal);
+    }
+  }, []);
 
   const accentColor = C.accent[tab] || "#4ade80";
 
   return (
     <div style={{ minHeight: "100dvh", background: "#080d08", fontFamily: "'DM Sans', sans-serif", color: "#e2e8f0", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", position: "relative" }}>
       <UpdateBanner updateReady={updateReady} />
+      <WatchKcalBanner kcal={watchBanner} onDismiss={() => setWatchBanner(null)} />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
