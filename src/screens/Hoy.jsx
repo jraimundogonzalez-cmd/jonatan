@@ -309,18 +309,54 @@ export default function Hoy({ onNavigate, updateReady, checking, onCheckUpdate }
           </div>
         )}
 
-        {/* Apple Watch kcal */}
+        {/* Apple Watch data */}
         {trained && (
           <div style={{ marginTop: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>⌚ Kcal quemadas (Apple Watch)</div>
-              <button onClick={() => setShowWatchEdit(!showWatchEdit)}
-                style={{ background: "none", border: "none", color: "#f59e0b", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                {kcalBurned > 0 ? `${kcalBurned} kcal ✏️` : "+ Añadir"}
-              </button>
-            </div>
+            {kcalBurned > 0 && (todayLog.watchType || todayLog.watchMin > 0) ? (
+              <div style={{ padding: "12px 14px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: "#fbbf24", fontWeight: 700 }}>⌚ Apple Watch</div>
+                  <button onClick={() => setShowWatchEdit(!showWatchEdit)}
+                    style={{ background: "none", border: "none", color: "#64748b", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✏️ Editar</button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: todayLog.watchMin > 0 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8, textAlign: "center" }}>
+                  {todayLog.watchMin > 0 && (
+                    <div style={{ padding: "8px 6px", background: "rgba(0,0,0,0.15)", borderRadius: 8 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: "#fde68a", fontFamily: "'DM Mono',monospace" }}>{todayLog.watchMin}</div>
+                      <div style={{ fontSize: 10, color: "#94a3b8" }}>min</div>
+                    </div>
+                  )}
+                  <div style={{ padding: "8px 6px", background: "rgba(0,0,0,0.15)", borderRadius: 8 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#f97316", fontFamily: "'DM Mono',monospace" }}>{kcalBurned}</div>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>kcal</div>
+                  </div>
+                  <div style={{ padding: "8px 6px", background: "rgba(0,0,0,0.15)", borderRadius: 8 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#4ade80", fontFamily: "'DM Mono',monospace" }}>+{Math.round(kcalBurned / 4)}</div>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>g carbos</div>
+                  </div>
+                </div>
+                {todayLog.watchType && (
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8, textAlign: "center" }}>{todayLog.watchType}</div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: "#94a3b8" }}>⌚ Kcal quemadas (Apple Watch)</div>
+                  <button onClick={() => setShowWatchEdit(!showWatchEdit)}
+                    style={{ background: "none", border: "none", color: "#f59e0b", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                    {kcalBurned > 0 ? `${kcalBurned} kcal ✏️` : "+ Añadir"}
+                  </button>
+                </div>
+                {kcalBurned > 0 && (
+                  <div style={{ padding: "8px 12px", background: "rgba(245,158,11,0.08)", borderRadius: 10, fontSize: 12, color: "#fde68a" }}>
+                    +{Math.round(kcalBurned / 4)}g carbos extra añadidos al presupuesto de hoy
+                  </div>
+                )}
+              </div>
+            )}
             {showWatchEdit && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
                 <input type="number" value={watchInput} onChange={e => setWatchInput(+e.target.value)}
                   style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "10px 12px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 18, textAlign: "center", outline: "none" }}
                   placeholder="0" />
@@ -328,11 +364,6 @@ export default function Hoy({ onNavigate, updateReady, checking, onCheckUpdate }
                   style={{ padding: "10px 16px", background: "#f59e0b", border: "none", borderRadius: 10, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
                   OK
                 </button>
-              </div>
-            )}
-            {kcalBurned > 0 && (
-              <div style={{ padding: "8px 12px", background: "rgba(245,158,11,0.08)", borderRadius: 10, fontSize: 12, color: "#fde68a", marginTop: 6 }}>
-                +{Math.round(kcalBurned / 4)}g carbos extra añadidos al presupuesto de hoy
               </div>
             )}
           </div>

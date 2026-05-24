@@ -118,13 +118,25 @@ const C = {
   accent: { hoy:"#60a5fa", nutri:"#4ade80", entreno:"#f59e0b", progreso:"#a78bfa" },
 };
 
-function WatchKcalBanner({ kcal, onDismiss }) {
-  if (!kcal) return null;
+function WatchKcalBanner({ data, onDismiss }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => { if (data) setShow(true); }, [data]);
+  if (!show || !data) return null;
+  const { kcal, type, min } = data;
+  const dismiss = () => { setShow(false); onDismiss(); };
   return (
     <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, zIndex: 201, padding: "0 12px", paddingTop: "env(safe-area-inset-top)" }}>
-      <div style={{ background: "#f59e0b", borderRadius: "0 0 14px 14px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>⌚ {kcal} kcal del Watch guardadas automáticamente</span>
-        <button onClick={onDismiss} style={{ background: "rgba(0,0,0,0.15)", border: "none", borderRadius: 8, padding: "4px 10px", color: "#000", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+      <div style={{ background: "#f59e0b", borderRadius: "0 0 14px 14px", padding: "12px 16px", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>⌚ Entreno guardado desde el Watch</div>
+            {type && <div style={{ fontSize: 11, color: "rgba(0,0,0,0.65)", marginTop: 2 }}>{type}</div>}
+            <div style={{ fontSize: 12, color: "#000", marginTop: 3 }}>
+              {min > 0 ? `${min} min · ` : ""}{kcal} kcal activas
+            </div>
+          </div>
+          <button onClick={dismiss} style={{ background: "rgba(0,0,0,0.15)", border: "none", borderRadius: 8, padding: "4px 10px", color: "#000", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginLeft: 12, flexShrink: 0 }}>OK</button>
+        </div>
       </div>
     </div>
   );
@@ -140,10 +152,12 @@ function Shell() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const kcal = parseInt(params.get("kcal"), 10);
+    const type = params.get("type") || "";
+    const min = parseInt(params.get("min"), 10) || 0;
     if (kcal > 0) {
-      setTodayLog({ watchKcal: kcal, trained: true });
+      setTodayLog({ watchKcal: kcal, watchType: type, watchMin: min, trained: true });
       window.history.replaceState({}, "", window.location.pathname);
-      setWatchBanner(kcal);
+      setWatchBanner({ kcal, type, min });
     }
   }, []);
 
@@ -152,7 +166,7 @@ function Shell() {
   return (
     <div style={{ minHeight: "100dvh", background: "#080d08", fontFamily: "'DM Sans', sans-serif", color: "#e2e8f0", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", position: "relative" }}>
       <UpdateBanner updateReady={updateReady} />
-      <WatchKcalBanner kcal={watchBanner} onDismiss={() => setWatchBanner(null)} />
+      <WatchKcalBanner data={watchBanner} onDismiss={() => setWatchBanner(null)} />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
