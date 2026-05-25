@@ -97,10 +97,30 @@ function tagDefaults(plan, training) {
   return plan;
 }
 
+// Abs block: 3-4 exercises depending on level
+export function buildAbsBlock(level) {
+  const adv = level === "avz";
+  return [
+    { id: "crunch",            sets: 3, reps: adv ? 25 : 20, rest: 45, _isAbs: true },
+    { id: "elevacion_piernas", sets: 3, reps: adv ? 15 : 12, rest: 45, _isAbs: true },
+    { id: "plancha",           sets: 3, reps: "45s",          rest: 30, _isAbs: true },
+    ...(adv ? [{ id: "russian_twist", sets: 3, reps: 20, rest: 30, _isAbs: true }] : []),
+  ];
+}
+
 export function buildSchedule(training) {
   const days = Math.min(6, Math.max(3, training.days));
   const splits = SPLITS[days] || SPLITS[4];
-  const seq = splits.map(([n, ids]) => makeWO(n, ids, training));
+
+  // Assign abs to sessions 0,2 (and 4 for 6-day) — ensures minimum 2 abs sessions per week
+  const absSet = new Set(days >= 6 ? [0, 2, 4] : [0, 2]);
+
+  const seq = splits.map(([n, ids], i) => {
+    const entry = makeWO(n, ids, training);
+    entry.hasAbs    = absSet.has(i);
+    entry.hasCardio = !entry.hasAbs;
+    return entry;
+  });
   return { ...training, seq, cursor: 0, weekStarted: false, lastTrainTs: null };
 }
 

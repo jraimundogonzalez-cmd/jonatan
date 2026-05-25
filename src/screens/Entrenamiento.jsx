@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "../store/AppContext";
 import { EX, TECH, CARDIO, SPLITS, byId, cById, primary } from "../data/exercises";
-import { buildSchedule, buildSession, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
+import { buildSchedule, buildSession, buildAbsBlock, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
 import { recommendSubstitutes, generateRoutine, buildSessionFromCats, inferCats, analyzeRoutine, GYM_DEFAULT, HOME_DEFAULT, CAT_LABELS_MAP } from "../utils/ai";
 
 const C = {
@@ -14,6 +14,378 @@ const C = {
 };
 
 const GOAL_N = { musculo:"ganar músculo", grasa:"perder grasa", recomp:"recomposición", fuerza:"fuerza", salud:"salud general" };
+
+const CARDIO_MENU = [
+  { id:"bici",      ic:"🚴", n:"Bici estática",   zona:"Z2 · 80-90 rpm" },
+  { id:"andar",     ic:"🚶", n:"Cinta andar",      zona:"Z1-Z2 · inclinación 3-6%" },
+  { id:"correr",    ic:"🏃", n:"Cinta correr",     zona:"Z2-Z3 · ritmo sostenido" },
+  { id:"escalera",  ic:"🪜", n:"Escaladora",       zona:"Z2-Z3 · paso completo" },
+  { id:"remoergo",  ic:"🛶", n:"Remo ergómetro",   zona:"Z2-Z3 · cuerpo completo" },
+  { id:"eliptica",  ic:"🤸", n:"Elíptica",         zona:"Z2 · bajo impacto" },
+  { id:"natacion",  ic:"🏊", n:"Natación",         zona:"Z2-Z3 · técnica libre" },
+  { id:"hiit",      ic:"⚡", n:"HIIT intervalos",  zona:"Z4-Z5 · 30s/90s" },
+];
+
+const MESOCYCLE_PHASES = [
+  { name:"Acumulación",     color:"#60a5fa", desc:"Volumen alto, intensidad moderada. Construyes base." },
+  { name:"Intensificación", color:"#f59e0b", desc:"Volumen moderado, intensidad alta. Cargas suben." },
+  { name:"Realización",     color:"#ef4444", desc:"Volumen bajo, intensidad máxima. Pico de fuerza." },
+  { name:"Descarga",        color:"#4ade80", desc:"Volumen muy bajo. El cuerpo supracompensa y crece." },
+];
+
+const MUSCLE_GROUPS = [
+  { id:"Pecho",     icon:"🫁" },
+  { id:"Espalda",   icon:"🦾" },
+  { id:"Hombros",   icon:"⬆️" },
+  { id:"Bíceps",    icon:"💪" },
+  { id:"Tríceps",   icon:"👊" },
+  { id:"Cuádriceps",icon:"🦵" },
+  { id:"Isquios",   icon:"🦵" },
+  { id:"Glúteos",   icon:"🍑" },
+  { id:"Core",      icon:"⚡" },
+];
+
+const MUSCLE_MAP = {
+  "Pecho":["pecho","pectoral","Pecho","Pectoral"],
+  "Espalda":["espalda","dorsal","Espalda","Dorsal"],
+  "Hombros":["hombro","deltoides","Hombro","Hombros","Deltoides"],
+  "Bíceps":["bíceps","biceps","Bíceps"],
+  "Tríceps":["tríceps","triceps","Tríceps"],
+  "Cuádriceps":["cuádriceps","cuadriceps","Cuádriceps"],
+  "Isquios":["isquios","femoral","Isquios","Femorales"],
+  "Glúteos":["glúteo","gluteo","Glúteos","Glúteo"],
+  "Core":["core","Core","abdomen","Abdomen","Abdominales","oblicuos"],
+};
+
+function muscleStatus(muscleId, lastMuscles, prevMuscles) {
+  const aliases = MUSCLE_MAP[muscleId] || [muscleId];
+  const inLast = lastMuscles.some(m => aliases.some(a => m.toLowerCase().includes(a.toLowerCase())));
+  const inPrev = prevMuscles.some(m => aliases.some(a => m.toLowerCase().includes(a.toLowerCase())));
+  if (inLast) return "fatigado";
+  if (inPrev) return "recuperando";
+  return "fresco";
+}
+
+function getCoachMessage(sessionName, muscles, rpe) {
+  const rpeN = +rpe;
+  let msg = "";
+  if (rpeN <= 3) msg = "Sesión muy suave. Si te encuentras bien, podrías subir un poco la intensidad la próxima vez.";
+  else if (rpeN <= 5) msg = "Ritmo controlado. Estás acumulando volumen de calidad. Sigue así.";
+  else if (rpeN <= 7) msg = "Zona óptima de progreso. Intensidad correcta para crecer sin sobreentrenar.";
+  else if (rpeN <= 8) msg = "Sesión exigente. Tu cuerpo tiene todo lo que necesita para mejorar. Prioriza el descanso y la proteína.";
+  else msg = "Esfuerzo máximo. Recuperación prioritaria: 8h de sueño, 2-2.5g proteína/kg y evita más entrenos duros en 48h.";
+
+  const hasPierna = muscles.some(m => ["Cuádriceps","Isquios","Glúteos"].some(g => m.includes(g) || g.includes(m)));
+  const hasEspalda = muscles.some(m => m.includes("espalda") || m.includes("Espalda") || m.includes("dorsal"));
+  if (hasPierna) msg += " Las piernas tardan 72-96h en recuperar — no fuerces trabajo de cuádriceps mañana.";
+  else if (hasEspalda) msg += " La espalda trabaja en casi todos los empujes. Cuida la postura las próximas 48h.";
+
+  return msg;
+}
+
+// ── Goal Date Card ────────────────────────────────────────────────
+function GoalDateCard({ training, setState }) {
+  const [editing, setEditing] = useState(false);
+  const [dateInput, setDateInput] = useState(training.goalDate ? training.goalDate.slice(0, 10) : "");
+
+  const save = () => {
+    if (!dateInput) return;
+    setState(s => ({ ...s, training: { ...s.training, goalDate: dateInput } }));
+    setEditing(false);
+  };
+  const clear = () => {
+    setState(s => ({ ...s, training: { ...s.training, goalDate: null } }));
+    setDateInput("");
+    setEditing(false);
+  };
+
+  const goalDate = training.goalDate ? new Date(training.goalDate + "T12:00:00") : null;
+  const today = new Date();
+  const daysLeft = goalDate ? Math.ceil((goalDate - today) / (1000 * 60 * 60 * 24)) : null;
+  const weeksLeft = daysLeft !== null ? Math.floor(daysLeft / 7) : null;
+  const cyclesLeft = weeksLeft !== null ? Math.floor(weeksLeft / 4) : null;
+  const phasesLeft = weeksLeft !== null ? weeksLeft % 4 : null;
+
+  const urgency = daysLeft !== null ? (daysLeft <= 14 ? "#ef4444" : daysLeft <= 42 ? "#f59e0b" : "#4ade80") : "#64748b";
+
+  return (
+    <div style={{ ...C.card, border: `1px solid ${urgency}30`, background: `${urgency}08` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, color: urgency, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 3 }}>
+            Objetivo · Fecha pico
+          </div>
+          <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 700 }}>
+            Abdomen seco y muy definido
+          </div>
+        </div>
+        <button onClick={() => setEditing(e => !e)}
+          style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", color: "#64748b", padding: "0 4px" }}>
+          {editing ? "×" : "✏️"}
+        </button>
+      </div>
+
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input type="date" value={dateInput} onChange={e => setDateInput(e.target.value)}
+            min={new Date().toISOString().slice(0, 10)}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "10px 12px", color: "#f1f5f9", fontSize: 14, outline: "none", width: "100%" }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={save} style={{ ...C.btnA, flex: 2, padding: "11px 0" }}>Guardar fecha</button>
+            {training.goalDate && <button onClick={clear} style={{ flex: 1, background: "none", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", borderRadius: 11, padding: "11px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Quitar</button>}
+          </div>
+        </div>
+      ) : goalDate ? (
+        <div>
+          <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 36, fontWeight: 800, color: urgency, lineHeight: 1 }}>{Math.max(0, daysLeft)}</div>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>días</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              {cyclesLeft > 0 && <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 3 }}>
+                {cyclesLeft} mesociclo{cyclesLeft !== 1 ? "s" : ""} + {phasesLeft} semana{phasesLeft !== 1 ? "s" : ""}
+              </div>}
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                {goalDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </div>
+              {daysLeft <= 0 && <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 700, marginTop: 4 }}>Fecha alcanzada</div>}
+              {daysLeft > 0 && daysLeft <= 14 && <div style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, marginTop: 4 }}>Fase final · máxima intensidad</div>}
+            </div>
+          </div>
+          {daysLeft > 0 && (
+            <div style={{ height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 9, overflow: "hidden" }}>
+              <div style={{ height: "100%", borderRadius: 9, background: `linear-gradient(90deg, ${urgency}, ${urgency}99)`,
+                width: `${Math.max(2, Math.min(100, 100 - (daysLeft / 365) * 100))}%`, transition: "width .4s" }} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ textAlign: "center", padding: "8px 0" }}>
+          <button onClick={() => setEditing(true)}
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 20px", color: "#64748b", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+            + Fijar fecha objetivo
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cardio Picker Modal ───────────────────────────────────────────
+function CardioPickerModal({ onSave, onSkip, minMin = 20 }) {
+  const [selected, setSelected] = useState(null);
+  const [duration, setDuration] = useState(minMin);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
+      <div style={{ background: "#080d08", border: "1px solid rgba(96,165,250,0.25)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflowY: "auto", padding: "20px 16px 40px" }}>
+        <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
+        <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Cardio del día</div>
+        <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>Elige tu cardio</h2>
+        <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 16px" }}>Mínimo {minMin} minutos. Zona de frecuencia cardíaca moderada.</p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+          {CARDIO_MENU.map(c => (
+            <div key={c.id} onClick={() => setSelected(c.id)}
+              style={{ border: `1.5px solid ${selected === c.id ? "#60a5fa" : "rgba(255,255,255,0.1)"}`, borderRadius: 14, padding: "12px 10px", cursor: "pointer", background: selected === c.id ? "rgba(96,165,250,0.1)" : "rgba(255,255,255,0.025)", textAlign: "center", transition: "all .15s" }}>
+              <div style={{ fontSize: 28, marginBottom: 4 }}>{c.ic}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: selected === c.id ? "#93c5fd" : "#e2e8f0", marginBottom: 2 }}>{c.n}</div>
+              <div style={{ fontSize: 10, color: "#475569" }}>{c.zona}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <span style={C.lbl}>Duración</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <input type="range" min={minMin} max={90} value={duration} onChange={e => setDuration(+e.target.value)}
+              style={{ flex: 1, accentColor: "#60a5fa" }} />
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#60a5fa", minWidth: 50, textAlign: "right" }}>{duration}m</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#475569", marginTop: 2 }}>
+            <span>{minMin} min</span><span>60 min</span><span>90 min</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => selected && onSave(selected, duration)} disabled={!selected}
+            style={{ ...C.btnA, flex: 2, background: selected ? "linear-gradient(135deg,#3b82f6,#1d4ed8)" : "#1e293b", color: selected ? "#fff" : "#475569", opacity: selected ? 1 : .7 }}>
+            Guardar cardio ({duration} min)
+          </button>
+          <button onClick={onSkip}
+            style={{ flex: 1, background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 11, padding: "13px 8px", fontSize: 12, color: "#64748b", cursor: "pointer", fontFamily: "inherit" }}>
+            Saltar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Recovery Map ─────────────────────────────────────────────────
+function RecoveryMap({ daily }) {
+  const entries = Object.entries(daily || {})
+    .filter(([, v]) => v.training?.muscles?.length > 0)
+    .sort(([a], [b]) => b.localeCompare(a));
+  const lastMuscles  = entries[0]?.[1]?.training?.muscles || [];
+  const prevMuscles  = entries[1]?.[1]?.training?.muscles || [];
+
+  if (lastMuscles.length === 0) return null;
+
+  const STATUS = {
+    fatigado:    { color: "#ef4444", dot: "#ef4444", label: "Fatigado", bg: "rgba(239,68,68,0.1)" },
+    recuperando: { color: "#f59e0b", dot: "#f59e0b", label: "Recuperando", bg: "rgba(245,158,11,0.08)" },
+    fresco:      { color: "#4ade80", dot: "#4ade80", label: "Listo",  bg: "rgba(74,222,128,0.06)" },
+  };
+
+  return (
+    <div style={C.card}>
+      <span style={C.lbl}>Mapa de recuperación muscular</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+        {MUSCLE_GROUPS.map(({ id, icon }) => {
+          const st = muscleStatus(id, lastMuscles, prevMuscles);
+          const s = STATUS[st];
+          return (
+            <div key={id} style={{ background: s.bg, borderRadius: 10, padding: "8px 6px", textAlign: "center", border: `1px solid ${s.color}25` }}>
+              <div style={{ fontSize: 16, marginBottom: 2 }}>{icon}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#e2e8f0", marginBottom: 2 }}>{id}</div>
+              <div style={{ fontSize: 9, color: s.color, fontWeight: 700, textTransform: "uppercase" }}>{s.label}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 10, color: "#475569" }}>
+        <span><span style={{ color: "#ef4444" }}>●</span> Fatigado (&lt;48h)</span>
+        <span><span style={{ color: "#f59e0b" }}>●</span> Recuperando</span>
+        <span><span style={{ color: "#4ade80" }}>●</span> Listo</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Post-Session Modal (RPE + Coach) ──────────────────────────────
+function PostSessionModal({ sessionName, muscles, hasCardio, onDone }) {
+  const [rpe, setRpe] = useState(7);
+  const [step, setStep] = useState(hasCardio ? "cardio" : "rpe"); // cardio → rpe → coach
+  const [cardioSel, setCardioSel] = useState(null);
+  const [cardioDur, setCardioDur] = useState(20);
+  const [cardioSelecting, setCardioSelecting] = useState(null);
+
+  const coachMsg = getCoachMessage(sessionName, muscles, rpe);
+
+  const finish = () => onDone({ rpe, cardio: cardioSel ? { id: cardioSel, min: cardioDur } : null });
+
+  if (step === "cardio") {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
+        <div style={{ background: "#080d08", border: "1px solid rgba(96,165,250,0.25)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflowY: "auto", padding: "20px 16px 40px" }}>
+          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
+          <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Cardio del día</div>
+          <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>¿Añadir cardio?</h2>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 14px" }}>Hoy es día de cardio · mínimo 20 min</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+            {CARDIO_MENU.map(c => (
+              <div key={c.id} onClick={() => setCardioSelecting(c.id)}
+                style={{ border: `1.5px solid ${cardioSelecting === c.id ? "#60a5fa" : "rgba(255,255,255,0.1)"}`, borderRadius: 14, padding: "12px 10px", cursor: "pointer", background: cardioSelecting === c.id ? "rgba(96,165,250,0.1)" : "rgba(255,255,255,0.025)", textAlign: "center" }}>
+                <div style={{ fontSize: 26, marginBottom: 3 }}>{c.ic}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: cardioSelecting === c.id ? "#93c5fd" : "#e2e8f0" }}>{c.n}</div>
+              </div>
+            ))}
+          </div>
+          {cardioSelecting && (
+            <div style={{ marginBottom: 14 }}>
+              <span style={C.lbl}>Duración</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <input type="range" min={20} max={90} value={cardioDur} onChange={e => setCardioDur(+e.target.value)}
+                  style={{ flex: 1, accentColor: "#60a5fa" }} />
+                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#60a5fa", minWidth: 50, textAlign: "right" }}>{cardioDur}m</span>
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { if (cardioSelecting) setCardioSel(cardioSelecting); setStep("rpe"); }}
+              disabled={!cardioSelecting}
+              style={{ ...C.btnA, flex: 2, background: cardioSelecting ? "linear-gradient(135deg,#3b82f6,#1d4ed8)" : "#1e293b", color: cardioSelecting ? "#fff" : "#475569" }}>
+              Añadir {cardioDur} min de cardio
+            </button>
+            <button onClick={() => setStep("rpe")} style={{ flex: 1, background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 11, padding: "13px 8px", fontSize: 12, color: "#64748b", cursor: "pointer", fontFamily: "inherit" }}>
+              Sin cardio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "rpe") {
+    const rpeColor = rpe <= 4 ? "#4ade80" : rpe <= 6 ? "#f59e0b" : rpe <= 8 ? "#f97316" : "#ef4444";
+    const rpeLabels = ["","Muy fácil","Fácil","Suave","Moderado","Moderado+","Difícil","Difícil+","Muy difícil","Máximo-1","Máximo"];
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
+        <div style={{ background: "#080d08", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", width: "100%", padding: "20px 16px 40px" }}>
+          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
+          <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Valoración RPE</div>
+          <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>¿Cómo fue la sesión?</h2>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 20px" }}>Rate of Perceived Exertion · 1 (muy fácil) → 10 (máximo)</p>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 64, fontWeight: 800, color: rpeColor, lineHeight: 1 }}>{rpe}</div>
+            <div style={{ fontSize: 14, color: rpeColor, fontWeight: 600, marginTop: 4 }}>{rpeLabels[rpe]}</div>
+          </div>
+          <input type="range" min={1} max={10} value={rpe} onChange={e => setRpe(+e.target.value)}
+            style={{ width: "100%", accentColor: rpeColor, marginBottom: 20, height: 6 }} />
+          <button onClick={() => setStep("coach")} style={{ ...C.btnA }}>Ver feedback del coach →</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "coach") {
+    const cardioInfo = cardioSel ? CARDIO_MENU.find(c => c.id === cardioSel) : null;
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
+        <div style={{ background: "#080d08", border: "1px solid rgba(167,139,250,0.25)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "80vh", overflowY: "auto", padding: "20px 16px 40px" }}>
+          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
+          <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Coach IA</div>
+          <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 16px" }}>Análisis post-sesión</h2>
+
+          <div style={{ padding: "14px", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: "#e2e8f0", lineHeight: 1.65 }}>{coachMsg}</div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px", textAlign: "center" }}>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 4 }}>RPE</div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 800, color: rpe >= 8 ? "#ef4444" : rpe >= 6 ? "#f59e0b" : "#4ade80" }}>{rpe}/10</div>
+            </div>
+            {cardioInfo && (
+              <div style={{ background: "rgba(96,165,250,0.06)", borderRadius: 12, padding: "12px", textAlign: "center", border: "1px solid rgba(96,165,250,0.15)" }}>
+                <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, marginBottom: 4 }}>Cardio</div>
+                <div style={{ fontSize: 22 }}>{cardioInfo.ic}</div>
+                <div style={{ fontSize: 11, color: "#93c5fd", fontWeight: 700 }}>{cardioDur} min</div>
+              </div>
+            )}
+          </div>
+
+          {muscles.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".08em" }}>Músculos trabajados</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {muscles.slice(0, 8).map((m, i) => (
+                  <span key={i} style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, color: "#fbbf24" }}>{m}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button onClick={finish} style={{ ...C.btnA }}>Finalizar sesión</button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 // ── Onboarding ─────────────────────────────────────────────────────
 const ONB = [
@@ -374,8 +746,10 @@ function SwapModal({ exerciseId, training, onPick, onClose }) {
 // ── Session Player ────────────────────────────────────────────────
 function SessionPlayer({ entry, training, onComplete, onExit }) {
   const { logPR, state } = useApp();
-  const initialPlan = buildSession(entry, training);
+  const absBlock = entry.hasAbs ? buildAbsBlock(training.level) : [];
+  const initialPlan = [...buildSession(entry, training), ...absBlock];
   const [plan, setPlan] = useState(initialPlan);
+  const [showPost, setShowPost] = useState(false);
   const [done, setDone] = useState([]);
   const [restIdx, setRestIdx] = useState(null);
   const [restTime, setRestTime] = useState(0);
@@ -501,10 +875,38 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
         );
       })}
 
+      {/* Abs section label */}
+      {entry.hasAbs && plan.some(x => x._isAbs) && (
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: 8, paddingTop: 12, marginBottom: 4 }}>
+          <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase" }}>⚡ Bloque Abdominales</div>
+        </div>
+      )}
+
+      {/* Cardio badge */}
+      {entry.hasCardio && (
+        <div style={{ background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 12, padding: "10px 14px", marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🚴</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#93c5fd" }}>Cardio del día</div>
+            <div style={{ fontSize: 11, color: "#475569" }}>Elige tipo y duración al finalizar · mín. 20 min</div>
+          </div>
+        </div>
+      )}
+
       {/* Complete */}
-      <button onClick={onComplete} style={{ ...C.btnA, marginTop: 8 }}>
+      <button onClick={() => setShowPost(true)} style={{ ...C.btnA, marginTop: 12 }}>
         ✅ Completar entrenamiento
       </button>
+
+      {/* Post-session modal */}
+      {showPost && (
+        <PostSessionModal
+          sessionName={entry.name}
+          muscles={[...new Set(plan.flatMap(x => byId(x.id)?.m || []))]}
+          hasCardio={!!entry.hasCardio}
+          onDone={(result) => { setShowPost(false); onComplete(result); }}
+        />
+      )}
 
       {/* PR Modal */}
       {prModal && (
@@ -581,6 +983,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 
 // ── Session Detail (preview) ──────────────────────────────────────
 function SessionDetailView({ entry, training, isCurrent, onBack, onStart, onSaveDone }) {
+  const absBlock = entry.hasAbs ? buildAbsBlock(training.level) : [];
   const plan = buildSession(entry, training);
   const [saved, setSaved] = useState(false);
   const handleSave = () => {
@@ -599,8 +1002,14 @@ function SessionDetailView({ entry, training, isCurrent, onBack, onStart, onSave
         </div>
       </div>
       <div style={{ padding: "16px" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>{entry.name}</h2>
-        <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 18px" }}>{plan.length} ejercicios · {estMin(plan)} min estimados{isCurrent ? " · siguiente en tu plan" : ""}</p>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", margin: "0 0 6px" }}>{entry.name}</h2>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          <span style={{ background: "rgba(255,255,255,0.05)", borderRadius: 20, padding: "3px 10px", fontSize: 11, color: "#64748b" }}>
+            {plan.length} ejercicios · {estMin(plan)} min{isCurrent ? " · siguiente" : ""}
+          </span>
+          {entry.hasAbs && <span style={{ background: "rgba(167,139,250,0.12)", borderRadius: 20, padding: "3px 10px", fontSize: 11, color: "#c4b5fd", fontWeight: 700 }}>⚡ Abdominales</span>}
+          {entry.hasCardio && <span style={{ background: "rgba(96,165,250,0.1)", borderRadius: 20, padding: "3px 10px", fontSize: 11, color: "#93c5fd", fontWeight: 700 }}>🚴 Cardio</span>}
+        </div>
         {plan.map((x, idx) => {
           const ex = byId(x.id);
           if (!ex) return null;
@@ -620,8 +1029,43 @@ function SessionDetailView({ entry, training, isCurrent, onBack, onStart, onSave
             </div>
           );
         })}
+        {/* Abs block preview */}
+        {absBlock.length > 0 && (
+          <>
+            <div style={{ borderTop: "1px solid rgba(167,139,250,0.15)", margin: "12px 0 8px", paddingTop: 10 }}>
+              <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>⚡ Bloque Abdominales</div>
+            </div>
+            {absBlock.map((x, idx) => {
+              const ex = byId(x.id);
+              if (!ex) return null;
+              return (
+                <div key={idx} style={{ ...C.card, marginBottom: 10, border: "1px solid rgba(167,139,250,0.15)", background: "rgba(167,139,250,0.04)" }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(167,139,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>⚡</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", marginBottom: 2 }}>{ex.n}</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <span style={{ background: "rgba(167,139,250,0.1)", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#c4b5fd", fontFamily: "'DM Mono',monospace" }}>{x.sets} × {x.reps}</span>
+                        <span style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#64748b" }}>{x.rest}s descanso</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {/* Cardio notice in detail view */}
+        {entry.hasCardio && (
+          <div style={{ background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.15)", borderRadius: 12, padding: "12px 14px", marginTop: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", marginBottom: 3 }}>🚴 Cardio del día</div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>Elige tipo y duración al finalizar la sesión · mínimo 20 min</div>
+          </div>
+        )}
+
         {isCurrent && (
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button onClick={onStart} style={{ ...C.btnA, flex: 2 }}>▶ Empezar entrenamiento</button>
             <button onClick={handleSave} style={{ flex: 1, background: saved ? "rgba(74,222,128,0.08)" : "rgba(245,158,11,0.12)", border: `1px solid ${saved ? "rgba(74,222,128,0.25)" : "rgba(245,158,11,0.3)"}`, borderRadius: 11, padding: "13px 8px", fontSize: 12, fontWeight: 700, color: saved ? "#4ade80" : "#f59e0b", cursor: "pointer", fontFamily: "inherit" }}>
               {saved ? "✓ Guardado" : "💾 Guardar sesión"}
@@ -700,6 +1144,21 @@ function DayDetailModal({ dateStr, daily, onClose }) {
                 {training.exercises?.map((ex, i) => (
                   <div key={i} style={{ fontSize: 12, color: "#94a3b8", padding: "3px 0" }}>• {ex.name} — {ex.sets}×{ex.reps}</div>
                 ))}
+                {training.rpe && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: "#64748b" }}>RPE:</span>
+                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 700, color: training.rpe >= 8 ? "#ef4444" : training.rpe >= 6 ? "#f59e0b" : "#4ade80" }}>{training.rpe}/10</span>
+                  </div>
+                )}
+                {training.cardio && (() => {
+                  const c = CARDIO_MENU.find(x => x.id === training.cardio.id);
+                  return c ? (
+                    <div style={{ fontSize: 11, color: "#60a5fa", marginTop: 6 }}>
+                      {c.ic} {c.n} · {training.cardio.min} min
+                    </div>
+                  ) : null;
+                })()}
+                {training.hasAbs && <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>⚡ Bloque abdominales completado</div>}
                 {training.kcal > 0 && <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>🔥 {training.kcal} kcal quemadas</div>}
               </div>
             </div>
@@ -858,9 +1317,10 @@ export default function Entrenamiento({ onNavigate }) {
     }));
   };
 
-  const logWorkoutToDaily = (entry, kcalBurned = 0) => {
+  const logWorkoutToDaily = (entry, kcalBurned = 0, postResult = {}) => {
     const todayStr = new Date().toISOString().slice(0, 10);
-    const plan = buildSession(entry, training);
+    const absBlock = entry?.hasAbs ? buildAbsBlock(training.level) : [];
+    const plan = [...buildSession(entry, training), ...absBlock];
     const muscles = [...new Set(plan.flatMap(x => byId(x.id)?.m || []))];
     const exercises = plan.map(x => ({ id: x.id, name: byId(x.id)?.n || "", sets: x.sets, reps: x.reps }));
     setState(s => ({
@@ -871,16 +1331,23 @@ export default function Entrenamiento({ onNavigate }) {
           ...(s.daily[todayStr] || {}),
           trained: true,
           watchKcal: kcalBurned || (s.daily[todayStr]?.watchKcal || 0),
-          training: { name: entry?.name || "", muscles, exercises, kcal: kcalBurned, savedAt: Date.now() }
+          training: {
+            name: entry?.name || "",
+            muscles, exercises, kcal: kcalBurned,
+            rpe: postResult.rpe || null,
+            cardio: postResult.cardio || null,
+            hasAbs: !!entry?.hasAbs,
+            savedAt: Date.now()
+          }
         }
       }
     }));
   };
 
-  const completeWorkout = () => {
+  const completeWorkout = (postResult = {}) => {
     const kcalBurned = +kcalInput || todayLog.watchKcal || 0;
     markTrained(kcalBurned);
-    logWorkoutToDaily(nextWO, kcalBurned);
+    logWorkoutToDaily(nextWO, kcalBurned, postResult);
     setState(s => ({
       ...s,
       training: {
@@ -888,7 +1355,7 @@ export default function Entrenamiento({ onNavigate }) {
         cursor: (s.training.cursor || 0) + 1,
         weekStarted: true,
         lastTrainTs: Date.now(),
-        done: [...(s.training.done || []), { name: nextWO?.name, date: new Date().toISOString(), kcal: kcalBurned }],
+        done: [...(s.training.done || []), { name: nextWO?.name, date: new Date().toISOString(), kcal: kcalBurned, rpe: postResult.rpe }],
         streak: (s.training.streak || 0) + 1,
       }
     }));
@@ -992,6 +1459,9 @@ export default function Entrenamiento({ onNavigate }) {
       </div>
 
       <div style={{ padding: "16px" }}>
+        {/* Goal Date Countdown */}
+        <GoalDateCard training={training} setState={setState} />
+
         {/* Today status */}
         {trainedToday ? (
           <div style={{ ...C.card, background: "rgba(74,222,128,0.05)", borderColor: "rgba(74,222,128,0.2)", textAlign: "center", padding: "24px 16px" }}>
@@ -1002,10 +1472,12 @@ export default function Entrenamiento({ onNavigate }) {
         ) : (
           <div style={{ ...C.card, background: "linear-gradient(160deg,#1a1200,rgba(54,48,36,.5))", borderColor: "rgba(245,158,11,0.2)" }}>
             <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>Siguiente en tu plan</div>
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>{nextWO?.name}</h2>
-            <p style={{ color: "#94a3b8", fontSize: 13, margin: "0 0 16px" }}>
-              {buildSession(nextWO, training).length} ejercicios · {estMin(buildSession(nextWO, training))} min
-            </p>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: "#f1f5f9", margin: "0 0 6px" }}>{nextWO?.name}</h2>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+              <span style={{ color: "#94a3b8", fontSize: 12 }}>{buildSession(nextWO, training).length} ejercicios · {estMin(buildSession(nextWO, training))} min</span>
+              {nextWO?.hasAbs && <span style={{ fontSize: 11, color: "#a78bfa", background: "rgba(167,139,250,0.12)", borderRadius: 10, padding: "1px 9px", fontWeight: 700 }}>⚡ Abdominales</span>}
+              {nextWO?.hasCardio && <span style={{ fontSize: 11, color: "#60a5fa", background: "rgba(96,165,250,0.1)", borderRadius: 10, padding: "1px 9px", fontWeight: 700 }}>🚴 Cardio</span>}
+            </div>
 
             {/* Apple Watch kcal */}
             <div style={{ marginBottom: 14 }}>
@@ -1049,7 +1521,12 @@ export default function Entrenamiento({ onNavigate }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: isCurrent ? "#fbbf24" : "#e2e8f0" }}>{e.name}</div>
-                  <div style={{ fontSize: 11, color: "#64748b" }}>{buildSession(e, training).length} ejercicios · {estMin(buildSession(e, training))} min{isCurrent ? " · siguiente" : ""}</div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 2 }}>
+                    <span style={{ fontSize: 11, color: "#64748b" }}>{buildSession(e, training).length} ej · {estMin(buildSession(e, training))} min</span>
+                    {e.hasAbs && <span style={{ fontSize: 10, color: "#a78bfa", background: "rgba(167,139,250,0.1)", borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>⚡ Abs</span>}
+                    {e.hasCardio && <span style={{ fontSize: 10, color: "#60a5fa", background: "rgba(96,165,250,0.08)", borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>🚴 Cardio</span>}
+                    {isCurrent && <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700 }}>· siguiente</span>}
+                  </div>
                 </div>
                 <span style={{ color: "#334155", fontSize: 18, flexShrink: 0 }}>›</span>
               </div>
@@ -1057,22 +1534,50 @@ export default function Entrenamiento({ onNavigate }) {
           })}
         </div>
 
-        {/* Stats */}
-        {(training.done?.length > 0 || training.streak > 0) && (
-          <div style={{ ...C.card, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 32, fontWeight: 700, color: "#f59e0b" }}>{training.done?.length || 0}</div>
-              <div style={{ fontSize: 11, color: "#64748b" }}>Sesiones completadas</div>
+        {/* Stats + Mesocycle */}
+        {(training.done?.length > 0 || training.streak > 0) && (() => {
+          const doneCount = training.done?.length || 0;
+          const daysPerWeek = training.days || 4;
+          const cycleSessions = daysPerWeek * 4;
+          const posInCycle = doneCount % cycleSessions;
+          const weekInCycle = Math.min(4, Math.floor(posInCycle / daysPerWeek) + 1);
+          const phase = MESOCYCLE_PHASES[weekInCycle - 1];
+          const cycleNum = Math.floor(doneCount / cycleSessions) + 1;
+          return (
+            <div style={{ ...C.card }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 32, fontWeight: 700, color: "#f59e0b" }}>{doneCount}</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>Sesiones</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 32, fontWeight: 700, color: "#4ade80" }}>{training.streak || 0}</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>Racha</div>
+                </div>
+              </div>
+              <div style={{ background: `${phase.color}12`, border: `1px solid ${phase.color}30`, borderRadius: 12, padding: "10px 14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                  <div style={{ fontSize: 10, color: phase.color, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                    Mesociclo {cycleNum} · Semana {weekInCycle}/4
+                  </div>
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {[1,2,3,4].map(w => (
+                      <div key={w} style={{ width: 14, height: 14, borderRadius: 4, background: w <= weekInCycle ? phase.color : "rgba(255,255,255,0.08)" }} />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{phase.name}</div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{phase.desc}</div>
+              </div>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 32, fontWeight: 700, color: "#4ade80" }}>{training.streak || 0}</div>
-              <div style={{ fontSize: 11, color: "#64748b" }}>Racha actual</div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Calendar */}
         <TrainingCalendar done={training.done || []} daily={state.daily || {}} onDayPress={ds => setSelectedDay(ds)} />
+
+        {/* Recovery Map */}
+        <RecoveryMap daily={state.daily || {}} />
 
         {/* AI regenerate */}
         <button onClick={regenerateWithAI}
