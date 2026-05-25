@@ -625,6 +625,11 @@ export default function Nutricion() {
                 <div style={{ background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.18)", borderRadius: 8, padding: "7px 12px", fontSize: 11, color: "#86efac", fontWeight: 600 }}>
                   📊 TOTAL: {Math.round(d.totals.p)}g P · {Math.round(d.totals.c)}g HC · {Math.round(d.totals.f)}g G · {d.totals.kcal} kcal
                 </div>
+                {d.fatGapG > 20 && (
+                  <div style={{ padding: "10px 12px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", borderRadius: 10, marginTop: 8, fontSize: 12, color: "#fbbf24", lineHeight: 1.5 }}>
+                    ⚠️ Faltan ~{d.fatGapG}g de grasa ({Math.round(d.fatGapG * 9)} kcal) para llegar a tu objetivo calórico. Añade a tus alimentos: aceite de oliva, aguacate o frutos secos.
+                  </div>
+                )}
               </div>
             ))}
           </>

@@ -86,29 +86,42 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
     const nA = assignedFoods.map(normFood).sort((a, b) => b.p - a.p);
     const mainProt = nA[0];
     const rest = nA.slice(1);
-    // Default portions for secondary foods
-    const defaultG = (f) => f.p > 50 ? 40 : f.p > 15 ? 150 : f.c > 20 ? 150 : 200;
-    const restItems = rest.map(f => ({ food: f, grams: r5(defaultG(f)) }));
-    const restSum = restItems.reduce((a, it) => ({
-      p: a.p + it.grams * it.food.p / 100, c: a.c + it.grams * it.food.c / 100,
-    }), { p: 0, c: 0 });
-    // Main protein: adjust grams to meet remaining P target
-    const maxPg = mainProt.p > 50 ? 80 : 500;
-    const pg = r5(clamp(mainProt.p > 0 ? Math.max(0, tP - restSum.p) / (mainProt.p / 100) : 50, 30, maxPg));
-    // Adjust the highest-carb secondary food to meet carb target if it has meaningful carbs
-    const cIdx = restItems.reduce((bi, it, i) => it.food.c > (restItems[bi]?.food.c || 0) ? i : bi, 0);
-    if (restItems.length > 0 && restItems[cIdx].food.c >= 8) {
-      const remC = Math.max(0,
-        tC - pg * mainProt.c / 100
-           - restItems.reduce((a, it, i) => a + (i === cIdx ? 0 : it.grams * it.food.c / 100), 0));
-      const maxCg = restItems[cIdx].food.p > 8 ? 350 : 600;
-      const adjG = restItems[cIdx].food.c > 0
-        ? r5(clamp(remC / (restItems[cIdx].food.c / 100), restItems[cIdx].grams, maxCg))
-        : restItems[cIdx].grams;
-      restItems[cIdx] = { ...restItems[cIdx], grams: adjG };
+
+    const isPowder = (f) => f.p > 50;
+    const isDairy  = (f) => f.cat === "postreprot" || f.cat === "lacteos";
+
+    // Default portions: powder → 1 scoop (30g), dairy → generous (450g)
+    const defaultG = (f) => isPowder(f) ? 30 : f.p > 15 ? 150 : isDairy(f) ? 450 : f.c > 20 ? 150 : 200;
+    const ri = rest.map(f => ({ food: f, grams: r5(defaultG(f)) }));
+
+    // Main protein: cap powder at 30g, otherwise scale to meet P target
+    const mainIsPowder = isPowder(mainProt);
+    const restP = ri.reduce((a, it) => a + it.grams * it.food.p / 100, 0);
+    const pg = r5(mainIsPowder ? 30 : clamp(mainProt.p > 0 ? Math.max(0, tP - restP) / (mainProt.p / 100) : 50, 30, 500));
+
+    // Fill remaining protein gap through the highest-protein secondary food (dairy scales up to 700g)
+    const pGap = Math.max(0, tP - pg * mainProt.p / 100 - ri.reduce((a, it) => a + it.grams * it.food.p / 100, 0));
+    if (pGap > 5 && ri.length > 0) {
+      const bpi = ri.reduce((bi, it, i) => it.food.p > (ri[bi]?.food.p || 0) ? i : bi, 0);
+      if (ri[bpi].food.p > 2) {
+        const cap = isDairy(ri[bpi].food) ? 700 : 500;
+        const cur = ri[bpi].grams * ri[bpi].food.p / 100;
+        const adjG = r5(clamp((cur + pGap) / (ri[bpi].food.p / 100), ri[bpi].grams, cap));
+        ri[bpi] = { ...ri[bpi], grams: adjG };
+      }
     }
+
+    // Adjust highest-carb secondary food to meet carb target
+    const cIdx = ri.reduce((bi, it, i) => it.food.c > (ri[bi]?.food.c || 0) ? i : bi, 0);
+    if (ri.length > 0 && ri[cIdx].food.c >= 8) {
+      const remC = Math.max(0, tC - pg * mainProt.c / 100 - ri.reduce((a, it, i) => a + (i === cIdx ? 0 : it.grams * it.food.c / 100), 0));
+      const maxCg = isDairy(ri[cIdx].food) ? 700 : ri[cIdx].food.p > 8 ? 400 : 600;
+      const adjG = ri[cIdx].food.c > 0 ? r5(clamp(remC / (ri[cIdx].food.c / 100), ri[cIdx].grams, maxCg)) : ri[cIdx].grams;
+      ri[cIdx] = { ...ri[cIdx], grams: adjG };
+    }
+
     push(mainProt, pg);
-    restItems.forEach(it => push(it.food, it.grams));
+    ri.forEach(it => push(it.food, it.grams));
     return { items, totals: makeTotals() };
   }
 
@@ -257,8 +270,11 @@ export const buildPlan = ({ macros, meals, mealNames, selFoods, refeedOn, refeed
 
     const dayTotals = dayMeals.reduce((a, m) => ({ p: a.p + m.totals.p, c: a.c + m.totals.c, f: a.f + m.totals.f, kcal: a.kcal + m.totals.kcal }), { p: 0, c: 0, f: 0, kcal: 0 });
     if (hasShake) { dayTotals.p += shakeP; dayTotals.kcal += shakeP * 4; }
+    const targetKcal = Math.round(dMacros.proteina*4 + dMacros.carbos*4 + dMacros.grasas*9);
+    const fatGapG = Math.max(0, Math.round(dMacros.grasas - dayTotals.f));
     return { dayIdx: di, dayName, isRefeed, hasShake, shakeProt: shakeP, postWorkoutMeal: pwm,
-      target: { ...dMacros, kcal: Math.round(dMacros.proteina*4 + dMacros.carbos*4 + dMacros.grasas*9) },
+      target: { ...dMacros, kcal: targetKcal },
+      fatGapG,
       meals: dayMeals, totals: dayTotals };
   });
   return { days };
