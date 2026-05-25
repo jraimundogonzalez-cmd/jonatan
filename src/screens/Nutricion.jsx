@@ -126,6 +126,8 @@ export default function Nutricion() {
   const [swapping, setSwapping] = useState(null);
   const [recipe, setRecipe] = useState(null);
   const [viewTab, setViewTab] = useState("plan"); // "plan" | "shopping"
+  const [localEdits, setLocalEdits] = useState({});  // { "di_mi_id": grams }
+  const [savedDays, setSavedDays] = useState(new Set());
 
   const selFoods = useMemo(() => FOODS.filter(f => selected.includes(f.id)), [selected]);
   const kcal = Math.round(macros.proteina * 4 + macros.carbos * 4 + macros.grasas * 9);
@@ -165,10 +167,69 @@ export default function Nutricion() {
     try {
       const data = buildPlan({ macros, meals, mealNames, selFoods, refeedOn, refeedDays, refeedCarbs, refeedFat, shakeOn, shakeProt, shakeDays, priorities, postWorkoutMeal, planDays });
       setPlanData(data);
+      setLocalEdits({});
+      setSavedDays(new Set());
       save({ planData: data, planDays });
       setStep(3);
     } catch (e) { setError(e.message || "Error generando el plan"); }
     finally { setLoading(false); }
+  };
+
+  // ── Slider edit helpers ───────────────────────────────────────
+  const eKey = (di, mi, id) => `${di}_${mi}_${id}`;
+  const effG = (di, mi, item) => localEdits[eKey(di, mi, item.id)] ?? item.grams;
+  const dayHasEdits = (di) => Object.keys(localEdits).some(k => k.startsWith(`${di}_`));
+
+  const handleFoodSlider = (di, mi, changedItem, newG) => {
+    const meal = planData.days[di].meals[mi];
+    const oldG = localEdits[eKey(di, mi, changedItem.id)] ?? changedItem.grams;
+    const pPer100 = changedItem.grams > 0 ? changedItem.p / changedItem.grams * 100 : 0;
+    const deltaP = (newG - oldG) * pPer100 / 100;
+    const next = { ...localEdits, [eKey(di, mi, changedItem.id)]: newG };
+    if (Math.abs(deltaP) > 0.5) {
+      const comp = meal.items
+        .filter(it => it.id !== changedItem.id && it.grams > 0)
+        .map(it => ({ ...it, pp: it.p / it.grams * 100 }))
+        .filter(it => it.pp > 5)
+        .sort((a, b) => b.pp - a.pp)[0];
+      if (comp) {
+        const compOld = localEdits[eKey(di, mi, comp.id)] ?? comp.grams;
+        const sStep = comp.pp > 50 ? 5 : 25;
+        const raw = compOld - deltaP / (comp.pp / 100);
+        next[eKey(di, mi, comp.id)] = Math.max(15, Math.round(raw / sStep) * sStep);
+      }
+    }
+    setLocalEdits(next);
+    setSavedDays(s => { const n = new Set(s); n.delete(di); return n; });
+  };
+
+  const saveDayEdits = (di) => {
+    if (!planData) return;
+    const np = {
+      ...planData,
+      days: planData.days.map((d, idx) => {
+        if (idx !== di) return d;
+        const newMeals = d.meals.map((m, mi) => {
+          const newItems = m.items.map(item => {
+            const g = localEdits[eKey(di, mi, item.id)];
+            if (g === undefined) return item;
+            const pp = item.grams > 0 ? item.p / item.grams * 100 : 0;
+            const cp = item.grams > 0 ? item.c / item.grams * 100 : 0;
+            const fp = item.grams > 0 ? item.f / item.grams * 100 : 0;
+            return { ...item, grams: g, p: +(g*pp/100).toFixed(1), c: +(g*cp/100).toFixed(1), f: +(g*fp/100).toFixed(1) };
+          });
+          const t = newItems.reduce((a, i) => ({ p: a.p+i.p, c: a.c+i.c, f: a.f+i.f }), { p:0,c:0,f:0 });
+          t.kcal = Math.round(t.p*4+t.c*4+t.f*9); t.p = Math.round(t.p); t.c = Math.round(t.c); t.f = Math.round(t.f);
+          return { ...m, items: newItems, totals: t };
+        });
+        const dt = newMeals.reduce((a,m) => ({ p:a.p+m.totals.p,c:a.c+m.totals.c,f:a.f+m.totals.f,kcal:a.kcal+m.totals.kcal }), { p:0,c:0,f:0,kcal:0 });
+        return { ...d, meals: newMeals, totals: dt, fatGapG: Math.max(0, Math.round(d.target.grasas - dt.f)) };
+      })
+    };
+    setPlanData(np);
+    save({ planData: np });
+    setLocalEdits(e => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith(`${di}_`))));
+    setSavedDays(s => new Set([...s, di]));
   };
 
   // ── Render steps ──────────────────────────────────────────────
@@ -592,17 +653,35 @@ export default function Nutricion() {
                     </div>
 
                     {m.items.map((it, ii) => {
-                      const qty = it.u
-                        ? (() => { const n = Math.max(1, Math.round(it.grams / it.u)); return `${n} ${it.uLabel || "ud"}${n > 1 ? "s" : ""}`; })()
-                        : `${it.grams}g`;
                       const food = FOODS.find(f => f.id === it.id);
                       const { direct: da, traces: ta } = food && allergies.length ? foodAllergenMatch(food, allergies) : { direct: [], traces: [] };
+                      const hasSlider = !it.u && it.grams > 0;
+                      const g = effG(di, mi, it);
+                      const isEdited = g !== it.grams;
+                      const pp = it.grams > 0 ? it.p / it.grams * 100 : 0;
+                      const cp = it.grams > 0 ? it.c / it.grams * 100 : 0;
+                      const fp = it.grams > 0 ? it.f / it.grams * 100 : 0;
+                      const adjP = g * pp / 100, adjC = g * cp / 100, adjF = g * fp / 100;
+                      const sMin = pp > 50 ? 15 : 50;
+                      const sMax = pp > 50 ? 80 : (it.cat === "postreprot" || it.cat === "lacteos" ? 1000 : 700);
+                      const sStep = pp > 50 ? 5 : 25;
+                      const qty = it.u
+                        ? (() => { const n = Math.max(1, Math.round(it.grams / it.u)); return `${n} ${it.uLabel || "ud"}${n > 1 ? "s" : ""}`; })()
+                        : `${g}g`;
                       return (
                         <div key={ii}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 4px 8px", fontSize: 12 }}>
-                            <span style={{ color: da.length ? "#fca5a5" : "#cbd5e1" }}>• {it.name} — <strong style={{ color: da.length ? "#f87171" : "#e2e8f0" }}>{qty}</strong></span>
-                            <span style={{ fontSize: 10, color: "#475569" }}>P{Math.round(it.p)} C{Math.round(it.c)} G{Math.round(it.f)}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0 1px 8px", fontSize: 12 }}>
+                            <span style={{ color: da.length ? "#fca5a5" : "#cbd5e1" }}>• {it.name} — <strong style={{ color: da.length ? "#f87171" : isEdited ? "#c084fc" : "#e2e8f0" }}>{qty}</strong></span>
+                            <span style={{ fontSize: 10, color: "#475569" }}>P{Math.round(adjP)} C{Math.round(adjC)} G{Math.round(adjF)}</span>
                           </div>
+                          {hasSlider && (
+                            <div style={{ paddingLeft: 14, paddingRight: 4, paddingBottom: 4 }}>
+                              <input type="range" min={sMin} max={sMax} step={sStep} value={g}
+                                onChange={e => handleFoodSlider(di, mi, it, +e.target.value)}
+                                style={{ width: "100%", accentColor: isEdited ? "#c084fc" : "#4ade80", cursor: "pointer", height: 4 }}
+                              />
+                            </div>
+                          )}
                           {da.length > 0 && (
                             <div style={{ margin: "2px 8px 4px", padding: "4px 8px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, fontSize: 10, color: "#f87171", fontWeight: 700 }}>
                               🚨 CONTIENE: {da.join(", ").toUpperCase()}
@@ -616,20 +695,52 @@ export default function Nutricion() {
                         </div>
                       );
                     })}
-                    <div style={{ fontSize: 10, color: "#475569", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                      {Math.round(m.totals.p)}g P · {Math.round(m.totals.c)}g HC · {Math.round(m.totals.f)}g G · {m.totals.kcal} kcal
-                    </div>
+                    {(() => {
+                      const t = m.items.reduce((a, it) => {
+                        const g = effG(di, mi, it);
+                        const pp = it.grams > 0 ? it.p / it.grams * 100 : 0;
+                        const cp = it.grams > 0 ? it.c / it.grams * 100 : 0;
+                        const fp = it.grams > 0 ? it.f / it.grams * 100 : 0;
+                        return { p: a.p + g*pp/100, c: a.c + g*cp/100, f: a.f + g*fp/100 };
+                      }, { p:0, c:0, f:0 });
+                      t.kcal = Math.round(t.p*4 + t.c*4 + t.f*9);
+                      return (
+                        <div style={{ fontSize: 10, color: "#475569", marginTop: 4, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                          {Math.round(t.p)}g P · {Math.round(t.c)}g HC · {Math.round(t.f)}g G · {t.kcal} kcal
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
 
-                <div style={{ background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.18)", borderRadius: 8, padding: "7px 12px", fontSize: 11, color: "#86efac", fontWeight: 600 }}>
-                  📊 TOTAL: {Math.round(d.totals.p)}g P · {Math.round(d.totals.c)}g HC · {Math.round(d.totals.f)}g G · {d.totals.kcal} kcal
-                </div>
-                {d.fatGapG > 20 && (
-                  <div style={{ padding: "10px 12px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", borderRadius: 10, marginTop: 8, fontSize: 12, color: "#fbbf24", lineHeight: 1.5 }}>
-                    ⚠️ Faltan ~{d.fatGapG}g de grasa ({Math.round(d.fatGapG * 9)} kcal) para llegar a tu objetivo calórico. Añade a tus alimentos: aceite de oliva, aguacate o frutos secos.
-                  </div>
-                )}
+                {(() => {
+                  const dt = d.meals.reduce((acc, m, mi) => {
+                    const mt = m.items.reduce((a, it) => {
+                      const g = effG(di, mi, it);
+                      const pp = it.grams > 0 ? it.p / it.grams * 100 : 0;
+                      const cp = it.grams > 0 ? it.c / it.grams * 100 : 0;
+                      const fp = it.grams > 0 ? it.f / it.grams * 100 : 0;
+                      return { p: a.p+g*pp/100, c: a.c+g*cp/100, f: a.f+g*fp/100 };
+                    }, { p:0,c:0,f:0 });
+                    return { p: acc.p+mt.p, c: acc.c+mt.c, f: acc.f+mt.f };
+                  }, { p:0,c:0,f:0 });
+                  if (d.hasShake) dt.p += d.shakeProt;
+                  dt.kcal = Math.round(dt.p*4 + dt.c*4 + dt.f*9);
+                  const fGap = Math.max(0, Math.round(d.target.grasas - dt.f));
+                  return (<>
+                    <div style={{ background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.18)", borderRadius: 8, padding: "7px 12px", fontSize: 11, color: "#86efac", fontWeight: 600 }}>
+                      📊 TOTAL: {Math.round(dt.p)}g P · {Math.round(dt.c)}g HC · {Math.round(dt.f)}g G · {dt.kcal} kcal
+                    </div>
+                    {fGap > 20 && (
+                      <div style={{ padding: "10px 12px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", borderRadius: 10, marginTop: 8, fontSize: 12, color: "#fbbf24", lineHeight: 1.5 }}>
+                        ⚠️ Faltan ~{fGap}g de grasa ({Math.round(fGap * 9)} kcal) para llegar a tu objetivo calórico. Añade a tus alimentos: aceite de oliva, aguacate o frutos secos.
+                      </div>
+                    )}
+                  </>);
+                })()}
+                <button onClick={() => saveDayEdits(di)} style={{ marginTop: 10, width: "100%", background: savedDays.has(di) && !dayHasEdits(di) ? "rgba(74,222,128,0.06)" : "rgba(74,222,128,0.13)", border: `1px solid ${savedDays.has(di) && !dayHasEdits(di) ? "rgba(74,222,128,0.2)" : "rgba(74,222,128,0.35)"}`, borderRadius: 10, padding: "10px", fontSize: 12, color: savedDays.has(di) && !dayHasEdits(di) ? "#4ade80" : "#86efac", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                  {savedDays.has(di) && !dayHasEdits(di) ? "✓ Guardado" : dayHasEdits(di) ? "💾 Guardar cambios" : "💾 Guardar día"}
+                </button>
               </div>
             ))}
           </>
