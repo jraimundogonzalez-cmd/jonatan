@@ -1510,6 +1510,18 @@ export default function Entrenamiento({ onNavigate }) {
         {/* Goal Date Countdown */}
         <GoalDateCard training={training} setState={setState} />
 
+        {/* Migration notice: old plans don't have abs/cardio flags */}
+        {seq.length > 0 && !seq.some(e => e.hasAbs !== undefined) && (
+          <div style={{ background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#c4b5fd", marginBottom: 4 }}>⚡ Nuevas funciones disponibles</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>Abdominales 2x/semana, cardio después de sesiones, calentamiento y más. Regenera tu plan para activarlas.</div>
+            <button onClick={() => { if (window.confirm("¿Regenerar el plan con abdominales y cardio?")) { finishSetup({ place: training.place, goal: training.goal, days: training.days, time: training.time, level: training.level }); }}}
+              style={{ background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#c4b5fd", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+              🔄 Regenerar plan ahora
+            </button>
+          </div>
+        )}
+
         {/* Today status */}
         {trainedToday ? (
           <div style={{ ...C.card, background: "rgba(74,222,128,0.05)", borderColor: "rgba(74,222,128,0.2)", textAlign: "center", padding: "24px 16px" }}>
