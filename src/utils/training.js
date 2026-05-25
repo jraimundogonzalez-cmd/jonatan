@@ -136,6 +136,48 @@ export function suggestPR(history) {
   return suggestion;
 }
 
+// Returns a warm-up block based on session muscles (5-8 min)
+export function buildWarmUp(plan) {
+  const muscles = [...new Set(plan.flatMap(x => byId(x.id)?.m || []))];
+  const hasPierna  = muscles.some(m => /cuádriceps|isquios|glúteo|pierna/i.test(m));
+  const hasPecho   = muscles.some(m => /pecho|pectoral/i.test(m));
+  const hasEspalda = muscles.some(m => /espalda|dorsal/i.test(m));
+  const hasHombro  = muscles.some(m => /hombro|deltoides/i.test(m));
+
+  const base = [
+    { label: "Cardio suave", desc: "5 min en cinta o bici a baja intensidad", min: 5 },
+    { label: "Rotaciones cervicales", desc: "10 rotaciones lentas a cada lado", reps: "10 c/l" },
+    { label: "Círculos de hombros", desc: "15 círculos adelante y atrás", reps: "15 c/l" },
+  ];
+  if (hasPecho || hasHombro) base.push({ label: "Apertura de pecho", desc: "Stretch con banda o puerta · Mantén 20s", reps: "3×20s" });
+  if (hasEspalda)            base.push({ label: "Gato-vaca", desc: "En cuadrupedia, alterna arco y redondeo de espalda", reps: "10 rep" });
+  if (hasPierna) {
+    base.push({ label: "Sentadilla libre profunda", desc: "Sin carga, rango completo. Active the hips.", reps: "2×15" });
+    base.push({ label: "Estiramiento cuádriceps", desc: "De pie, tira del pie hacia glúteo 20s cada lado", reps: "20s c/l" });
+  }
+  return base;
+}
+
+// Returns a cool-down block (5-10 min static stretching)
+export function buildCoolDown(plan) {
+  const muscles = [...new Set(plan.flatMap(x => byId(x.id)?.m || []))];
+  const hasPierna  = muscles.some(m => /cuádriceps|isquios|glúteo|pierna/i.test(m));
+  const hasPecho   = muscles.some(m => /pecho|pectoral/i.test(m));
+  const hasEspalda = muscles.some(m => /espalda|dorsal/i.test(m));
+
+  const stretches = [
+    { label: "Respiración diafragmática", desc: "4 segundos inhala · 4 mantén · 6 exhala. Repite 6 veces.", reps: "6 resp" },
+  ];
+  if (hasPecho) stretches.push({ label: "Stretch pectoral en puerta", desc: "Antebrazos en marco, inclina el tronco adelante. 30s.", reps: "2×30s" });
+  if (hasEspalda) stretches.push({ label: "Postura del niño (Child's Pose)", desc: "Rodillas al pecho, brazos extendidos. Relaja espalda.", reps: "45s" });
+  if (hasPierna) {
+    stretches.push({ label: "Estiramiento isquiotibial tumbado", desc: "Tumbado, lleva pierna recta hacia ti. 30s cada lado.", reps: "30s c/l" });
+    stretches.push({ label: "Piriforme (figura 4)", desc: "Tumbado, cruza tobillo sobre rodilla contraria. 30s.", reps: "30s c/l" });
+  }
+  stretches.push({ label: "Foam roller (opcional)", desc: "2 min rodillo por los grupos trabajados hoy.", reps: "2 min" });
+  return stretches;
+}
+
 export function alternatives(id, place, exclude = []) {
   const e = byId(id);
   if (!e) return [];

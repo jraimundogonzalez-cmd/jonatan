@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "../store/AppContext";
 import { EX, TECH, CARDIO, SPLITS, byId, cById, primary } from "../data/exercises";
-import { buildSchedule, buildSession, buildAbsBlock, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
+import { buildSchedule, buildSession, buildAbsBlock, buildWarmUp, buildCoolDown, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
 import { recommendSubstitutes, generateRoutine, buildSessionFromCats, inferCats, analyzeRoutine, GYM_DEFAULT, HOME_DEFAULT, CAT_LABELS_MAP } from "../utils/ai";
 
 const C = {
@@ -750,6 +750,10 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const initialPlan = [...buildSession(entry, training), ...absBlock];
   const [plan, setPlan] = useState(initialPlan);
   const [showPost, setShowPost] = useState(false);
+  const [showWarmUp, setShowWarmUp] = useState(false);
+  const [showCoolDown, setShowCoolDown] = useState(false);
+  const warmUp   = buildWarmUp(initialPlan);
+  const coolDown = buildCoolDown(initialPlan);
   const [done, setDone] = useState([]);
   const [restIdx, setRestIdx] = useState(null);
   const [restTime, setRestTime] = useState(0);
@@ -812,6 +816,28 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
             style={{ ...C.btnS, fontSize: 12, padding: "8px 14px" }}>Saltar</button>
         </div>
       )}
+
+      {/* Warm-up */}
+      <div style={{ marginBottom: 10 }}>
+        <button onClick={() => setShowWarmUp(v => !v)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: showWarmUp ? "rgba(74,222,128,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${showWarmUp ? "rgba(74,222,128,0.25)" : "rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", fontFamily: "inherit" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: showWarmUp ? "#4ade80" : "#64748b" }}>🌡️ Calentamiento ({warmUp.length} ejercicios)</span>
+          <span style={{ color: "#64748b", fontSize: 14 }}>{showWarmUp ? "▲" : "▼"}</span>
+        </button>
+        {showWarmUp && (
+          <div style={{ background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)", borderRadius: "0 0 12px 12px", padding: "10px 14px", borderTop: "none" }}>
+            {warmUp.map((w, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderBottom: i < warmUp.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(74,222,128,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#4ade80", flexShrink: 0 }}>{i + 1}</div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#e2e8f0" }}>{w.label} <span style={{ fontSize: 11, color: "#4ade80", marginLeft: 4 }}>{w.reps || w.min && `${w.min} min`}</span></div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>{w.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Exercises */}
       {plan.map((x, idx) => {
@@ -892,6 +918,28 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
           </div>
         </div>
       )}
+
+      {/* Cool-down */}
+      <div style={{ marginTop: 10, marginBottom: 4 }}>
+        <button onClick={() => setShowCoolDown(v => !v)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: showCoolDown ? "rgba(96,165,250,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${showCoolDown ? "rgba(96,165,250,0.25)" : "rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", fontFamily: "inherit" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: showCoolDown ? "#60a5fa" : "#64748b" }}>❄️ Enfriamiento ({coolDown.length} estiramientos)</span>
+          <span style={{ color: "#64748b", fontSize: 14 }}>{showCoolDown ? "▲" : "▼"}</span>
+        </button>
+        {showCoolDown && (
+          <div style={{ background: "rgba(96,165,250,0.04)", border: "1px solid rgba(96,165,250,0.12)", borderRadius: "0 0 12px 12px", padding: "10px 14px", borderTop: "none" }}>
+            {coolDown.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderBottom: i < coolDown.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(96,165,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#60a5fa", flexShrink: 0 }}>{i + 1}</div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#e2e8f0" }}>{s.label} <span style={{ fontSize: 11, color: "#60a5fa", marginLeft: 4 }}>{s.reps}</span></div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Complete */}
       <button onClick={() => setShowPost(true)} style={{ ...C.btnA, marginTop: 12 }}>

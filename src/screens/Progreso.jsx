@@ -2,6 +2,94 @@ import { useState } from "react";
 import { useApp } from "../store/AppContext";
 import { byId } from "../data/exercises";
 
+// Body fat estimation (Deurenberg formula)
+function estimateBodyFat(weight, heightCm, age, sex) {
+  if (!weight || !heightCm || !age) return null;
+  const h = heightCm / 100;
+  const bmi = weight / (h * h);
+  const isMale = sex !== "m";
+  const bf = 1.20 * bmi + 0.23 * age - (isMale ? 16.2 : 5.4);
+  return Math.max(5, Math.min(50, +bf.toFixed(1)));
+}
+
+function BodyCompositionCard({ measurements, profile }) {
+  const latest = measurements[measurements.length - 1];
+  const first  = measurements[0];
+  if (!latest) return null;
+
+  const { sex = "h", age = 30, height = 175 } = profile || {};
+  const bfLatest = estimateBodyFat(latest.weight, height, age, sex);
+  const bfFirst  = first !== latest ? estimateBodyFat(first.weight, height, age, sex) : null;
+
+  const leanKg  = bfLatest && latest.weight ? +(latest.weight * (1 - bfLatest / 100)).toFixed(1) : null;
+  const fatKg   = bfLatest && latest.weight ? +(latest.weight * (bfLatest / 100)).toFixed(1) : null;
+
+  const bfCategory = !bfLatest ? "" :
+    sex === "m" ? (bfLatest < 14 ? "Atlético" : bfLatest < 21 ? "En forma" : bfLatest < 26 ? "Promedio" : "Alto") :
+    (bfLatest < 21 ? "Atlético" : bfLatest < 28 ? "En forma" : bfLatest < 35 ? "Promedio" : "Alto");
+  const bfColor = bfLatest ? (bfLatest < 15 ? "#4ade80" : bfLatest < 22 ? "#f59e0b" : bfLatest < 28 ? "#f97316" : "#ef4444") : "#64748b";
+
+  return (
+    <div style={{ background: "rgba(167,139,250,0.04)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 14, padding: 16, marginBottom: 12 }}>
+      <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 10 }}>Composición Corporal</div>
+      {bfLatest && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 800, color: bfColor }}>{bfLatest}%</div>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>GRASA CORPORAL</div>
+              <div style={{ fontSize: 10, color: bfColor, fontWeight: 700 }}>{bfCategory}</div>
+            </div>
+            {leanKg && <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 800, color: "#4ade80" }}>{leanKg}</div>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>KG MÚSCULO</div>
+            </div>}
+            {fatKg && <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 800, color: "#f87171" }}>{fatKg}</div>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>KG GRASA</div>
+            </div>}
+          </div>
+
+          {/* Visual bar */}
+          <div style={{ height: 10, background: "rgba(255,255,255,0.06)", borderRadius: 9, overflow: "hidden", marginBottom: 8 }}>
+            <div style={{ width: `${bfLatest}%`, height: "100%", background: `linear-gradient(90deg, ${bfColor}, ${bfColor}88)`, borderRadius: 9 }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#475569" }}>
+            <span style={{ color: "#4ade80" }}>5% (mínimo)</span>
+            <span style={{ color: "#f59e0b" }}>15-20% (atlético)</span>
+            <span style={{ color: "#ef4444" }}>+30%</span>
+          </div>
+        </>
+      )}
+
+      {bfFirst && bfLatest && bfFirst !== bfLatest && (
+        <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, fontSize: 12 }}>
+          <span style={{ color: "#64748b" }}>Inicio: {bfFirst}% → Ahora: {bfLatest}% </span>
+          <span style={{ color: bfLatest < bfFirst ? "#4ade80" : "#ef4444", fontWeight: 700 }}>
+            {bfLatest < bfFirst ? "↓" : "↑"}{Math.abs(+(bfLatest - bfFirst).toFixed(1))}%
+          </span>
+        </div>
+      )}
+
+      {latest.waist && (
+        <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 10, fontSize: 12, color: "#64748b" }}>
+          Cintura/cadera: {latest.waist && latest.hips
+            ? `${+(latest.waist / latest.hips).toFixed(2)} ratio`
+            : `${latest.waist} cm cintura`}
+          {latest.waist && height && (
+            <span style={{ marginLeft: 8, color: latest.waist / height < 0.5 ? "#4ade80" : "#f59e0b" }}>
+              · ratio cint/altura: {+(latest.waist / height).toFixed(2)}
+            </span>
+          )}
+        </div>
+      )}
+      <p style={{ fontSize: 10, color: "#334155", marginTop: 8, marginBottom: 0 }}>
+        Estimación basada en fórmula Deurenberg (BMI + edad). Mide con báscula de bioimpedancia para mayor precisión.
+      </p>
+    </div>
+  );
+}
+
 const C = {
   card: { background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 16, marginBottom: 12 },
   inp:  { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 12px", color: "#e2e8f0", fontSize: 14, fontFamily: "inherit", width: "100%", outline: "none" },
@@ -78,6 +166,35 @@ function MeasureForm({ onSave }) {
   );
 }
 
+function WaistChart({ measurements }) {
+  const waists = measurements.map(m => m.waist).filter(Boolean);
+  if (waists.length < 2) return null;
+  const min = Math.min(...waists) - 2, max = Math.max(...waists) + 2;
+  const range = max - min || 1;
+  const w = 300, h = 60;
+  const points = waists.map((wt, i) => ({
+    x: (i / (waists.length - 1)) * (w - 20) + 10,
+    y: h - ((wt - min) / range) * (h - 16) - 8,
+  }));
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: ".06em" }}>Evolución cintura (cm)</div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 60 }}>
+        <path d={path} fill="none" stroke="#4ade80" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#4ade80" />)}
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#475569", marginTop: 2 }}>
+        <span>Inicio: {waists[0]} cm</span>
+        <span style={{ color: waists[waists.length-1] < waists[0] ? "#4ade80" : "#f59e0b", fontWeight: 700 }}>
+          {waists[waists.length-1] < waists[0] ? "↓" : "↑"}{Math.abs(waists[waists.length-1] - waists[0]).toFixed(1)} cm total
+        </span>
+        <span>Ahora: {waists[waists.length-1]} cm</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Progreso() {
   const { state, addMeasurement } = useApp();
   const [tab, setTab] = useState("body"); // body | prs | history
@@ -87,6 +204,8 @@ export default function Progreso() {
   const measurements = state.progress?.measurements || [];
   const prs = state.progress?.prs || {};
   const history = state.training?.done || [];
+  const daily = state.daily || {};
+  const profile = state.profile || {};
 
   const latest = measurements[measurements.length - 1];
   const prev    = measurements[measurements.length - 2];
@@ -106,7 +225,7 @@ export default function Progreso() {
       <div style={{ padding: "16px" }}>
         {/* Tabs */}
         <div style={{ display: "flex", gap: 0, marginBottom: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 4 }}>
-          {[["body","📏 Cuerpo"],["prs","🏆 PRs"],["history","📋 Historial"]].map(([id, label]) => (
+          {[["body","📏 Cuerpo"],["comp","🧬 Composición"],["prs","🏆 PRs"],["history","📋 Historial"]].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ flex: 1, padding: "8px 4px", border: "none", borderRadius: 9, background: tab === id ? "rgba(167,139,250,0.15)" : "transparent", color: tab === id ? "#a78bfa" : "#64748b", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
               {label}
@@ -148,6 +267,7 @@ export default function Progreso() {
                     </span>
                   )}
                 </div>
+                <WaistChart measurements={measurements} />
               </div>
             )}
 
@@ -177,6 +297,71 @@ export default function Progreso() {
               </div>
             )}
           </>
+        )}
+
+        {/* Body Composition */}
+        {tab === "comp" && (
+          <div>
+            {measurements.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                <p style={{ color: "#475569", fontSize: 14 }}>Registra mediciones para ver la composición corporal.</p>
+                <button onClick={() => setTab("body")} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 12, padding: "10px 20px", color: "#a78bfa", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>
+                  → Ir a mediciones
+                </button>
+              </div>
+            ) : (
+              <>
+                <BodyCompositionCard measurements={measurements} profile={profile} />
+
+                {/* How to use guide */}
+                <div style={C.card}>
+                  <span style={C.lbl}>Cómo interpretar los datos</span>
+                  {[
+                    { color: "#4ade80", label: "Atlético (hombres <14%, mujeres <21%)", desc: "Definición muscular visible. Venoso en brazos y abdomen." },
+                    { color: "#f59e0b", label: "En forma (hombres 14-21%, mujeres 21-28%)", desc: "Buena forma física. Abdomen plano. Objetivo realista." },
+                    { color: "#f97316", label: "Promedio (hombres 21-26%, mujeres 28-35%)", desc: "Salud aceptable. Margen de mejora con ejercicio y dieta." },
+                    { color: "#ef4444", label: "Alto (hombres >26%, mujeres >35%)", desc: "Riesgo metabólico elevado. Priorizar pérdida de grasa." },
+                  ].map((c, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderBottom: i < 3 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: c.color, flexShrink: 0, marginTop: 3 }} />
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: c.color }}>{c.label}</div>
+                        <div style={{ fontSize: 11, color: "#64748b" }}>{c.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Training stats */}
+                {Object.values(daily).some(d => d.training?.rpe) && (
+                  <div style={C.card}>
+                    <span style={C.lbl}>Intensidad media (RPE)</span>
+                    {(() => {
+                      const rpeEntries = Object.entries(daily)
+                        .filter(([, v]) => v.training?.rpe)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .slice(-10);
+                      const avg = rpeEntries.reduce((s, [, v]) => s + v.training.rpe, 0) / rpeEntries.length;
+                      return (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 36, fontWeight: 800, color: avg >= 8 ? "#ef4444" : avg >= 6 ? "#f59e0b" : "#4ade80" }}>{avg.toFixed(1)}</div>
+                            <div style={{ fontSize: 12, color: "#64748b" }}>Media de las últimas {rpeEntries.length} sesiones</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 40 }}>
+                            {rpeEntries.map(([date, v], i) => (
+                              <div key={i} style={{ flex: 1, background: v.training.rpe >= 8 ? "#ef4444" : v.training.rpe >= 6 ? "#f59e0b" : "#4ade80", borderRadius: "3px 3px 0 0", height: `${(v.training.rpe / 10) * 100}%`, opacity: 0.8 }} title={`${date}: RPE ${v.training.rpe}`} />
+                            ))}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#334155", marginTop: 4 }}>Óptimo: RPE 6-8 para hipertrofia | RPE 8-9 para fuerza</div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
 
         {/* PRs */}
@@ -240,17 +425,36 @@ export default function Progreso() {
             ) : (
               <div style={C.card}>
                 <span style={C.lbl}>Sesiones completadas ({history.length})</span>
-                {history.slice().reverse().map((d, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i < history.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none", fontSize: 12, alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: "#e2e8f0", marginBottom: 2 }}>{d.name}</div>
-                      <div style={{ color: "#64748b" }}>{d.date ? new Date(d.date).toLocaleDateString("es-ES") : "—"}</div>
+                {history.slice().reverse().map((d, i) => {
+                  const dateKey = d.date?.slice(0, 10);
+                  const log = dateKey ? daily[dateKey]?.training : null;
+                  return (
+                    <div key={i} style={{ padding: "10px 0", borderBottom: i < history.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 12 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#e2e8f0", marginBottom: 2 }}>{d.name}</div>
+                          <div style={{ color: "#64748b" }}>{d.date ? new Date(d.date).toLocaleDateString("es-ES") : "—"}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          {d.rpe && (
+                            <span style={{ ...C.mono, fontSize: 12, fontWeight: 700, color: d.rpe >= 8 ? "#ef4444" : d.rpe >= 6 ? "#f59e0b" : "#4ade80" }}>
+                              RPE {d.rpe}
+                            </span>
+                          )}
+                          {d.kcal > 0 && <span style={{ ...C.mono, fontSize: 12, color: "#f59e0b" }}>⌚ {d.kcal}</span>}
+                          {log?.hasAbs && <span style={{ fontSize: 10, color: "#a78bfa" }}>⚡abs</span>}
+                        </div>
+                      </div>
+                      {log?.muscles?.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
+                          {log.muscles.slice(0, 5).map((m, j) => (
+                            <span key={j} style={{ fontSize: 9, color: "#475569", background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "1px 6px" }}>{m}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {d.kcal > 0 && (
-                      <span style={{ ...C.mono, fontSize: 13, color: "#f59e0b", fontWeight: 700 }}>⌚ {d.kcal} kcal</span>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

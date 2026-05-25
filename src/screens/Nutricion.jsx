@@ -762,6 +762,33 @@ export default function Nutricion() {
               🔄 Regenerar plan
             </button>
 
+            {/* Feature 7: Nutrición periódica — daily adjustment banner */}
+            {(() => {
+              const todayKey = new Date().toISOString().slice(0, 10);
+              const todayLog = state.daily?.[todayKey] || {};
+              const isTrain = !!todayLog.trained;
+              const isRest  = todayLog.trained === false;
+              if (!isTrain && !isRest) return null;
+              const adj = saved.restDayAdjust || { carbsMult: 0.75, fatMult: 1.25 };
+              const carbDelta = isRest ? Math.round(macros.carbos * (adj.carbsMult - 1)) : 0;
+              const fatDelta  = isRest ? Math.round(macros.grasas  * (adj.fatMult  - 1)) : 0;
+              return (
+                <div style={{ background: isTrain ? "rgba(245,158,11,0.07)" : "rgba(96,165,250,0.07)", border: `1px solid ${isTrain ? "rgba(245,158,11,0.25)" : "rgba(96,165,250,0.25)"}`, borderRadius: 12, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 18 }}>{isTrain ? "🏋️" : "😴"}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: isTrain ? "#f59e0b" : "#60a5fa" }}>
+                      {isTrain ? "Hoy has entrenado" : "Hoy es día de descanso"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>
+                      {isTrain
+                        ? `Macros normales. Si quemaste kcal con Apple Watch, se añaden como HC extra.`
+                        : `HC ${carbDelta}g (×${adj.carbsMult}) · Grasas +${fatDelta}g (×${adj.fatMult}) · Aplica en el siguiente plan generado.`}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {planData.days.map((d, di) => (
               <div key={di} style={{ marginBottom: 20 }}>
                 <div style={{ background: d.isRefeed ? "rgba(245,158,11,0.1)" : "rgba(74,222,128,0.07)", borderLeft: `3px solid ${d.isRefeed ? "#f59e0b" : "#4ade80"}`, borderRadius: "0 8px 8px 0", padding: "8px 12px", marginBottom: 8, color: d.isRefeed ? "#fbbf24" : "#4ade80", fontSize: 13, fontWeight: 700 }}>
