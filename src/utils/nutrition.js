@@ -58,14 +58,61 @@ const r5 = (x) => Math.max(0, Math.round(x / 5) * 5);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const BERRY_IDS = [102, 103];
 const YOGURT_IDS = [46, 121];
-const PROT_CATS = new Set(["aves","carnes","pescado","marisco","huevos","lacteos","quesos","fiambres","conservas"]);
+const PROT_CATS = new Set(["aves","carnes","pescado","marisco","huevos","lacteos","quesos","fiambres","conservas","postreprot"]);
 
-export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, usedFoodIds, usedCats, priorityFoods }) => {
-  // Normalize unit-based foods (stored per-unit) to per-100g for algorithm correctness
+export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, usedFoodIds, usedCats, priorityFoods, assignedFoods }) => {
   const normFood = (f) => f.u ? { ...f, p: +(f.p * 100 / f.u).toFixed(1), c: +(f.c * 100 / f.u).toFixed(1), f: +(f.f * 100 / f.u).toFixed(1), cal: Math.round(f.cal * 100 / f.u) } : f;
   const nFoods = selFoods.map(normFood);
   const origById = Object.fromEntries(selFoods.map(f => [f.id, f]));
 
+  const items = [];
+  const push = (food, grams) => {
+    if (grams < 5) return;
+    const orig = origById[food.id] || food;
+    const roundedGrams = orig.u ? Math.max(orig.u, Math.round(grams / orig.u) * orig.u) : grams;
+    items.push({ id: food.id, name: food.name, cat: food.cat, grams: roundedGrams,
+      u: orig.u || null, uLabel: orig.uLabel || null,
+      p: +(roundedGrams * food.p / 100).toFixed(1), c: +(roundedGrams * food.c / 100).toFixed(1), f: +(roundedGrams * food.f / 100).toFixed(1) });
+  };
+  const makeTotals = () => {
+    const t = items.reduce((a, i) => ({ p: a.p + i.p, c: a.c + i.c, f: a.f + i.f }), { p: 0, c: 0, f: 0 });
+    t.kcal = Math.round(t.p * 4 + t.c * 4 + t.f * 9);
+    t.p = Math.round(t.p); t.c = Math.round(t.c); t.f = Math.round(t.f);
+    return t;
+  };
+
+  // ── TinyPool direct mode: all assigned foods appear, quantities meet targets ──
+  if (assignedFoods && assignedFoods.length > 0) {
+    const nA = assignedFoods.map(normFood).sort((a, b) => b.p - a.p);
+    const mainProt = nA[0];
+    const rest = nA.slice(1);
+    // Default portions for secondary foods
+    const defaultG = (f) => f.p > 50 ? 40 : f.p > 15 ? 150 : f.c > 20 ? 150 : 200;
+    const restItems = rest.map(f => ({ food: f, grams: r5(defaultG(f)) }));
+    const restSum = restItems.reduce((a, it) => ({
+      p: a.p + it.grams * it.food.p / 100, c: a.c + it.grams * it.food.c / 100,
+    }), { p: 0, c: 0 });
+    // Main protein: adjust grams to meet remaining P target
+    const maxPg = mainProt.p > 50 ? 80 : 500;
+    const pg = r5(clamp(mainProt.p > 0 ? Math.max(0, tP - restSum.p) / (mainProt.p / 100) : 50, 30, maxPg));
+    // Adjust the highest-carb secondary food to meet carb target if it has meaningful carbs
+    const cIdx = restItems.reduce((bi, it, i) => it.food.c > (restItems[bi]?.food.c || 0) ? i : bi, 0);
+    if (restItems.length > 0 && restItems[cIdx].food.c >= 8) {
+      const remC = Math.max(0,
+        tC - pg * mainProt.c / 100
+           - restItems.reduce((a, it, i) => a + (i === cIdx ? 0 : it.grams * it.food.c / 100), 0));
+      const maxCg = restItems[cIdx].food.p > 8 ? 350 : 600;
+      const adjG = restItems[cIdx].food.c > 0
+        ? r5(clamp(remC / (restItems[cIdx].food.c / 100), restItems[cIdx].grams, maxCg))
+        : restItems[cIdx].grams;
+      restItems[cIdx] = { ...restItems[cIdx], grams: adjG };
+    }
+    push(mainProt, pg);
+    restItems.forEach(it => push(it.food, it.grams));
+    return { items, totals: makeTotals() };
+  }
+
+  // ── Standard pool-based algorithm (large food selections) ──
   const priorityList = (priorityFoods || []).map(id => nFoods.find(f => f.id === id)).filter(Boolean);
   const forcedItems = [];
   const portionForPriority = (f) => {
@@ -92,7 +139,6 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   const blockedIds = new Set([...usedFoodIds, ...forcedIds]);
   const blockedCats = new Set([...usedCats, ...forcedCats]);
 
-  // With few foods, allow repeating rather than leaving meals empty
   const tinyPool = selFoods.length <= 5;
   const freeBlocked = (list) => tinyPool ? list.filter(f => !forcedIds.has(f.id)) : list.filter(f => !blockedIds.has(f.id) && !blockedCats.has(f.cat));
   const freeBlockedRelaxed = (list) => tinyPool ? list : list.filter(f => !blockedIds.has(f.id));
@@ -103,10 +149,9 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
     return pick[offset % pick.length];
   };
 
-  // Use normalized foods for pool building (correct per-100g values)
   const lean = nFoods.filter(f => (PROT_CATS.has(f.cat) || f.p >= 10) && f.f <= 20).sort((a, b) => b.p - a.p || a.f - b.f);
   const protPool = lean.length ? lean : nFoods.filter(f => PROT_CATS.has(f.cat) || f.p >= 7).sort((a, b) => b.p - a.p);
-  const carbPool = nFoods.filter(f => f.c >= 15).sort((a, b) => b.c - a.c);
+  const carbPool = nFoods.filter(f => f.c >= 10).sort((a, b) => b.c - a.c);
   const carbPoolNF = carbPool.filter(f => f.cat !== "frutas");
   const fatPool  = nFoods.filter(f => f.f >= 25).sort((a, b) => b.f - a.f);
   const vegPool  = nFoods.filter(f => f.cat === "verduras" && f.cal <= 40 && f.c < 12 && f.f < 3);
@@ -131,7 +176,6 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   const vf = (isMain && vegPool.length && !forcedItems.some(it => it.food.cat === "verduras"))
     ? pickBlocked(vegPool, dayIdx + mealIdx) : null;
 
-  // Start with a higher initial gram estimate for low-density protein foods (eggs, dairy)
   const pgInit = pf ? (pf.p < 10 ? 250 : 150) : 0;
   let pg = pgInit, cg = cf ? 80 : 0, c2g = cf2 ? 50 : 0, fg = ff ? 8 : 0;
   const vg = vf ? 150 : 0;
@@ -157,16 +201,6 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
     pg = r5(pg); cg = r5(cg); c2g = r5(c2g); fg = r5(fg);
   }
 
-  const items = [];
-  const push = (food, grams) => {
-    if (grams < 5) return;
-    const orig = origById[food.id] || food;
-    // Round grams to nearest unit boundary when food is unit-based
-    const roundedGrams = orig.u ? Math.max(orig.u, Math.round(grams / orig.u) * orig.u) : grams;
-    items.push({ id: food.id, name: food.name, cat: food.cat, grams: roundedGrams,
-      u: orig.u || null, uLabel: orig.uLabel || null,
-      p: +(roundedGrams * food.p / 100).toFixed(1), c: +(roundedGrams * food.c / 100).toFixed(1), f: +(roundedGrams * food.f / 100).toFixed(1) });
-  };
   forcedItems.forEach(it => push(it.food, it.grams));
   if (pf) push(pf, pg);
   if (cf && (!pf || cf.id !== pf.id)) push(cf, cg);
@@ -174,11 +208,7 @@ export const buildMeal = ({ tP, tC, tF, dayIdx, mealIdx, mealNames, selFoods, us
   if (ff && (!pf || ff.id !== pf.id) && (!cf || ff.id !== cf.id)) push(ff, fg);
   if (vf) push(vf, vg);
 
-  const totals = items.reduce((a, i) => ({ p: a.p + i.p, c: a.c + i.c, f: a.f + i.f }), { p: 0, c: 0, f: 0 });
-  totals.kcal = Math.round(totals.p * 4 + totals.c * 4 + totals.f * 9);
-  totals.p = Math.round(totals.p); totals.c = Math.round(totals.c); totals.f = Math.round(totals.f);
-
-  return { items, totals };
+  return { items, totals: makeTotals() };
 };
 
 export const buildPlan = ({ macros, meals, mealNames, selFoods, refeedOn, refeedDays, refeedCarbs, refeedFat, shakeOn, shakeProt, shakeDays, priorities, postWorkoutMeal, planDays = 7 }) => {
@@ -187,6 +217,20 @@ export const buildPlan = ({ macros, meals, mealNames, selFoods, refeedOn, refeed
   const w = mealNames.length;
   const baseWeights = mealNames.map((_, i) => w === 1 ? 1 : (/almuerzo|cena|comida/i.test(mealNames[i]) ? 1.3 : 0.8));
   const baseSum = baseWeights.reduce((a, b) => a + b, 0);
+
+  // With ≤6 foods selected, pre-assign all foods across meals so every food appears
+  const tinyPool = selFoods.length <= 6 && meals > 0;
+  let mealFoodAssignments = null;
+  if (tinyPool) {
+    // Sort: highest protein density first so protein sources lead each meal
+    const byProtDens = [...selFoods].sort((a, b) => {
+      const aD = a.p / Math.max(1, a.c * 0.4 + a.f * 0.3 + 0.5);
+      const bD = b.p / Math.max(1, b.c * 0.4 + b.f * 0.3 + 0.5);
+      return bD - aD;
+    });
+    mealFoodAssignments = Array.from({ length: meals }, () => []);
+    byProtDens.forEach((f, i) => mealFoodAssignments[i % meals].push(f));
+  }
 
   const days = DAYS.map((dayName, di) => {
     const isRefeed = refeedOn && refeedDays.includes(di);
@@ -205,6 +249,7 @@ export const buildPlan = ({ macros, meals, mealNames, selFoods, refeedOn, refeed
         tP: dProtTarget * fracPF, tC: dMacros.carbos * fracC, tF: dMacros.grasas * fracPF,
         dayIdx: di, mealIdx: mi, mealNames, selFoods, usedFoodIds, usedCats,
         priorityFoods: priorities[`${di}_${mi}`] || [],
+        assignedFoods: mealFoodAssignments ? mealFoodAssignments[mi] : null,
       });
       items.forEach(it => { usedFoodIds.add(it.id); usedCats.add(it.cat); });
       return { name: mealName, items, totals, isPostWorkout: mi === pwm };
