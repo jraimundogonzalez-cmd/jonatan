@@ -622,6 +622,22 @@ export default function Entrenamiento({ onNavigate }) {
     setView("home");
   };
 
+  const goToConfig = () => {
+    const prefilled = Object.fromEntries(
+      [["place", training.place], ["goal", training.goal], ["days", training.days], ["time", training.time], ["level", training.level]]
+        .filter(([, v]) => v !== undefined && v !== null)
+    );
+    persistOnb(prefilled, 0);
+    persistView("config-edit");
+  };
+
+  const resetAll = () => {
+    if (!window.confirm("¿Empezar desde cero? Se perderán las sesiones completadas y tu racha actual.")) return;
+    setOnbAnswers({});
+    setOnbStep(0);
+    setState(s => ({ ...s, training: { seq: [], cursor: 0, streak: 0, done: [], chat: [], _onbStep: 0, _onbAnswers: {}, _view: "home" } }));
+  };
+
   const regenerateWithAI = () => {
     if (!window.confirm("¿Generar una rutina nueva con IA basada en tu equipo, objetivo y tiempo?")) return;
     const equipment = training.equipment && training.equipment.length > 0
@@ -695,10 +711,35 @@ export default function Entrenamiento({ onNavigate }) {
     );
   }
 
+  if (view === "config-edit") {
+    return (
+      <div style={{ background: "#080d08", minHeight: "100vh" }}>
+        <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 10px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button onClick={() => persistView("home")} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>← Cancelar</button>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#f59e0b", letterSpacing: 2, fontWeight: 500 }}>CONFIGURACIÓN</span>
+            <div style={{ width: 70 }} />
+          </div>
+        </div>
+        <Onboarding
+          step={onbStep}
+          answers={onbAnswers}
+          onPick={(answers, nextStep) => persistOnb(answers, nextStep)}
+          onBack={() => onbStep === 0 ? persistView("home") : persistOnb(onbAnswers, onbStep - 1)}
+          onDone={(final) => finishSetup(final)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: "#080d08", minHeight: "100vh" }}>
       <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 10px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
-        <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#f59e0b", letterSpacing: 2, fontWeight: 500 }}>ENTRENO</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#f59e0b", letterSpacing: 2, fontWeight: 500 }}>ENTRENO</span>
+          <button onClick={goToConfig} title="Editar configuración"
+            style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>⚙️</button>
+        </div>
       </div>
 
       <div style={{ padding: "16px" }}>
@@ -788,6 +829,10 @@ export default function Entrenamiento({ onNavigate }) {
         {/* Reset */}
         <button onClick={() => { if (window.confirm("¿Regenerar el plan desde cero?")) { finishSetup({ place: training.place, goal: training.goal, days: training.days, time: training.time, level: training.level }); }}}
           style={{ ...C.btnS, width: "100%", marginTop: 8 }}>🔄 Regenerar plantilla clásica</button>
+        <button onClick={resetAll}
+          style={{ ...C.btnS, width: "100%", marginTop: 8, color: "#f87171", borderColor: "rgba(248,113,113,0.2)" }}>
+          🗑️ Empezar desde cero
+        </button>
       </div>
     </div>
   );
