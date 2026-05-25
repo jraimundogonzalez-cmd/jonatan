@@ -232,6 +232,87 @@ export default function Nutricion() {
     setSavedDays(s => new Set([...s, di]));
   };
 
+  const generatePDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210, ML = 14, MR = 14, CW = W - ML - MR;
+    let y = 0;
+
+    const checkPage = (need = 10) => { if (y + need > 282) { doc.addPage(); y = 16; } };
+
+    const txt = (str, x, sz, bold = false, r = 30, g = 30, b = 30) => {
+      doc.setFontSize(sz); doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setTextColor(r, g, b); doc.text(str, x, y);
+    };
+
+    // ── Header bar ──────────────────────────────────────────────
+    doc.setFillColor(22, 101, 52); doc.rect(0, 0, W, 26, 'F');
+    y = 10; txt('Plan de Nutricion', ML, 16, true, 255, 255, 255);
+    y += 7; txt(`${macros.proteina}g Proteina  ${macros.carbos}g HC  ${macros.grasas}g Grasa  ${kcal} kcal/dia  |  ${planDays === 1 ? 'Plan de hoy' : planDays === 7 ? 'Plan semanal' : `${planDays} dias`}`, ML, 9, false, 187, 247, 208);
+    y = 34;
+
+    planData.days.forEach((d, di) => {
+      checkPage(16);
+      // Day header
+      doc.setFillColor(230, 252, 238); doc.rect(ML, y - 5, CW, 8, 'F');
+      doc.setDrawColor(74, 222, 128); doc.setLineWidth(0.6); doc.line(ML, y - 5, ML, y + 3);
+      txt(`Dia ${di + 1} - ${d.dayName}${d.isRefeed ? '  (REFEED)' : ''}`, ML + 4, 10.5, true, 15, 80, 35);
+      y += 8;
+      if (d.hasShake) { checkPage(6); txt(`  Batido post-entreno: +${d.shakeProt}g proteina`, ML + 4, 8.5, false, 59, 130, 246); y += 5; }
+
+      d.meals.forEach((m, mi) => {
+        checkPage(10);
+        txt(m.name, ML + 2, 10, true, 50, 50, 50); y += 5;
+
+        m.items.forEach(it => {
+          checkPage(6);
+          const g = effG(di, mi, it);
+          const pp = it.grams > 0 ? it.p / it.grams * 100 : 0;
+          const cp = it.grams > 0 ? it.c / it.grams * 100 : 0;
+          const fp = it.grams > 0 ? it.f / it.grams * 100 : 0;
+          const qty = it.u ? (() => { const n = Math.max(1, Math.round(it.grams / it.u)); return `${n} ${it.uLabel || 'ud'}${n > 1 ? 's' : ''}`; })() : `${g}g`;
+          txt(`  - ${it.name}`, ML + 4, 9, false, 60, 60, 60);
+          txt(qty, ML + CW * 0.55, 9, true, 22, 120, 60);
+          txt(`P${Math.round(g*pp/100)} C${Math.round(g*cp/100)} G${Math.round(g*fp/100)}`, ML + CW * 0.75, 9, false, 130, 130, 130);
+          y += 5;
+        });
+
+        // Meal total
+        checkPage(5);
+        const mt = m.items.reduce((a, it) => {
+          const g = effG(di, mi, it), pp = it.grams > 0 ? it.p/it.grams*100 : 0, cp = it.grams > 0 ? it.c/it.grams*100 : 0, fp = it.grams > 0 ? it.f/it.grams*100 : 0;
+          return { p: a.p+g*pp/100, c: a.c+g*cp/100, f: a.f+g*fp/100 };
+        }, { p:0,c:0,f:0 });
+        mt.kcal = Math.round(mt.p*4+mt.c*4+mt.f*9);
+        txt(`   Total: ${Math.round(mt.p)}g P  ${Math.round(mt.c)}g HC  ${Math.round(mt.f)}g G  ${mt.kcal} kcal`, ML + 4, 8, false, 100, 130, 100);
+        y += 6;
+      });
+
+      // Day total bar
+      checkPage(8);
+      const dt = d.meals.reduce((acc, m, mi) => {
+        const mt = m.items.reduce((a, it) => {
+          const g = effG(di, mi, it), pp = it.grams > 0 ? it.p/it.grams*100 : 0, cp = it.grams > 0 ? it.c/it.grams*100 : 0, fp = it.grams > 0 ? it.f/it.grams*100 : 0;
+          return { p: a.p+g*pp/100, c: a.c+g*cp/100, f: a.f+g*fp/100 };
+        }, { p:0,c:0,f:0 });
+        return { p: acc.p+mt.p, c: acc.c+mt.c, f: acc.f+mt.f };
+      }, { p:0,c:0,f:0 });
+      if (d.hasShake) dt.p += d.shakeProt;
+      dt.kcal = Math.round(dt.p*4+dt.c*4+dt.f*9);
+      doc.setFillColor(230, 252, 238); doc.rect(ML, y - 4, CW, 7, 'F');
+      txt(`TOTAL DIA: ${Math.round(dt.p)}g P  ${Math.round(dt.c)}g HC  ${Math.round(dt.f)}g G  ${dt.kcal} kcal`, ML + 3, 9, true, 22, 101, 52);
+      y += 10;
+
+      const fGap = Math.max(0, Math.round(d.target.grasas - dt.f));
+      if (fGap > 20) {
+        checkPage(7); txt(`  Nota: faltan ~${fGap}g grasa (${Math.round(fGap*9)} kcal). Annade aceite, aguacate o frutos secos.`, ML + 2, 8, false, 180, 100, 0); y += 6;
+      }
+      y += 2;
+    });
+
+    doc.save('plan-nutricion.pdf');
+  };
+
   // ── Render steps ──────────────────────────────────────────────
 
   const Header = () => (
@@ -605,8 +686,14 @@ export default function Nutricion() {
             </h1>
             <p style={{ color: "#475569", fontSize: 11, margin: 0 }}>{macros.proteina}g P · {macros.carbos}g HC · {macros.grasas}g G · {meals} comidas</p>
           </div>
-          <button onClick={() => { setStep(1); setPlanData(null); save({ planData: null }); }}
-            style={{ ...C.btnS, fontSize: 10, padding: "6px 10px" }}>Nuevo plan</button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={generatePDF}
+              style={{ ...C.btnS, fontSize: 10, padding: "6px 10px", color: "#f87171", borderColor: "rgba(248,113,113,0.3)" }}>
+              📄 PDF
+            </button>
+            <button onClick={() => { setStep(1); setPlanData(null); save({ planData: null }); }}
+              style={{ ...C.btnS, fontSize: 10, padding: "6px 10px" }}>Nuevo plan</button>
+          </div>
         </div>
 
         {/* Tabs: plan / shopping */}
