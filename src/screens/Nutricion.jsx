@@ -22,54 +22,76 @@ const STEPS = ["Perfil", "Alimentos", "Macros", "Plan"];
 
 function RecipeModal({ mealName, items, onClose }) {
   const recipe = useMemo(() => generateRecipe(mealName, items), [mealName, items]);
+  const [imgErr, setImgErr] = useState(false);
+  const cats = new Set(items.map(it => it.cat));
+  const photoTerm = cats.has("aves") ? "grilled,chicken,meal"
+    : cats.has("pescado") ? "fish,meal,plate"
+    : cats.has("carnes") ? "beef,steak,plate"
+    : cats.has("huevos") ? "eggs,cooked,plate"
+    : (cats.has("postreprot") || cats.has("lacteos")) ? "yogurt,bowl,healthy"
+    : cats.has("verduras") ? "vegetables,salad,bowl"
+    : cats.has("legumbres") ? "beans,lentils,bowl"
+    : "healthy,food,bowl";
+  const fallbackEmoji = cats.has("aves") ? "🍗" : cats.has("pescado") ? "🐟" : cats.has("carnes") ? "🥩" : cats.has("huevos") ? "🍳" : (cats.has("postreprot") || cats.has("lacteos")) ? "🥛" : "🍽️";
+
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 200, display: "flex", alignItems: "flex-end", padding: "0" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#0f1a12", border: "1px solid rgba(74,222,128,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "88vh", overflowY: "auto" }}>
-        <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 18px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-          <div>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0f1a12", border: "1px solid rgba(74,222,128,0.2)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "88vh", overflowY: "auto" }}>
+
+        {/* Photo header */}
+        <div style={{ position: "relative", height: 210, borderRadius: "20px 20px 0 0", overflow: "hidden", flexShrink: 0 }}>
+          {!imgErr
+            ? <img src={`https://source.unsplash.com/featured/800x420/?${photoTerm}`} alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setImgErr(true)} />
+            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#14532d,#052e16)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 80 }}>{fallbackEmoji}</div>
+          }
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(0deg,rgba(15,26,18,0.92) 0%,rgba(0,0,0,0.05) 55%)" }} />
+          <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", width: 36, height: 4, background: "rgba(255,255,255,0.35)", borderRadius: 9 }} />
+          <button onClick={onClose} style={{ position: "absolute", top: 10, right: 12, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>×</button>
+          <div style={{ position: "absolute", bottom: 14, left: 18, right: 52 }}>
             <div style={{ fontSize: 10, color: "#4ade80", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>{mealName} · Receta rápida</div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", margin: 0, lineHeight: 1.3 }}>{recipe.name}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9", margin: 0, lineHeight: 1.2 }}>{recipe.name}</h2>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <span style={{ background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>⏱ {recipe.time} min</span>
-          <span style={{ background: "rgba(255,255,255,0.06)", color: "#94a3b8", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{recipe.diff}</span>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>INGREDIENTES</div>
-          {recipe.ingredients.map((ing, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13, color: "#cbd5e1" }}>
-              <span style={{ color: "#4ade80", fontWeight: 700, flexShrink: 0 }}>•</span>
-              {ing}
-            </div>
-          ))}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>PREPARACIÓN</div>
-          {recipe.steps.map((step, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
-              <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#16a34a", color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
-              <p style={{ fontSize: 13, color: "#cbd5e1", lineHeight: 1.6, margin: 0 }}>{step}</p>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ padding: "12px 14px", background: "rgba(74,222,128,0.07)", borderRadius: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>ASÍ TIENE QUE QUEDAR</div>
-          <p style={{ fontSize: 13, color: "#86efac", lineHeight: 1.6, margin: 0 }}>{recipe.result}</p>
-        </div>
-
-        {recipe.tips && (
-          <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.07)", borderRadius: 12 }}>
-            <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, letterSpacing: ".08em", marginBottom: 4 }}>💡 TIP PRO</div>
-            <p style={{ fontSize: 12, color: "#fde68a", lineHeight: 1.55, margin: 0 }}>{recipe.tips}</p>
+        {/* Content */}
+        <div style={{ padding: "16px 18px 36px" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <span style={{ background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>⏱ {recipe.time} min</span>
+            <span style={{ background: "rgba(255,255,255,0.06)", color: "#94a3b8", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{recipe.diff}</span>
           </div>
-        )}
+
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>INGREDIENTES</div>
+            {recipe.ingredients.map((ing, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13, color: "#cbd5e1" }}>
+                <span style={{ color: "#4ade80", fontWeight: 700, flexShrink: 0 }}>•</span>{ing}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>PREPARACIÓN</div>
+            {recipe.steps.map((step, i) => (
+              <div key={i} style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
+                <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#16a34a", color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+                <p style={{ fontSize: 13, color: "#cbd5e1", lineHeight: 1.6, margin: 0 }}>{step}</p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ padding: "12px 14px", background: "rgba(74,222,128,0.07)", borderRadius: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>ASÍ TIENE QUE QUEDAR</div>
+            <p style={{ fontSize: 13, color: "#86efac", lineHeight: 1.6, margin: 0 }}>{recipe.result}</p>
+          </div>
+
+          {recipe.tips && (
+            <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.07)", borderRadius: 12 }}>
+              <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, letterSpacing: ".08em", marginBottom: 4 }}>💡 TIP PRO</div>
+              <p style={{ fontSize: 12, color: "#fde68a", lineHeight: 1.55, margin: 0 }}>{recipe.tips}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

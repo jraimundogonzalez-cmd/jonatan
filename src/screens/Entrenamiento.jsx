@@ -579,6 +579,94 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   );
 }
 
+// ── Session Detail (preview) ──────────────────────────────────────
+function SessionDetailView({ entry, training, isCurrent, onBack, onStart }) {
+  const plan = buildSession(entry, training);
+  return (
+    <div style={{ minHeight: "100vh", background: "#080d08" }}>
+      <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 16px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button onClick={onBack} style={{ ...C.btnS, fontSize: 11, padding: "7px 12px" }}>← Volver</button>
+          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", fontWeight: 600, letterSpacing: 1 }}>VISTA PREVIA</span>
+          {isCurrent
+            ? <button onClick={onStart} style={{ ...C.btnA, width: "auto", padding: "8px 14px", fontSize: 12 }}>▶ Empezar</button>
+            : <div style={{ width: 80 }} />
+          }
+        </div>
+      </div>
+      <div style={{ padding: "16px" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>{entry.name}</h2>
+        <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 18px" }}>{plan.length} ejercicios · {estMin(plan)} min estimados{isCurrent ? " · siguiente en tu plan" : ""}</p>
+        {plan.map((x, idx) => {
+          const ex = byId(x.id);
+          if (!ex) return null;
+          return (
+            <div key={idx} style={{ ...C.card, marginBottom: 10 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#f59e0b", flexShrink: 0, fontFamily: "'DM Mono',monospace" }}>{idx + 1}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", marginBottom: 2 }}>{ex.n}</div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>{ex.m?.join(", ")}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#94a3b8", fontFamily: "'DM Mono',monospace" }}>{x.sets} × {x.reps}</span>
+                    <span style={{ background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#64748b" }}>{x.rest}s descanso</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {isCurrent && <button onClick={onStart} style={{ ...C.btnA, marginTop: 8 }}>▶ Empezar entrenamiento</button>}
+      </div>
+    </div>
+  );
+}
+
+// ── Training Calendar ─────────────────────────────────────────────
+function TrainingCalendar({ done = [] }) {
+  const [viewDate, setViewDate] = useState(() => new Date());
+  const year = viewDate.getFullYear(), month = viewDate.getMonth();
+  const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const WEEK = ["L","M","X","J","V","S","D"];
+  const trainedDates = new Set(done.map(d => d.date?.slice(0, 10)).filter(Boolean));
+  const trainedThisMonth = done.filter(d => d.date?.startsWith(`${year}-${String(month+1).padStart(2,"0")}`));
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date().toISOString().slice(0, 10);
+  const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+
+  return (
+    <div style={{ ...C.card }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <button onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer", padding: "0 6px", lineHeight: 1 }}>‹</button>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{MONTHS[month]} {year}</span>
+        <button onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer", padding: "0 6px", lineHeight: 1 }}>›</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 6 }}>
+        {WEEK.map(d => <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: "#475569" }}>{d}</div>)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+        {cells.map((d, i) => {
+          if (!d) return <div key={`e${i}`} />;
+          const ds = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          const trained = trainedDates.has(ds);
+          const isToday = ds === today;
+          return (
+            <div key={d} style={{ aspectRatio: "1", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: trained ? "rgba(245,158,11,0.18)" : isToday ? "rgba(255,255,255,0.06)" : "transparent", border: `1px solid ${isToday ? "rgba(245,158,11,0.45)" : "transparent"}` }}>
+              <span style={{ fontSize: 12, fontWeight: trained || isToday ? 700 : 400, color: trained ? "#fbbf24" : isToday ? "#f59e0b" : "#475569", lineHeight: 1.2 }}>{d}</span>
+              {trained && <span style={{ fontSize: 8, color: "#f59e0b", lineHeight: 1 }}>✓</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 12, fontSize: 11, color: "#64748b" }}>
+        🟠 {trainedThisMonth.length} {trainedThisMonth.length === 1 ? "sesión" : "sesiones"} este mes
+        {trainedThisMonth.length > 0 && ` · ${[...new Set(trainedThisMonth.map(d => d.name))].join(", ")}`}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Entrenamiento ────────────────────────────────────────────
 export default function Entrenamiento({ onNavigate }) {
   const { state, setState, markTrained, todayLog } = useApp();
@@ -588,6 +676,7 @@ export default function Entrenamiento({ onNavigate }) {
   const [onbAnswers, setOnbAnswers] = useState(() => state.training._onbAnswers || {});
   const [kcalInput, setKcalInput] = useState("");
   const [showKcal, setShowKcal] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState(null);
 
   const setupDone = training.seq && training.seq.length > 0;
 
@@ -711,6 +800,20 @@ export default function Entrenamiento({ onNavigate }) {
     );
   }
 
+  if (view === "session-detail" && selectedIdx !== null && seq[selectedIdx]) {
+    const entry = seq[selectedIdx];
+    const currentPos = cursor % seq.length;
+    return (
+      <SessionDetailView
+        entry={entry}
+        training={training}
+        isCurrent={selectedIdx === currentPos}
+        onBack={() => persistView("home")}
+        onStart={() => persistView("playing")}
+      />
+    );
+  }
+
   if (view === "config-edit") {
     return (
       <div style={{ background: "#080d08", minHeight: "100vh" }}>
@@ -793,7 +896,8 @@ export default function Entrenamiento({ onNavigate }) {
             const isPast = i < pos;
             const isCurrent = i === pos;
             return (
-              <div key={i} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: i < seq.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none", alignItems: "center" }}>
+              <div key={i} onClick={() => { setSelectedIdx(i); persistView("session-detail"); }}
+                style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: i < seq.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none", alignItems: "center", cursor: "pointer" }}>
                 <div style={{ width: 40, height: 40, borderRadius: 11, background: isCurrent ? "#f59e0b" : isPast ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.06)", color: isCurrent ? "#000" : isPast ? "#4ade80" : "#64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: isCurrent ? 12 : 14, fontWeight: 800, flexShrink: 0 }}>
                   {isCurrent ? "▶" : isPast ? "✓" : i + 1}
                 </div>
@@ -801,6 +905,7 @@ export default function Entrenamiento({ onNavigate }) {
                   <div style={{ fontSize: 14, fontWeight: 700, color: isCurrent ? "#fbbf24" : "#e2e8f0" }}>{e.name}</div>
                   <div style={{ fontSize: 11, color: "#64748b" }}>{buildSession(e, training).length} ejercicios · {estMin(buildSession(e, training))} min{isCurrent ? " · siguiente" : ""}</div>
                 </div>
+                <span style={{ color: "#334155", fontSize: 18, flexShrink: 0 }}>›</span>
               </div>
             );
           })}
@@ -819,6 +924,9 @@ export default function Entrenamiento({ onNavigate }) {
             </div>
           </div>
         )}
+
+        {/* Calendar */}
+        <TrainingCalendar done={training.done || []} />
 
         {/* AI regenerate */}
         <button onClick={regenerateWithAI}
