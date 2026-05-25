@@ -20,19 +20,32 @@ const STEPS = ["Perfil", "Alimentos", "Macros", "Plan"];
 
 // ── Subcomponents ─────────────────────────────────────────────────
 
+const PEXELS_KEY = "zGavr4Z4fCxMdbqCFvzuRLlqgMEAO4stKKEqfwC3Sn1eVKP3965YAsZ4";
+
 function RecipeModal({ mealName, items, onClose }) {
   const recipe = useMemo(() => generateRecipe(mealName, items), [mealName, items]);
+  const [photoUrl, setPhotoUrl] = useState(null);
   const [imgErr, setImgErr] = useState(false);
   const cats = new Set(items.map(it => it.cat));
-  const photoTerm = cats.has("aves") ? "grilled,chicken,meal"
-    : cats.has("pescado") ? "fish,meal,plate"
-    : cats.has("carnes") ? "beef,steak,plate"
-    : cats.has("huevos") ? "eggs,cooked,plate"
-    : (cats.has("postreprot") || cats.has("lacteos")) ? "yogurt,bowl,healthy"
-    : cats.has("verduras") ? "vegetables,salad,bowl"
-    : cats.has("legumbres") ? "beans,lentils,bowl"
-    : "healthy,food,bowl";
+  const photoTerm = cats.has("aves") ? "grilled chicken breast plate"
+    : cats.has("pescado") ? "grilled fish fillet plate"
+    : cats.has("carnes") ? "beef steak meal plate"
+    : cats.has("huevos") ? "cooked eggs plate healthy"
+    : (cats.has("postreprot") || cats.has("lacteos")) ? "greek yogurt bowl healthy"
+    : cats.has("verduras") ? "vegetable salad bowl healthy"
+    : cats.has("legumbres") ? "lentils beans bowl meal"
+    : "healthy meal plate food";
   const fallbackEmoji = cats.has("aves") ? "🍗" : cats.has("pescado") ? "🐟" : cats.has("carnes") ? "🥩" : cats.has("huevos") ? "🍳" : (cats.has("postreprot") || cats.has("lacteos")) ? "🥛" : "🍽️";
+
+  useEffect(() => {
+    const page = Math.floor(Math.random() * 8) + 1;
+    fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(photoTerm)}&per_page=1&page=${page}&orientation=landscape`, {
+      headers: { Authorization: PEXELS_KEY }
+    })
+      .then(r => r.json())
+      .then(data => { if (data.photos?.[0]?.src?.large2x) setPhotoUrl(data.photos[0].src.large2x); })
+      .catch(() => {});
+  }, [photoTerm]);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
@@ -40,8 +53,8 @@ function RecipeModal({ mealName, items, onClose }) {
 
         {/* Photo header */}
         <div style={{ position: "relative", height: 210, borderRadius: "20px 20px 0 0", overflow: "hidden", flexShrink: 0 }}>
-          {!imgErr
-            ? <img src={`https://source.unsplash.com/featured/800x420/?${photoTerm}`} alt=""
+          {photoUrl && !imgErr
+            ? <img src={photoUrl} alt=""
                 style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setImgErr(true)} />
             : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#14532d,#052e16)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 80 }}>{fallbackEmoji}</div>
           }
