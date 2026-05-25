@@ -580,8 +580,13 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 }
 
 // ── Session Detail (preview) ──────────────────────────────────────
-function SessionDetailView({ entry, training, isCurrent, onBack, onStart }) {
+function SessionDetailView({ entry, training, isCurrent, onBack, onStart, onSaveDone }) {
   const plan = buildSession(entry, training);
+  const [saved, setSaved] = useState(false);
+  const handleSave = () => {
+    onSaveDone?.();
+    setSaved(true);
+  };
   return (
     <div style={{ minHeight: "100vh", background: "#080d08" }}>
       <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 16px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
@@ -590,8 +595,7 @@ function SessionDetailView({ entry, training, isCurrent, onBack, onStart }) {
           <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", fontWeight: 600, letterSpacing: 1 }}>VISTA PREVIA</span>
           {isCurrent
             ? <button onClick={onStart} style={{ ...C.btnA, width: "auto", padding: "8px 14px", fontSize: 12 }}>▶ Empezar</button>
-            : <div style={{ width: 80 }} />
-          }
+            : <div style={{ width: 80 }} />}
         </div>
       </div>
       <div style={{ padding: "16px" }}>
@@ -616,24 +620,121 @@ function SessionDetailView({ entry, training, isCurrent, onBack, onStart }) {
             </div>
           );
         })}
-        {isCurrent && <button onClick={onStart} style={{ ...C.btnA, marginTop: 8 }}>▶ Empezar entrenamiento</button>}
+        {isCurrent && (
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={onStart} style={{ ...C.btnA, flex: 2 }}>▶ Empezar entrenamiento</button>
+            <button onClick={handleSave} style={{ flex: 1, background: saved ? "rgba(74,222,128,0.08)" : "rgba(245,158,11,0.12)", border: `1px solid ${saved ? "rgba(74,222,128,0.25)" : "rgba(245,158,11,0.3)"}`, borderRadius: 11, padding: "13px 8px", fontSize: 12, fontWeight: 700, color: saved ? "#4ade80" : "#f59e0b", cursor: "pointer", fontFamily: "inherit" }}>
+              {saved ? "✓ Guardado" : "💾 Guardar sesión"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Day Detail Modal ──────────────────────────────────────────────
+function DayDetailModal({ dateStr, daily, onClose }) {
+  const log = daily?.[dateStr] || {};
+  const { nutrition, training } = log;
+  const [y, m, d] = dateStr.split("-");
+  const MONTHS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const DAYS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+  const dt = new Date(`${dateStr}T12:00:00`);
+  const dateLabel = `${DAYS[dt.getDay()]} ${+d} de ${MONTHS[+m - 1]} ${y}`;
+  const hasData = nutrition || training || log.trained;
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0a120a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
+        <div style={{ padding: "16px 18px 0" }}>
+          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.12)", borderRadius: 9, margin: "0 auto 16px" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 3 }}>Resumen del día</div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", margin: 0, textTransform: "capitalize" }}>{dateLabel}</h2>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+
+        <div style={{ padding: "0 18px 36px" }}>
+          {/* Nutrition */}
+          {nutrition ? (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>🥗 Nutrición</div>
+              {nutrition.meals?.map((m, mi) => (
+                <div key={mi} style={{ marginBottom: 12, background: "rgba(255,255,255,0.025)", borderRadius: 12, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#a3e635", marginBottom: 6 }}>{m.name}</div>
+                  {m.items?.map((it, ii) => (
+                    <div key={ii} style={{ fontSize: 12, color: "#94a3b8", padding: "2px 0" }}>• {it.name} — {it.grams}g</div>
+                  ))}
+                  <div style={{ fontSize: 10, color: "#475569", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                    {Math.round(m.totals?.p || 0)}g P · {Math.round(m.totals?.c || 0)}g HC · {Math.round(m.totals?.f || 0)}g G · {m.totals?.kcal || 0} kcal
+                  </div>
+                </div>
+              ))}
+              <div style={{ background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.15)", borderRadius: 8, padding: "7px 12px", fontSize: 11, color: "#86efac", fontWeight: 600 }}>
+                TOTAL: {Math.round(nutrition.totals?.p || 0)}g P · {Math.round(nutrition.totals?.c || 0)}g HC · {Math.round(nutrition.totals?.f || 0)}g G · {nutrition.totals?.kcal || 0} kcal
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 18, padding: "12px", background: "rgba(255,255,255,0.02)", borderRadius: 10, fontSize: 12, color: "#334155", textAlign: "center" }}>
+              Sin registro de nutrición este día
+            </div>
+          )}
+
+          {/* Training */}
+          {training ? (
+            <div>
+              <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>🏋️ Entrenamiento</div>
+              <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 12, padding: "12px" }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fbbf24", marginBottom: 8 }}>{training.name}</div>
+                {training.muscles?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                    {training.muscles.map((m, i) => (
+                      <span key={i} style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 20, padding: "3px 9px", fontSize: 11, color: "#f59e0b" }}>{m}</span>
+                    ))}
+                  </div>
+                )}
+                {training.exercises?.map((ex, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "#94a3b8", padding: "3px 0" }}>• {ex.name} — {ex.sets}×{ex.reps}</div>
+                ))}
+                {training.kcal > 0 && <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>🔥 {training.kcal} kcal quemadas</div>}
+              </div>
+            </div>
+          ) : log.trained ? (
+            <div style={{ padding: "12px", background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 10, fontSize: 12, color: "#92400e" }}>
+              🏋️ Entrenó este día (sin detalle)
+            </div>
+          ) : (
+            <div style={{ padding: "12px", background: "rgba(255,255,255,0.02)", borderRadius: 10, fontSize: 12, color: "#334155", textAlign: "center" }}>
+              Sin registro de entrenamiento este día
+            </div>
+          )}
+
+          {!hasData && (
+            <div style={{ textAlign: "center", padding: "20px 0", color: "#334155", fontSize: 13 }}>Sin actividad registrada</div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 // ── Training Calendar ─────────────────────────────────────────────
-function TrainingCalendar({ done = [] }) {
+function TrainingCalendar({ done = [], daily = {}, onDayPress }) {
   const [viewDate, setViewDate] = useState(() => new Date());
   const year = viewDate.getFullYear(), month = viewDate.getMonth();
   const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const WEEK = ["L","M","X","J","V","S","D"];
-  const trainedDates = new Set(done.map(d => d.date?.slice(0, 10)).filter(Boolean));
-  const trainedThisMonth = done.filter(d => d.date?.startsWith(`${year}-${String(month+1).padStart(2,"0")}`));
   const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date().toISOString().slice(0, 10);
   const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const monthPfx = `${year}-${String(month+1).padStart(2,"0")}`;
+  const trainedThisMonth = (daily ? Object.entries(daily).filter(([k, v]) => k.startsWith(monthPfx) && (v.training || v.trained)) : []).length;
+  const nutThisMonth = (daily ? Object.entries(daily).filter(([k, v]) => k.startsWith(monthPfx) && v.nutrition) : []).length;
 
   return (
     <div style={{ ...C.card }}>
@@ -648,20 +749,29 @@ function TrainingCalendar({ done = [] }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
         {cells.map((d, i) => {
           if (!d) return <div key={`e${i}`} />;
-          const ds = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-          const trained = trainedDates.has(ds);
+          const ds = `${monthPfx}-${String(d).padStart(2,"0")}`;
+          const log = daily?.[ds] || {};
+          const hasTrain = !!(log.training || log.trained);
+          const hasNut = !!log.nutrition;
           const isToday = ds === today;
+          const bg = (hasTrain && hasNut) ? "rgba(250,200,40,0.18)" : hasTrain ? "rgba(245,158,11,0.18)" : hasNut ? "rgba(74,222,128,0.12)" : isToday ? "rgba(255,255,255,0.06)" : "transparent";
+          const numColor = hasTrain ? "#fbbf24" : hasNut ? "#4ade80" : isToday ? "#f59e0b" : "#475569";
           return (
-            <div key={d} style={{ aspectRatio: "1", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: trained ? "rgba(245,158,11,0.18)" : isToday ? "rgba(255,255,255,0.06)" : "transparent", border: `1px solid ${isToday ? "rgba(245,158,11,0.45)" : "transparent"}` }}>
-              <span style={{ fontSize: 12, fontWeight: trained || isToday ? 700 : 400, color: trained ? "#fbbf24" : isToday ? "#f59e0b" : "#475569", lineHeight: 1.2 }}>{d}</span>
-              {trained && <span style={{ fontSize: 8, color: "#f59e0b", lineHeight: 1 }}>✓</span>}
+            <div key={d} onClick={() => (hasTrain || hasNut || log.trained) && onDayPress?.(ds)}
+              style={{ aspectRatio: "1", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: bg, border: `1px solid ${isToday ? "rgba(245,158,11,0.45)" : "transparent"}`, cursor: (hasTrain || hasNut || log.trained) ? "pointer" : "default" }}>
+              <span style={{ fontSize: 12, fontWeight: (hasTrain || hasNut || isToday) ? 700 : 400, color: numColor, lineHeight: 1.2 }}>{d}</span>
+              <div style={{ display: "flex", gap: 2, marginTop: 1 }}>
+                {hasTrain && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#f59e0b" }} />}
+                {hasNut && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#4ade80" }} />}
+              </div>
             </div>
           );
         })}
       </div>
-      <div style={{ marginTop: 12, fontSize: 11, color: "#64748b" }}>
-        🟠 {trainedThisMonth.length} {trainedThisMonth.length === 1 ? "sesión" : "sesiones"} este mes
-        {trainedThisMonth.length > 0 && ` · ${[...new Set(trainedThisMonth.map(d => d.name))].join(", ")}`}
+      <div style={{ marginTop: 10, display: "flex", gap: 12, fontSize: 11, color: "#475569" }}>
+        {trainedThisMonth > 0 && <span><span style={{ color: "#f59e0b" }}>●</span> {trainedThisMonth} entrenos</span>}
+        {nutThisMonth > 0 && <span><span style={{ color: "#4ade80" }}>●</span> {nutThisMonth} dietas</span>}
+        {trainedThisMonth === 0 && nutThisMonth === 0 && <span>Sin registros este mes</span>}
       </div>
     </div>
   );
@@ -677,6 +787,7 @@ export default function Entrenamiento({ onNavigate }) {
   const [kcalInput, setKcalInput] = useState("");
   const [showKcal, setShowKcal] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
 
   const setupDone = training.seq && training.seq.length > 0;
 
@@ -747,9 +858,29 @@ export default function Entrenamiento({ onNavigate }) {
     }));
   };
 
+  const logWorkoutToDaily = (entry, kcalBurned = 0) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const plan = buildSession(entry, training);
+    const muscles = [...new Set(plan.flatMap(x => byId(x.id)?.m || []))];
+    const exercises = plan.map(x => ({ id: x.id, name: byId(x.id)?.n || "", sets: x.sets, reps: x.reps }));
+    setState(s => ({
+      ...s,
+      daily: {
+        ...s.daily,
+        [todayStr]: {
+          ...(s.daily[todayStr] || {}),
+          trained: true,
+          watchKcal: kcalBurned || (s.daily[todayStr]?.watchKcal || 0),
+          training: { name: entry?.name || "", muscles, exercises, kcal: kcalBurned, savedAt: Date.now() }
+        }
+      }
+    }));
+  };
+
   const completeWorkout = () => {
     const kcalBurned = +kcalInput || todayLog.watchKcal || 0;
     markTrained(kcalBurned);
+    logWorkoutToDaily(nextWO, kcalBurned);
     setState(s => ({
       ...s,
       training: {
@@ -810,6 +941,21 @@ export default function Entrenamiento({ onNavigate }) {
         isCurrent={selectedIdx === currentPos}
         onBack={() => persistView("home")}
         onStart={() => persistView("playing")}
+        onSaveDone={() => {
+          logWorkoutToDaily(entry, 0);
+          markTrained(0);
+          setState(s => ({
+            ...s,
+            training: {
+              ...s.training,
+              cursor: (s.training.cursor || 0) + 1,
+              weekStarted: true,
+              lastTrainTs: Date.now(),
+              done: [...(s.training.done || []), { name: entry?.name, date: new Date().toISOString(), kcal: 0 }],
+              streak: (s.training.streak || 0) + 1,
+            }
+          }));
+        }}
       />
     );
   }
@@ -926,7 +1072,7 @@ export default function Entrenamiento({ onNavigate }) {
         )}
 
         {/* Calendar */}
-        <TrainingCalendar done={training.done || []} />
+        <TrainingCalendar done={training.done || []} daily={state.daily || {}} onDayPress={ds => setSelectedDay(ds)} />
 
         {/* AI regenerate */}
         <button onClick={regenerateWithAI}
@@ -942,6 +1088,7 @@ export default function Entrenamiento({ onNavigate }) {
           🗑️ Empezar desde cero
         </button>
       </div>
+      {selectedDay && <DayDetailModal dateStr={selectedDay} daily={state.daily || {}} onClose={() => setSelectedDay(null)} />}
     </div>
   );
 }

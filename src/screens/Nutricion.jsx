@@ -250,6 +250,18 @@ export default function Nutricion() {
     };
     setPlanData(np);
     save({ planData: np });
+    // Save today's nutrition to daily log
+    const todayStr = new Date().toISOString().slice(0, 10);
+    setState(s => ({
+      ...s,
+      daily: {
+        ...s.daily,
+        [todayStr]: {
+          ...(s.daily[todayStr] || {}),
+          nutrition: { meals: np.days[di].meals, totals: np.days[di].totals, savedAt: Date.now() }
+        }
+      }
+    }));
     setLocalEdits(e => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith(`${di}_`))));
     setSavedDays(s => new Set([...s, di]));
   };
