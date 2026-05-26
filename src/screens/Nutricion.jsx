@@ -837,6 +837,91 @@ export default function Nutricion() {
               );
             })()}
 
+            {/* Balance del día — solo si hay comidas escaneadas hoy */}
+            {(() => {
+              const todayKey = new Date().toISOString().slice(0, 10);
+              const scannedFoods = state.daily?.[todayKey]?.scannedFoods || [];
+              if (scannedFoods.length === 0) return null;
+              const consumed = scannedFoods.reduce((acc, f) => ({
+                proteina: acc.proteina + (f.proteina || 0),
+                carbos:   acc.carbos   + (f.carbos   || 0),
+                grasas:   acc.grasas   + (f.grasas   || 0),
+                kcal:     acc.kcal     + (f.kcal     || 0),
+              }), { proteina: 0, carbos: 0, grasas: 0, kcal: 0 });
+              const allMealNames = MEALS_NAMES[meals] || MEALS_NAMES[4];
+              const doneMeals = new Set(scannedFoods.map(f => f.meal).filter(Boolean));
+              const remaining = {
+                proteina: Math.max(0, macros.proteina - consumed.proteina),
+                carbos:   Math.max(0, macros.carbos   - consumed.carbos),
+                grasas:   Math.max(0, macros.grasas   - consumed.grasas),
+                kcal:     Math.max(0, Math.round(macros.proteina*4 + macros.carbos*4 + macros.grasas*9) - consumed.kcal),
+              };
+              const pendingMeals = allMealNames.filter(m => !doneMeals.has(m));
+              const perMeal = pendingMeals.length > 0 ? {
+                proteina: Math.round(remaining.proteina / pendingMeals.length),
+                carbos:   Math.round(remaining.carbos   / pendingMeals.length),
+                grasas:   Math.round(remaining.grasas   / pendingMeals.length),
+                kcal:     Math.round(remaining.kcal     / pendingMeals.length),
+              } : null;
+              const pct = (v, total) => total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0;
+              return (
+                <div style={{ background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 14, padding: "14px", marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 10 }}>Balance del día</div>
+
+                  {/* Barras de progreso por macro */}
+                  {[
+                    { label: "Proteína", key: "proteina", color: "#4ade80", unit: "g" },
+                    { label: "Carbos",   key: "carbos",   color: "#60a5fa", unit: "g" },
+                    { label: "Grasas",   key: "grasas",   color: "#f59e0b", unit: "g" },
+                  ].map(({ label, key, color, unit }) => {
+                    const total = macros[key];
+                    const done  = consumed[key];
+                    const left  = Math.max(0, total - done);
+                    const p     = pct(done, total);
+                    return (
+                      <div key={key} style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+                          <span style={{ color: "#94a3b8" }}>{label}</span>
+                          <span><span style={{ color, fontWeight: 700 }}>{done}{unit}</span><span style={{ color: "#475569" }}> / {total}{unit} · quedan {left}{unit}</span></span>
+                        </div>
+                        <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 9 }}>
+                          <div style={{ height: "100%", width: `${p}%`, background: color, borderRadius: 9, transition: "width .4s" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Comidas completadas vs pendientes */}
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, marginBottom: pendingMeals.length > 0 ? 10 : 0 }}>
+                    {allMealNames.map(m => (
+                      <span key={m} style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: doneMeals.has(m) ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.06)", color: doneMeals.has(m) ? "#4ade80" : "#64748b", border: `1px solid ${doneMeals.has(m) ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)"}` }}>
+                        {doneMeals.has(m) ? "✓ " : ""}{m}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Objetivo para comidas restantes */}
+                  {perMeal && pendingMeals.length > 0 && (
+                    <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 6 }}>
+                        OBJETIVO PARA {pendingMeals.map(m => m.toUpperCase()).join(" + ")}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, textAlign: "center" }}>
+                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#4ade80" }}>{perMeal.proteina}g</div><div style={{ fontSize: 9, color: "#64748b" }}>Prot</div></div>
+                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#60a5fa" }}>{perMeal.carbos}g</div><div style={{ fontSize: 9, color: "#64748b" }}>HC</div></div>
+                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b" }}>{perMeal.grasas}g</div><div style={{ fontSize: 9, color: "#64748b" }}>Grasa</div></div>
+                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#e2e8f0" }}>{perMeal.kcal}</div><div style={{ fontSize: 9, color: "#64748b" }}>kcal</div></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {pendingMeals.length === 0 && (
+                    <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 700, textAlign: "center", paddingTop: 4 }}>✅ Todas las comidas del día registradas</div>
+                  )}
+                </div>
+              );
+            })()}
+
             {planData.days.map((d, di) => (
               <div key={di} style={{ marginBottom: 20 }}>
                 <div style={{ background: d.isRefeed ? "rgba(245,158,11,0.1)" : "rgba(74,222,128,0.07)", borderLeft: `3px solid ${d.isRefeed ? "#f59e0b" : "#4ade80"}`, borderRadius: "0 8px 8px 0", padding: "8px 12px", marginBottom: 8, color: d.isRefeed ? "#fbbf24" : "#4ade80", fontSize: 13, fontWeight: 700 }}>

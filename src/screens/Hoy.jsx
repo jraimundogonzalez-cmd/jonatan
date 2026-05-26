@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useApp } from "../store/AppContext";
 import { getDailyQuote } from "../data/quotes";
 import { analyzeFood, getApiKey, saveApiKey } from "../utils/aiVision";
+import { MEALS_NAMES } from "../data/foods";
 
 const doHardReload = () => {
   if ("caches" in window) {
@@ -55,7 +56,19 @@ function Ring({ value, max, color, label, sub }) {
   );
 }
 
+function getMealSlot(hour, mealsCount) {
+  const names = MEALS_NAMES[mealsCount] || MEALS_NAMES[4];
+  if (mealsCount === 1) return names[0];
+  if (mealsCount === 2) return hour < 15 ? names[0] : names[1];
+  if (mealsCount === 3) return hour < 11 ? names[0] : hour < 17 ? names[1] : names[2];
+  if (mealsCount === 4) return hour < 11 ? names[0] : hour < 15 ? names[1] : hour < 19 ? names[2] : names[3];
+  if (mealsCount === 5) return hour < 9 ? names[0] : hour < 12 ? names[1] : hour < 16 ? names[2] : hour < 19 ? names[3] : names[4];
+  return names[names.length - 1];
+}
+
 function FoodScanner({ todayLog, setTodayLog }) {
+  const { state } = useApp();
+  const mealsCount = state.nutrition?.meals || 4;
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState(() => getApiKey());
   const [keyInput, setKeyInput] = useState("");
@@ -90,8 +103,10 @@ function FoodScanner({ todayLog, setTodayLog }) {
 
   const addToLog = () => {
     if (!result) return;
+    const hour = new Date().getHours();
+    const meal = getMealSlot(hour, mealsCount);
     const existing = todayLog.scannedFoods || [];
-    setTodayLog({ scannedFoods: [...existing, { ...result, ts: Date.now() }] });
+    setTodayLog({ scannedFoods: [...existing, { ...result, ts: Date.now(), meal }] });
     setResult(null);
     setPreview(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -222,11 +237,12 @@ function FoodScanner({ todayLog, setTodayLog }) {
               <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Registrado hoy</div>
               {scanned.map((f, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                  <div>
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    {f.meal && <div style={{ fontSize: 9, color: "#a78bfa", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 2 }}>{f.meal}</div>}
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>{f.descripcion}</div>
                     <div style={{ fontSize: 11, color: "#64748b" }}>{f.porcion} · {f.proteina}p / {f.carbos}c / {f.grasas}g</div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
                     <div style={{ fontSize: 12, color: "#94a3b8", fontFamily: "'DM Mono',monospace" }}>{f.kcal} kcal</div>
                     <button onClick={() => removeEntry(i)} style={{ background: "none", border: "none", color: "#475569", fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
                   </div>
