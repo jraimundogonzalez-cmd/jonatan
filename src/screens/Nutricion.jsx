@@ -110,6 +110,50 @@ function RecipeModal({ mealName, items, onClose }) {
   );
 }
 
+function TrainDayBanner({ isTrain, isRest, kcalWatch, extraHC, carbDelta, fatDelta, carbsMult, fatMult, sessionName, onSaveKcal }) {
+  const [editing, setEditing] = useState(false);
+  const [inp, setInp] = useState("");
+  return (
+    <div style={{ background: isTrain ? "rgba(245,158,11,0.07)" : "rgba(96,165,250,0.07)", border: `1px solid ${isTrain ? "rgba(245,158,11,0.25)" : "rgba(96,165,250,0.25)"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <span style={{ fontSize: 20 }}>{isTrain ? "🏋️" : "😴"}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: isTrain ? "#f59e0b" : "#60a5fa", marginBottom: 2 }}>
+            {isTrain ? (sessionName ? `Entrenado hoy · ${sessionName}` : "Hoy has entrenado") : "Hoy es día de descanso"}
+          </div>
+          {isTrain ? (
+            <>
+              {kcalWatch > 0 ? (
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                  <span style={{ color: "#f59e0b", fontWeight: 700 }}>{kcalWatch} kcal</span> quemadas · +{extraHC}g HC extra añadidos a tus macros
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "#64748b" }}>Registra las kcal del Apple Watch para ajustar tus macros de hoy</div>
+              )}
+              <button onClick={() => { setEditing(v => !v); setInp(kcalWatch > 0 ? String(kcalWatch) : ""); }}
+                style={{ marginTop: 8, fontSize: 11, color: "#f59e0b", background: "none", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                ⌚ {kcalWatch > 0 ? `${kcalWatch} kcal ✏️` : "Registrar kcal Apple Watch"}
+              </button>
+              {editing && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <input type="number" value={inp} onChange={e => setInp(e.target.value)} placeholder="kcal quemadas"
+                    style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 9, padding: "9px 11px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 15, outline: "none" }} />
+                  <button onClick={() => { onSaveKcal(+inp || 0); setEditing(false); }}
+                    style={{ padding: "9px 14px", background: "#f59e0b", border: "none", borderRadius: 9, color: "#000", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>OK</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 11, color: "#64748b" }}>
+              HC {carbDelta}g (×{carbsMult}) · Grasas +{fatDelta}g (×{fatMult}) · Aplica en el siguiente plan generado.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ShoppingList({ planData }) {
   const list = buildShoppingList(planData, CATS);
   const toKg = g => g >= 1000 ? `${(g / 1000).toFixed(2).replace(".", ",")} kg` : `${g} g`;
@@ -133,7 +177,7 @@ function ShoppingList({ planData }) {
 
 // ── Main Component ─────────────────────────────────────────────────
 export default function Nutricion() {
-  const { state, setState } = useApp();
+  const { state, setState, setTodayLog } = useApp();
   const saved = state.nutrition || {};
 
   const [step, setStep] = useState(saved.planData ? 3 : 0);
@@ -772,20 +816,24 @@ export default function Nutricion() {
               const adj = saved.restDayAdjust || { carbsMult: 0.75, fatMult: 1.25 };
               const carbDelta = isRest ? Math.round(macros.carbos * (adj.carbsMult - 1)) : 0;
               const fatDelta  = isRest ? Math.round(macros.grasas  * (adj.fatMult  - 1)) : 0;
+              const kcalWatch = todayLog.watchKcal || todayLog.training?.kcal || 0;
+              const extraHC   = kcalWatch > 0 ? Math.round(kcalWatch / 4) : 0;
               return (
-                <div style={{ background: isTrain ? "rgba(245,158,11,0.07)" : "rgba(96,165,250,0.07)", border: `1px solid ${isTrain ? "rgba(245,158,11,0.25)" : "rgba(96,165,250,0.25)"}`, borderRadius: 12, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 18 }}>{isTrain ? "🏋️" : "😴"}</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: isTrain ? "#f59e0b" : "#60a5fa" }}>
-                      {isTrain ? "Hoy has entrenado" : "Hoy es día de descanso"}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>
-                      {isTrain
-                        ? `Macros normales. Si quemaste kcal con Apple Watch, se añaden como HC extra.`
-                        : `HC ${carbDelta}g (×${adj.carbsMult}) · Grasas +${fatDelta}g (×${adj.fatMult}) · Aplica en el siguiente plan generado.`}
-                    </div>
-                  </div>
-                </div>
+                <TrainDayBanner
+                  isTrain={isTrain}
+                  isRest={isRest}
+                  kcalWatch={kcalWatch}
+                  extraHC={extraHC}
+                  carbDelta={carbDelta}
+                  fatDelta={fatDelta}
+                  carbsMult={adj.carbsMult}
+                  fatMult={adj.fatMult}
+                  sessionName={todayLog.training?.name || ""}
+                  onSaveKcal={(v) => {
+                    setTodayLog({ watchKcal: v });
+                    setState(s => ({ ...s, daily: { ...s.daily, [todayKey]: { ...(s.daily[todayKey] || {}), watchKcal: v, training: { ...(s.daily[todayKey]?.training || {}), kcal: v } } } }));
+                  }}
+                />
               );
             })()}
 

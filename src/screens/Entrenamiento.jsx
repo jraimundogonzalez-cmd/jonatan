@@ -2150,13 +2150,15 @@ function TrainingCalendar({ done = [], daily = {}, onDayPress }) {
 
 // ── Main Entrenamiento ────────────────────────────────────────────
 export default function Entrenamiento({ onNavigate }) {
-  const { state, setState, markTrained, todayLog } = useApp();
+  const { state, setState, markTrained, todayLog, setTodayLog } = useApp();
   const training = state.training;
   const [view, setView] = useState(() => state.training._view || "home");
   const [onbStep, setOnbStep] = useState(() => state.training._onbStep || 0);
   const [onbAnswers, setOnbAnswers] = useState(() => state.training._onbAnswers || {});
   const [kcalInput, setKcalInput] = useState("");
   const [showKcal, setShowKcal] = useState(false);
+  const [showPostKcal, setShowPostKcal] = useState(false);
+  const [postKcalInput, setPostKcalInput] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
 
@@ -2401,13 +2403,77 @@ export default function Entrenamiento({ onNavigate }) {
         )}
 
         {/* Today status */}
-        {trainedToday ? (
-          <div style={{ ...C.card, background: "rgba(74,222,128,0.05)", borderColor: "rgba(74,222,128,0.2)", textAlign: "center", padding: "24px 16px" }}>
-            <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#4ade80", margin: "0 0 6px" }}>Hoy ya entrenaste</h2>
-            <p style={{ color: "#64748b", fontSize: 13, margin: 0 }}>Descansa. El músculo crece fuera del gimnasio.</p>
-          </div>
-        ) : (
+        {trainedToday ? (() => {
+          const td = todayLog.training || {};
+          const kcalToday = todayLog.watchKcal || td.kcal || 0;
+          const rpeVal = td.rpe;
+          const rpeColor = rpeVal <= 4 ? "#4ade80" : rpeVal <= 6 ? "#f59e0b" : rpeVal <= 8 ? "#f97316" : "#ef4444";
+          const muscles = td.muscles || [];
+          const savedAt = td.savedAt ? new Date(td.savedAt) : null;
+          const timeStr = savedAt ? savedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : null;
+          return (
+            <div style={{ ...C.card, background: "rgba(74,222,128,0.04)", borderColor: "rgba(74,222,128,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <div style={{ fontSize: 28 }}>✅</div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#4ade80" }}>Hoy ya entrenaste</div>
+                  {td.name && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 1 }}>{td.name}{timeStr ? ` · ${timeStr}` : ""}</div>}
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div style={{ display: "grid", gridTemplateColumns: kcalToday > 0 ? (rpeVal ? "1fr 1fr 1fr" : "1fr 1fr") : (rpeVal ? "1fr 1fr" : "1fr"), gap: 8, marginBottom: kcalToday > 0 || rpeVal ? 12 : 0 }}>
+                {kcalToday > 0 && (
+                  <div style={{ background: "rgba(245,158,11,0.08)", borderRadius: 10, padding: "10px 8px", textAlign: "center", border: "1px solid rgba(245,158,11,0.15)" }}>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{kcalToday}</div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>kcal quemadas</div>
+                  </div>
+                )}
+                {rpeVal && (
+                  <div style={{ background: `${rpeColor}12`, borderRadius: 10, padding: "10px 8px", textAlign: "center", border: `1px solid ${rpeColor}25` }}>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: rpeColor }}>{rpeVal}/10</div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>RPE</div>
+                  </div>
+                )}
+                {td.cardio && (
+                  <div style={{ background: "rgba(96,165,250,0.07)", borderRadius: 10, padding: "10px 8px", textAlign: "center", border: "1px solid rgba(96,165,250,0.15)" }}>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#60a5fa" }}>{td.cardio.min}m</div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>cardio</div>
+                  </div>
+                )}
+              </div>
+
+              {muscles.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+                  {muscles.slice(0, 6).map((m, i) => (
+                    <span key={i} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "2px 9px", fontSize: 10, color: "#86efac" }}>{m}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* kcal update */}
+              <button onClick={() => { setShowPostKcal(v => !v); setPostKcalInput(kcalToday > 0 ? String(kcalToday) : ""); }}
+                style={{ fontSize: 11, color: "#f59e0b", background: "none", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 9, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                ⌚ {kcalToday > 0 ? `${kcalToday} kcal Apple Watch ✏️` : "Registrar kcal Apple Watch"}
+              </button>
+              {showPostKcal && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                  <input type="number" value={postKcalInput} onChange={e => setPostKcalInput(e.target.value)} placeholder="kcal quemadas"
+                    style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "10px 12px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 16, outline: "none" }} />
+                  <button onClick={() => {
+                    const v = +postKcalInput || 0;
+                    setTodayLog({ watchKcal: v });
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    setState(s => ({ ...s, daily: { ...s.daily, [todayStr]: { ...(s.daily[todayStr] || {}), watchKcal: v, training: { ...(s.daily[todayStr]?.training || {}), kcal: v } } } }));
+                    setShowPostKcal(false);
+                  }} style={{ padding: "10px 14px", background: "#f59e0b", border: "none", borderRadius: 10, color: "#000", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+                </div>
+              )}
+
+              <p style={{ color: "#475569", fontSize: 11, margin: "10px 0 0" }}>El músculo crece fuera del gimnasio. ¡Buen trabajo!</p>
+            </div>
+          );
+        })() : (
           <div style={{ ...C.card, background: "linear-gradient(160deg,#1a1200,rgba(54,48,36,.5))", borderColor: "rgba(245,158,11,0.2)" }}>
             <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>Siguiente en tu plan</div>
             <h2 style={{ fontSize: 24, fontWeight: 700, color: "#f1f5f9", margin: "0 0 6px" }}>{nextWO?.name}</h2>

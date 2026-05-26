@@ -1652,6 +1652,9 @@ export const FOODS = [
   {id:1628, name:"Proteína Whey Concentrada 100g", cat:"postreprot", p:75, c:8, f:4, cal:368},
   {id:1629, name:"Proteína Whey Aislada 100g", cat:"postreprot", p:87, c:3, f:1, cal:369},
   {id:1630, name:"Proteína Caseína 100g", cat:"postreprot", p:80, c:5, f:2, cal:362},
+  {id:1631, name:"Guacamole Hacendado", cat:"grasas", p:1.9, c:2, f:13.7, cal:149},
+  {id:1632, name:"Cereales Smacks Kellogg's", cat:"cereales", p:7.1, c:81, f:1.6, cal:377},
+  {id:1633, name:"Corn Flakes Hacendado", cat:"cereales", p:6.3, c:84, f:1.1, cal:378},
 ];
 
 export const ALLERGIES_OPT = [
