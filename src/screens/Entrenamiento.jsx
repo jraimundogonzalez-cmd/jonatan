@@ -446,6 +446,39 @@ function Onboarding({ step, answers, onPick, onBack, onDone }) {
 }
 
 // ── PR Modal ──────────────────────────────────────────────────────
+// Calcula la progresión inteligente serie a serie vs sesión anterior
+function smartProgress(lastSets, targetReps) {
+  return lastSets.map(s => {
+    const prevW = +s.weight || 0;
+    const prevR = +s.reps || 0;
+    if (!prevW) return { weight: "", reps: targetReps, delta: 0, note: "" };
+    const surplus = prevR - targetReps;
+    let newW, note;
+    if (surplus >= 5) {
+      const inc = prevW >= 120 ? 7.5 : prevW >= 60 ? 5 : 2.5;
+      newW = +(prevW + inc).toFixed(2);
+      note = `+${inc}kg`;
+    } else if (surplus >= 2) {
+      const inc = prevW >= 100 ? 5 : 2.5;
+      newW = +(prevW + inc).toFixed(2);
+      note = `+${inc}kg`;
+    } else if (surplus >= 0) {
+      const inc = prevW >= 100 ? 2.5 : 1.25;
+      newW = +(prevW + inc).toFixed(2);
+      note = `+${inc}kg`;
+    } else if (surplus === -1) {
+      newW = prevW;
+      note = "+1 rep";
+    } else {
+      const dec = prevW >= 100 ? 5 : 2.5;
+      newW = Math.max(0, +(prevW - dec).toFixed(2));
+      note = `-${dec}kg`;
+    }
+    const newR = surplus >= 0 ? targetReps : Math.min(prevR + 1, targetReps);
+    return { weight: newW, reps: newR, delta: newW - prevW, note, prevW, prevR };
+  });
+}
+
 function generateIaAdvice(currentSets, lastSession, exercise) {
   const targetReps = exercise?.reps || 10;
   const lastSetsData = lastSession?.setsData;
@@ -456,36 +489,25 @@ function generateIaAdvice(currentSets, lastSession, exercise) {
   const lastSet = currentSets[currentSets.length - 1];
   const lastSetReps = +lastSet?.reps || 0;
   const volChange = lastVol > 0 ? Math.round((currentVol - lastVol) / lastVol * 100) : null;
-
-  // Generate next session targets
-  const nextSets = currentSets.map(s => {
-    if (!s.weight && !s.reps) return s;
-    const w = +s.weight || 0;
-    const r = +s.reps || 0;
-    const hitTarget = r >= targetReps;
-    if (w > 0 && hitTarget) {
-      const inc = w >= 100 ? 5 : w >= 60 ? 2.5 : 1.25;
-      return { weight: +(w + inc).toFixed(2), reps: targetReps };
-    }
-    if (w > 0 && !hitTarget) return { weight: w, reps: Math.min(r + 1, targetReps) };
-    return { weight: w, reps: r };
-  });
-
+  const nextSets = smartProgress(
+    currentSets.map(s => ({ weight: +s.weight || 0, reps: +s.reps || 0 })),
+    targetReps
+  );
   let msg, color, icon;
   if (allHitTarget && volChange !== null && volChange > 0) {
-    msg = `Volumen +${volChange}% vs sesión anterior. Sube 2.5–5kg en las series de trabajo la próxima vez.`;
+    msg = `Volumen +${volChange}% vs sesión anterior. ¡Gran progresión! Sube de peso la próxima vez.`;
     color = "#4ade80"; icon = "🚀";
   } else if (allHitTarget) {
-    msg = `Todas las series completadas (${targetReps} reps objetivo). Aumenta el peso 2.5kg en la siguiente sesión.`;
+    msg = `Todas las series completadas con ${targetReps} reps. Aumenta el peso en la siguiente sesión.`;
     color = "#86efac"; icon = "✅";
   } else if (lastSetReps >= targetReps - 1) {
-    msg = `Cerca del objetivo. Mantén el mismo peso e intenta completar las ${targetReps} reps en todas las series.`;
+    msg = `Muy cerca del objetivo. Mantén el peso e intenta cerrar las ${targetReps} reps en todas.`;
     color = "#fde68a"; icon = "💪";
   } else if (lastSetReps < targetReps - 2) {
-    msg = `El peso de trabajo es alto para las reps objetivo. Baja 2.5–5kg para dominar la técnica y llegar a ${targetReps} reps.`;
+    msg = `Peso de trabajo alto para las reps objetivo. Baja ligeramente para dominar la técnica.`;
     color = "#f87171"; icon = "⚠️";
   } else {
-    msg = `Progresión normal. Intenta sumar 1 rep más en cada serie la próxima sesión.`;
+    msg = `Progresión normal. Intenta +1 rep por serie la próxima sesión.`;
     color = "#a78bfa"; icon = "📈";
   }
   return { msg, color, icon, nextSets, currentVol, lastVol, volChange };
@@ -493,15 +515,20 @@ function generateIaAdvice(currentSets, lastSession, exercise) {
 
 function PRModal({ exercise, history, onSave, onClose }) {
   const numSets = exercise?.sets || 4;
-  const suggestion = suggestPR(history);
+  const targetReps = exercise?.reps || 10;
+  const lastSession = history?.[history.length - 1];
+  const lastSets = lastSession?.setsData;
+
+  // Plan sugerido calculado desde la última sesión
+  const suggestedPlan = lastSets && lastSets.length === numSets
+    ? smartProgress(lastSets, targetReps)
+    : null;
 
   const initSets = () => {
-    const lastSets = history?.[history.length - 1]?.setsData;
-    if (lastSets && lastSets.length === numSets) {
-      return lastSets.map(s => ({ weight: s.weight ?? "", reps: s.reps ?? (exercise?.reps || 10) }));
-    }
-    const baseW = suggestion?.weight || (history?.[history.length - 1]?.weight) || "";
-    const baseR = exercise?.reps || 10;
+    // Si hay plan sugerido, pre-rellenar con él
+    if (suggestedPlan) return suggestedPlan.map(s => ({ weight: s.weight, reps: s.reps }));
+    const baseW = history?.[history.length - 1]?.weight || "";
+    const baseR = targetReps;
     if (!baseW) return Array.from({ length: numSets }, () => ({ weight: "", reps: "" }));
     const w = +baseW;
     if (numSets === 1) return [{ weight: w, reps: baseR }];
@@ -521,6 +548,7 @@ function PRModal({ exercise, history, onSave, onClose }) {
 
   const [setsData, setSetsData] = useState(initSets);
   const [advice, setAdvice] = useState(null);
+  const [planVisible, setPlanVisible] = useState(true);
 
   const updateSet = (i, field, val) => {
     setSetsData(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val === "" ? "" : +val } : s));
@@ -532,83 +560,116 @@ function PRModal({ exercise, history, onSave, onClose }) {
     setSetsData(prev => prev.map((s, idx) => idx <= fromIdx ? s : { ...s, [field]: val }));
   };
 
+  const applyPlan = () => {
+    if (suggestedPlan) setSetsData(suggestedPlan.map(s => ({ weight: s.weight, reps: s.reps })));
+  };
+
   const hasAnyData = setsData.some(s => (s.weight !== "" && +s.weight > 0) || (s.reps !== "" && +s.reps > 0));
   const maxWeight = Math.max(...setsData.map(s => +s.weight || 0));
   const totalVol = setsData.reduce((sum, s) => sum + ((+s.weight || 0) * (+s.reps || 0)), 0);
-  const lastSession = history?.[history.length - 1];
-  const lastSets = lastSession?.setsData;
 
   const handleSave = () => {
-    const payload = {
-      weight: maxWeight || 0,
-      reps: +setsData[setsData.length - 1]?.reps || exercise?.reps || 0,
-      sets: numSets,
-      setsData,
-      targetReps: exercise?.reps || 10,
-    };
-    onSave(payload);
+    onSave({ weight: maxWeight || 0, reps: +setsData[setsData.length - 1]?.reps || targetReps, sets: numSets, setsData, targetReps });
     const a = generateIaAdvice(setsData, lastSession, exercise);
     setAdvice(a);
   };
 
   return (
-    <div onClick={advice ? undefined : onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
+    <div onClick={advice ? undefined : onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "94vh", overflowY: "auto" }}>
         <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
 
+        {/* Cabecera */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Registrar PR</div>
             <h2 style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", margin: 0 }}>{byId(exercise?.id)?.n || exercise?.id}</h2>
-            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{numSets} series · objetivo {exercise?.reps || 10} reps</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{numSets} series · objetivo {targetReps} reps</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
         </div>
 
-        {/* Análisis IA post-guardado */}
+        {/* ── ANÁLISIS POST-GUARDADO ─────────────────────────────── */}
         {advice && (
-          <div style={{ padding: "14px", background: "rgba(255,255,255,0.04)", borderRadius: 14, marginBottom: 16, border: `1px solid ${advice.color}30` }}>
+          <div style={{ padding: "16px", background: "rgba(255,255,255,0.04)", borderRadius: 14, marginBottom: 16, border: `1px solid ${advice.color}25` }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: advice.color, marginBottom: 8 }}>{advice.icon} Análisis IA</div>
-            <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 12 }}>{advice.msg}</div>
+            <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.6, marginBottom: 14 }}>{advice.msg}</div>
+
             {advice.currentVol > 0 && (
-              <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
-                <div style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 700, color: "#f59e0b" }}>{maxWeight}kg</div>
-                  <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>Peso máx</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 700, color: "#a78bfa" }}>{advice.currentVol}</div>
-                  <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>Volumen kg</div>
-                </div>
-                {advice.volChange !== null && (
-                  <div style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 700, color: advice.volChange >= 0 ? "#4ade80" : "#f87171" }}>{advice.volChange >= 0 ? "+" : ""}{advice.volChange}%</div>
-                    <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>vs anterior</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                {[
+                  { val: `${maxWeight}kg`, lbl: "Peso máx", color: "#f59e0b" },
+                  { val: advice.currentVol, lbl: "Volumen", color: "#a78bfa" },
+                  ...(advice.volChange !== null ? [{ val: `${advice.volChange >= 0 ? "+" : ""}${advice.volChange}%`, lbl: "vs anterior", color: advice.volChange >= 0 ? "#4ade80" : "#f87171" }] : []),
+                ].map((x, i) => (
+                  <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 4px", background: "rgba(255,255,255,0.04)", borderRadius: 10 }}>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 15, fontWeight: 700, color: x.color }}>{x.val}</div>
+                    <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", marginTop: 2 }}>{x.lbl}</div>
                   </div>
-                )}
+                ))}
               </div>
             )}
-            <div style={{ fontSize: 10, color: "#475569", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>Objetivo próxima sesión</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+
+            {/* Plan para próxima sesión */}
+            <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10 }}>📋 Plan próxima sesión</div>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
               {advice.nextSets.map((ns, i) => (
-                <span key={i} style={{ background: "rgba(245,158,11,0.1)", borderRadius: 8, padding: "4px 10px", color: "#fde68a", fontFamily: "'DM Mono',monospace", fontSize: 12 }}>
-                  S{i + 1}: {ns.weight ? `${ns.weight}kg` : "—"} × {ns.reps || "—"}
-                </span>
+                <div key={i} style={{ minWidth: 72, background: "rgba(245,158,11,0.07)", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid rgba(245,158,11,0.15)", flexShrink: 0 }}>
+                  <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, marginBottom: 6 }}>SERIE {i + 1}</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 800, color: "#f59e0b", lineHeight: 1.1 }}>
+                    {ns.weight ? `${ns.weight}` : "—"}<span style={{ fontSize: 10, color: "#94a3b8" }}>kg</span>
+                  </div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, color: "#e2e8f0", marginTop: 2 }}>× {ns.reps || "—"}</div>
+                  {ns.note && (
+                    <div style={{ fontSize: 9, color: ns.delta >= 0 ? "#4ade80" : "#f87171", marginTop: 4, fontWeight: 600 }}>{ns.note}</div>
+                  )}
+                </div>
               ))}
             </div>
-            <button onClick={onClose} style={{ ...C.btnA, marginTop: 14 }}>Cerrar</button>
+            <button onClick={onClose} style={{ ...C.btnA, marginTop: 16 }}>Cerrar</button>
           </div>
         )}
 
         {!advice && (
           <>
-            {suggestion && (
-              <div style={{ padding: "9px 12px", background: "rgba(245,158,11,0.07)", borderRadius: 10, marginBottom: 14, fontSize: 11, color: "#fde68a" }}>
-                💡 Sugerencia: <strong>{suggestion.weight}kg × {suggestion.reps}</strong> — {suggestion.note}
+            {/* ── PLAN SUGERIDO (solo cuando hay historial con setsData) ── */}
+            {suggestedPlan && planVisible && (
+              <div style={{ background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 14, padding: "14px", marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em" }}>📋 Plan sugerido para hoy</div>
+                  <button onClick={() => setPlanVisible(false)} style={{ background: "none", border: "none", color: "#475569", fontSize: 16, cursor: "pointer", padding: 0 }}>×</button>
+                </div>
+                <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4 }}>
+                  {suggestedPlan.map((s, i) => (
+                    <div key={i} style={{ minWidth: 68, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "10px 6px", textAlign: "center", flexShrink: 0 }}>
+                      <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, marginBottom: 4 }}>S{i + 1}</div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 17, fontWeight: 800, color: "#f1f5f9", lineHeight: 1 }}>
+                        {s.weight || "—"}<span style={{ fontSize: 9, color: "#64748b" }}>kg</span>
+                      </div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#94a3b8", marginTop: 3 }}>× {s.reps}</div>
+                      {s.note && (
+                        <div style={{ fontSize: 9, fontWeight: 700, marginTop: 4, color: s.delta >= 0 ? "#4ade80" : "#f87171" }}>{s.note}</div>
+                      )}
+                      {s.prevW != null && (
+                        <div style={{ fontSize: 8, color: "#334155", marginTop: 3 }}>{s.prevW}kg×{s.prevR}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button onClick={applyPlan}
+                    style={{ flex: 1, padding: "10px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 10, color: "#f59e0b", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                    Usar este plan
+                  </button>
+                  <button onClick={() => setSetsData(Array.from({ length: numSets }, () => ({ weight: "", reps: "" })))}
+                    style={{ padding: "10px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#64748b", fontSize: 12, cursor: "pointer" }}>
+                    Vaciar
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* Cabeceras */}
+            {/* ── FILAS POR SERIE ──────────────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 28px", gap: 6, marginBottom: 6, padding: "0 2px" }}>
               <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>S</div>
               <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Peso (kg)</div>
@@ -616,26 +677,25 @@ function PRModal({ exercise, history, onSave, onClose }) {
               <div />
             </div>
 
-            {/* Fila por serie */}
             {setsData.map((s, i) => {
               const prevSet = lastSets?.[i];
               const isHeaviest = s.weight !== "" && +s.weight > 0 && +s.weight === maxWeight;
-              const hitTarget = s.reps !== "" && +s.reps >= (exercise?.reps || 10);
+              const hitTarget = s.reps !== "" && +s.reps >= targetReps;
               return (
                 <div key={i} style={{ marginBottom: 10 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 28px", gap: 6, alignItems: "center" }}>
-                    <div style={{ width: 28, height: 44, borderRadius: 9, background: isHeaviest ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: isHeaviest ? "#f59e0b" : "#64748b", fontFamily: "'DM Mono',monospace" }}>
+                    <div style={{ width: 28, height: 46, borderRadius: 9, background: isHeaviest ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: isHeaviest ? "#f59e0b" : "#64748b", fontFamily: "'DM Mono',monospace" }}>
                       {i + 1}
                     </div>
                     <input type="number" inputMode="decimal" value={s.weight} onChange={e => updateSet(i, "weight", e.target.value)}
-                      placeholder="ej. 80"
+                      placeholder="kg"
                       style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${isHeaviest ? "rgba(245,158,11,0.5)" : "rgba(255,255,255,0.12)"}`, borderRadius: 10, padding: "12px 6px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 20, textAlign: "center", width: "100%", outline: "none", boxSizing: "border-box" }} />
                     <input type="number" inputMode="numeric" value={s.reps} onChange={e => updateSet(i, "reps", e.target.value)}
                       placeholder="reps"
-                      style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${hitTarget ? "rgba(74,222,128,0.4)" : "rgba(255,255,255,0.12)"}`, borderRadius: 10, padding: "12px 6px", color: hitTarget ? "#4ade80" : "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 20, textAlign: "center", width: "100%", outline: "none", boxSizing: "border-box" }} />
+                      style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${hitTarget ? "rgba(74,222,128,0.45)" : "rgba(255,255,255,0.12)"}`, borderRadius: 10, padding: "12px 6px", color: hitTarget ? "#4ade80" : "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 20, textAlign: "center", width: "100%", outline: "none", boxSizing: "border-box" }} />
                     {i < setsData.length - 1 ? (
                       <button onClick={() => { fillDown("weight", i); fillDown("reps", i); }} title="Copiar a series siguientes"
-                        style={{ width: 28, height: 44, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#475569", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        style={{ width: 28, height: 46, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#475569", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         ↓
                       </button>
                     ) : <div />}
@@ -654,7 +714,7 @@ function PRModal({ exercise, history, onSave, onClose }) {
 
             {/* Resumen volumen */}
             {totalVol > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "14px 0", padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "12px 0", padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#f59e0b" }}>{maxWeight}kg</div>
                   <div style={{ fontSize: 10, color: "#64748b" }}>Peso máximo</div>
@@ -666,7 +726,7 @@ function PRModal({ exercise, history, onSave, onClose }) {
               </div>
             )}
 
-            {/* Historial */}
+            {/* Historial compacto */}
             {history?.length > 0 && (
               <div style={{ marginBottom: 14 }}>
                 <span style={C.lbl}>Sesiones anteriores</span>
