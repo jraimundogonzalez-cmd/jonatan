@@ -121,7 +121,8 @@ export function buildSchedule(training) {
     entry.hasCardio = !entry.hasAbs;
     return entry;
   });
-  return { ...training, seq, cursor: 0, weekStarted: false, lastTrainTs: null };
+  const today = new Date().toISOString().split("T")[0];
+  return { ...training, seq, cursor: 0, weekStarted: false, lastTrainTs: null, mesocycleStart: today, mesocycleDuration: 5 };
 }
 
 // PR suggestion: suggest weight/reps increase based on history

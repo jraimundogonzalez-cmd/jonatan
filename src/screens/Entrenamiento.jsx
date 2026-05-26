@@ -1243,6 +1243,94 @@ function ExerciseTutorialModal({ ex, onClose }) {
 }
 
 
+// ── Mesocycle progress card ───────────────────────────────────────
+function MesocycleCard({ training, setState }) {
+  const start = training.mesocycleStart
+    ? new Date(training.mesocycleStart)
+    : null;
+  const totalWeeks = training.mesocycleDuration || 5;
+
+  if (!start) return null;
+
+  const today = new Date();
+  const daysElapsed = Math.floor((today - start) / 86400000);
+  const weekNum = Math.min(Math.floor(daysElapsed / 7) + 1, totalWeeks + 1);
+  const daysIntoWeek = daysElapsed % 7;
+  const daysLeft = totalWeeks * 7 - daysElapsed;
+  const isComplete = daysElapsed >= totalWeeks * 7;
+  const pct = Math.min(100, Math.round((daysElapsed / (totalWeeks * 7)) * 100));
+
+  const PHASE_NAMES = ["Acumulación", "Acumulación", "Intensificación", "Realización", "Descarga"];
+  const phase = PHASE_NAMES[Math.min(weekNum - 1, PHASE_NAMES.length - 1)] || "Descarga";
+
+  const renewMeso = () => {
+    const today = new Date().toISOString().split("T")[0];
+    setState(s => ({ ...s, training: { ...s.training, mesocycleStart: today } }));
+  };
+
+  if (isComplete) {
+    return (
+      <div style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b", marginBottom: 6 }}>🏆 Mesociclo completado</div>
+        <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 12 }}>
+          Has completado {totalWeeks} semanas de progresión. Es un buen momento para renovar los ejercicios y evitar la adaptación.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={renewMeso}
+            style={{ flex: 1, padding: "10px", background: "#f59e0b", border: "none", borderRadius: 10, color: "#000", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+            🔄 Renovar plan
+          </button>
+          <button onClick={renewMeso}
+            style={{ flex: 1, padding: "10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#94a3b8", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+            Repetir {totalWeeks} semanas
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div>
+          <span style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em" }}>Mesociclo · </span>
+          <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase" }}>{phase}</span>
+        </div>
+        <div style={{ fontSize: 11, color: "#64748b" }}>
+          {daysLeft > 0 ? `${daysLeft} días restantes` : ""}
+        </div>
+      </div>
+      {/* Semanas */}
+      <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
+        {Array.from({ length: totalWeeks }).map((_, i) => {
+          const wk = i + 1;
+          const done = weekNum > wk;
+          const current = weekNum === wk;
+          return (
+            <div key={i} style={{ flex: 1, textAlign: "center" }}>
+              <div style={{
+                height: 6, borderRadius: 4, marginBottom: 4,
+                background: done ? "#f59e0b" : current ? "rgba(245,158,11,0.4)" : "rgba(255,255,255,0.08)",
+                position: "relative", overflow: "hidden",
+              }}>
+                {current && (
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(daysIntoWeek / 7) * 100}%`, background: "#f59e0b" }} />
+                )}
+              </div>
+              <div style={{ fontSize: 9, color: current ? "#f59e0b" : done ? "#64748b" : "#334155", fontWeight: current ? 800 : 400 }}>
+                S{wk}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: "#64748b" }}>
+        Semana <strong style={{ color: "#e2e8f0" }}>{weekNum}</strong> de {totalWeeks} · {pct}% completado
+      </div>
+    </div>
+  );
+}
+
 function SessionPlayer({ entry, training, onComplete, onExit }) {
   const { logPR, state, setState } = useApp();
   const absBlock = entry.hasAbs ? buildAbsBlock(training.level) : [];
@@ -1290,8 +1378,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const removeExercise = (idx) => {
     setDone(d => d.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
     setPlan(p => p.filter((_, i) => i !== idx));
-    setPendingChanges(true);
-    setSavedOk(false);
+    // No marca cambios permanentes: "saltar hoy" no afecta sesiones futuras
   };
 
   const savePlanChanges = () => {
@@ -1451,7 +1538,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
                   {!x._isAbs && (
                     <button onClick={() => removeExercise(idx)}
                       style={{ fontSize: 11, color: "#94a3b8", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>
-                      🗑 Eliminar
+                      ⏭ Saltar hoy
                     </button>
                   )}
                 </div>
@@ -1873,6 +1960,14 @@ export default function Entrenamiento({ onNavigate }) {
 
   const setupDone = training.seq && training.seq.length > 0;
 
+  // Inicializar mesocycleStart para planes existentes que no lo tienen
+  useEffect(() => {
+    if (setupDone && !training.mesocycleStart) {
+      const today = new Date().toISOString().split("T")[0];
+      setState(s => ({ ...s, training: { ...s.training, mesocycleStart: today, mesocycleDuration: 5 } }));
+    }
+  }, [setupDone]);
+
   // Only show "trained today" if a workout was actually completed today
   const todayKey = new Date().toISOString().slice(0, 10);
   const trainedToday = (training.done || []).some(d => d.date?.slice(0, 10) === todayKey);
@@ -2082,6 +2177,9 @@ export default function Entrenamiento({ onNavigate }) {
       </div>
 
       <div style={{ padding: "16px" }}>
+        {/* Mesocycle progress */}
+        <MesocycleCard training={training} setState={setState} />
+
         {/* Goal Date Countdown */}
         <GoalDateCard training={training} setState={setState} />
 
