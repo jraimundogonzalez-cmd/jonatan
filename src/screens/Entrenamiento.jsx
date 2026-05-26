@@ -1243,6 +1243,87 @@ function ExerciseTutorialModal({ ex, onClose }) {
 }
 
 
+// ── Add Exercise Modal ────────────────────────────────────────────
+const MUSCLE_TABS = [
+  { key: "all",       label: "Todo" },
+  { key: "cuadriceps", label: "Cuád" },
+  { key: "isquios",   label: "Isquios" },
+  { key: "gluteos",   label: "Glúteo" },
+  { key: "gemelos",   label: "Gemelos" },
+  { key: "pecho",     label: "Pecho" },
+  { key: "espalda",   label: "Espalda" },
+  { key: "hombro",    label: "Hombro" },
+  { key: "biceps",    label: "Bíceps" },
+  { key: "triceps",   label: "Tríceps" },
+  { key: "core",      label: "Core" },
+  { key: "lumbar",    label: "Lumbar" },
+  { key: "aductores", label: "Aductores" },
+  { key: "abductores",label: "Abductores" },
+];
+
+function AddExerciseModal({ place, onAdd, onClose }) {
+  const [q, setQ] = useState("");
+  const [tab, setTab] = useState("all");
+
+  const filtered = EX.filter(e => {
+    if (place === "casa" && e.loc === "gym") return false;
+    if (tab !== "all" && e.cat !== tab) return false;
+    if (q) {
+      const qL = q.toLowerCase();
+      return e.n.toLowerCase().includes(qL) || (e.m || []).some(m => m.toLowerCase().includes(qL));
+    }
+    return true;
+  });
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 210, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(74,222,128,0.2)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "16px 18px 12px" }}>
+          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 14px" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#4ade80" }}>＋ Añadir ejercicio</div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
+          </div>
+          {/* Search input */}
+          <input
+            autoFocus
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Buscar ejercicio..."
+            style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 14px", color: "#e2e8f0", fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
+          />
+          {/* Muscle tabs */}
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+            {MUSCLE_TABS.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: "none", background: tab === t.key ? "#4ade80" : "rgba(255,255,255,0.06)", color: tab === t.key ? "#000" : "#94a3b8" }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Exercise list */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "0 18px 32px" }}>
+          {filtered.length === 0 && (
+            <div style={{ textAlign: "center", color: "#475569", fontSize: 13, padding: "32px 0" }}>No se encontraron ejercicios</div>
+          )}
+          {filtered.map(e => (
+            <button key={e.id} onClick={() => { onAdd(e); onClose(); }}
+              style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "12px 14px", marginBottom: 6, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", marginBottom: 2 }}>{e.n}</div>
+                <div style={{ fontSize: 11, color: "#64748b" }}>{(e.m || []).join(" · ")}</div>
+              </div>
+              <div style={{ fontSize: 18, color: "#4ade80", fontWeight: 700, marginLeft: 8 }}>＋</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Mesocycle progress card ───────────────────────────────────────
 function MesocycleCard({ training, setState }) {
   const start = training.mesocycleStart
@@ -1367,6 +1448,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const [techModal, setTechModal] = useState(null);
   const [swapModal, setSwapModal] = useState(null);
   const [ytModal, setYtModal] = useState(null);
+  const [addModal, setAddModal] = useState(false);
   const intervalRef = useRef(null);
 
   const swapExercise = (idx, newId) => {
@@ -1379,6 +1461,17 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
     setDone(d => d.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
     setPlan(p => p.filter((_, i) => i !== idx));
     // No marca cambios permanentes: "saltar hoy" no afecta sesiones futuras
+  };
+
+  const addExerciseToSession = (ex) => {
+    const sc = repScheme(training.goal);
+    const newEx = { id: ex.id, sets: sc.s, reps: sc.r, rest: sc.rest };
+    setPlan(p => {
+      const absStart = p.findIndex(x => x._isAbs);
+      return absStart >= 0 ? [...p.slice(0, absStart), newEx, ...p.slice(absStart)] : [...p, newEx];
+    });
+    setPendingChanges(true);
+    setSavedOk(false);
   };
 
   const savePlanChanges = () => {
@@ -1570,8 +1663,14 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
         </div>
       )}
 
+      {/* Botón añadir ejercicio */}
+      <button onClick={() => setAddModal(true)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", background: "rgba(74,222,128,0.06)", border: "1px dashed rgba(74,222,128,0.3)", borderRadius: 12, color: "#4ade80", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginTop: 4, marginBottom: 10 }}>
+        ＋ Añadir ejercicio
+      </button>
+
       {/* Cool-down */}
-      <div style={{ marginTop: 10, marginBottom: 4 }}>
+      <div style={{ marginTop: 0, marginBottom: 4 }}>
         <button onClick={() => setShowCoolDown(v => !v)}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: showCoolDown ? "rgba(96,165,250,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${showCoolDown ? "rgba(96,165,250,0.25)" : "rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", fontFamily: "inherit" }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: showCoolDown ? "#60a5fa" : "#64748b" }}>❄️ Enfriamiento ({coolDown.length} estiramientos)</span>
@@ -1687,6 +1786,15 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 
       {/* Exercise Tutorial Modal with photo */}
       {ytModal && <ExerciseTutorialModal ex={ytModal} onClose={() => setYtModal(null)} />}
+
+      {/* Add exercise modal */}
+      {addModal && (
+        <AddExerciseModal
+          place={training.place || "gym"}
+          onAdd={addExerciseToSession}
+          onClose={() => setAddModal(false)}
+        />
+      )}
     </div>
   );
 }
