@@ -1324,6 +1324,59 @@ function AddExerciseModal({ place, onAdd, onClose }) {
   );
 }
 
+// ── Pending Exercises Card ────────────────────────────────────────
+function PendingExercisesCard({ training, setState, onAddToSession }) {
+  const pending = training.pendingExercises || [];
+  if (pending.length === 0) return null;
+
+  const removePending = (id) => {
+    setState(s => ({
+      ...s,
+      training: { ...s.training, pendingExercises: (s.training.pendingExercises || []).filter(p => p.id !== id) },
+    }));
+  };
+
+  const clearAll = () => {
+    setState(s => ({ ...s, training: { ...s.training, pendingExercises: [] } }));
+  };
+
+  return (
+    <div style={{ background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 14, padding: "14px", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#c4b5fd", textTransform: "uppercase", letterSpacing: ".08em" }}>
+          ⏭ Ejercicios pendientes ({pending.length})
+        </div>
+        <button onClick={clearAll} style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer" }}>
+          Limpiar todo
+        </button>
+      </div>
+      {pending.map((p, i) => {
+        const ex = byId(p.id);
+        return (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < pending.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>{ex?.n || p.id}</div>
+              <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
+                {p.sets} × {p.reps} · saltado el {p.skippedDate} · {p.fromSession}
+              </div>
+            </div>
+            {onAddToSession && (
+              <button onClick={() => { onAddToSession(p); removePending(p.id); }}
+                style={{ padding: "5px 10px", background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, color: "#c4b5fd", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                + Añadir
+              </button>
+            )}
+            <button onClick={() => removePending(p.id)}
+              style={{ padding: "5px 8px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, color: "#475569", fontSize: 11, cursor: "pointer" }}>
+              ×
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Mesocycle progress card ───────────────────────────────────────
 function MesocycleCard({ training, setState }) {
   const start = training.mesocycleStart
@@ -1458,9 +1511,32 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   };
 
   const removeExercise = (idx) => {
+    const skipped = plan[idx];
+    if (skipped && !skipped._isAbs) {
+      // Guardar en lista de pendientes
+      const today = new Date().toISOString().split("T")[0];
+      setState(s => {
+        const prev = s.training.pendingExercises || [];
+        const already = prev.some(p => p.id === skipped.id);
+        if (already) return s;
+        return {
+          ...s,
+          training: {
+            ...s.training,
+            pendingExercises: [...prev, {
+              id: skipped.id,
+              sets: skipped.sets,
+              reps: skipped.reps,
+              rest: skipped.rest,
+              fromSession: entry.name,
+              skippedDate: today,
+            }],
+          },
+        };
+      });
+    }
     setDone(d => d.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
     setPlan(p => p.filter((_, i) => i !== idx));
-    // No marca cambios permanentes: "saltar hoy" no afecta sesiones futuras
   };
 
   const addExerciseToSession = (ex) => {
@@ -1562,6 +1638,24 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
           </div>
         )}
       </div>
+
+      {/* Pendientes de sesiones anteriores */}
+      {(state.training.pendingExercises || []).length > 0 && (
+        <PendingExercisesCard
+          training={state.training}
+          setState={setState}
+          onAddToSession={(p) => {
+            setPlan(prev => {
+              const absStart = prev.findIndex(x => x._isAbs);
+              const newEx = { id: p.id, sets: p.sets, reps: p.reps, rest: p.rest };
+              return absStart >= 0
+                ? [...prev.slice(0, absStart), newEx, ...prev.slice(absStart)]
+                : [...prev, newEx];
+            });
+            setPendingChanges(true);
+          }}
+        />
+      )}
 
       {/* Banner ejercicio prioritario ausente */}
       {showExtBanner && (
@@ -2285,6 +2379,9 @@ export default function Entrenamiento({ onNavigate }) {
       </div>
 
       <div style={{ padding: "16px" }}>
+        {/* Pending exercises */}
+        <PendingExercisesCard training={training} setState={setState} />
+
         {/* Mesocycle progress */}
         <MesocycleCard training={training} setState={setState} />
 
