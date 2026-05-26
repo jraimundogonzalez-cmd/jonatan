@@ -1655,6 +1655,7 @@ export const FOODS = [
   {id:1631, name:"Guacamole Hacendado", cat:"grasas", p:1.9, c:2, f:13.7, cal:149},
   {id:1632, name:"Cereales Smacks Kellogg's", cat:"cereales", p:7.1, c:81, f:1.6, cal:377},
   {id:1633, name:"Corn Flakes Hacendado", cat:"cereales", p:6.3, c:84, f:1.1, cal:378},
+  {id:1634, name:"Aros de Cebolla Rebozados Metro Chef", cat:"snacks", p:0, c:25, f:8.1, cal:188},
 ];
 
 export const ALLERGIES_OPT = [
