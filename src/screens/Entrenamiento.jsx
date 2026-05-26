@@ -1077,13 +1077,17 @@ const EX_PHOTO = {
   // Pierna
   sentadilla_barra:           ["barbell back squat gym rack man", "squat barbell legs"],
   sentadilla_bulgara:         ["bulgarian split squat dumbbell gym", "rear foot elevated split squat"],
+  sentadilla_smith:           ["smith machine squat gym legs man", "smith machine squat lower body"],
+  hack_squat:                 ["hack squat machine gym legs", "hack squat sled machine exercise"],
   prensa_inclinada:           ["leg press machine gym man", "incline leg press exercise"],
   extension_cuadriceps:       ["leg extension machine seated gym", "quad extension machine exercise"],
   curl_femoral_maquina:       ["lying leg curl machine gym", "hamstring curl machine exercise"],
+  nordic_curl:                ["nordic hamstring curl kneeling floor", "kneeling hamstring eccentric exercise gym"],
   zancada_mancuernas:         ["dumbbell walking lunge legs gym", "lunge dumbbell exercise"],
   peso_muerto_rumano:         ["romanian deadlift barbell gym man", "RDL hamstring barbell"],
   peso_muerto_barra:          ["deadlift barbell gym heavy man", "conventional deadlift gym"],
-  hip_thrust:                 ["barbell hip thrust glutes gym bench", "hip thrust exercise glute"],
+  hip_thrust:                 ["barbell hip thrust woman fitness glute", "hip thrust barbell glute exercise"],
+  glute_bridge:               ["glute bridge floor bodyweight exercise", "hip thrust floor bodyweight glute"],
   elevacion_gemelo_pie:       ["standing calf raise machine gym", "calf raise exercise"],
   elevacion_gemelo_sentado:   ["seated calf raise machine gym", "seated calf raise"],
   abductor_maquina:           ["hip abductor machine gym seated", "abductor machine inner thigh"],
@@ -1120,6 +1124,7 @@ function getExercisePhotoTerm(ex) {
   const n = (ex.n || "").toLowerCase();
   if (n.includes("sentadilla"))      return ["squat barbell gym rack", null];
   if (n.includes("press banca"))     return ["bench press barbell gym", null];
+  if (n.includes("curl femoral") || n.includes("nordic")) return ["hamstring curl machine gym", null];
   if (n.includes("curl"))            return ["bicep curl dumbbell gym", null];
   if (n.includes("jalón") || n.includes("jalon")) return ["lat pulldown machine gym", null];
   if (n.includes("peso muerto"))     return ["deadlift barbell gym", null];
