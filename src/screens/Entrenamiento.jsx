@@ -745,108 +745,108 @@ function SwapModal({ exerciseId, training, onPick, onClose }) {
 
 const PEXELS_KEY = "zGavr4Z4fCxMdbqCFvzuRLlqgMEAO4stKKEqfwC3Sn1eVKP3965YAsZ4";
 
-// Mapa exacto ejercicio ID → término de búsqueda en inglés para Pexels
+// ID ejercicio → [término principal, término fallback]
+// Los términos están optimizados para Pexels buscando el EQUIPO/MOVIMIENTO exacto
 const EX_PHOTO = {
-  // ── Pecho ────────────────────────────────────────────────────────
-  press_banca_barra:           "barbell bench press chest gym",
-  press_banca_mancuernas:      "dumbbell bench press chest gym",
-  press_inclinado_mancuernas:  "incline dumbbell press chest gym",
-  press_inclinado_barra:       "incline barbell press chest gym",
-  aperturas_mancuernas:        "dumbbell chest fly pec deck",
-  fondos_paralelas:            "parallel bar dips chest tricep",
-  fondos_bancos:               "bench dips tricep bodyweight",
-  flexiones:                   "push ups chest bodyweight floor",
-  // ── Espalda ─────────────────────────────────────────────────────
-  jalon_polea:                 "lat pulldown cable machine back",
-  remo_mancuerna:              "dumbbell row back exercise",
-  remo_barra:                  "barbell bent over row back gym",
-  remo_polea:                  "seated cable row machine back",
-  dominadas:                   "pull ups bar back exercise",
-  dominada_asistida:           "assisted pull ups machine lat",
-  pullover_polea:              "straight arm pulldown cable back",
-  face_pull:                   "face pull cable rear delt",
-  // ── Hombros ─────────────────────────────────────────────────────
-  press_militar_barra:         "barbell overhead press shoulder",
-  press_militar_mancuernas:    "dumbbell shoulder press overhead",
-  elevaciones_laterales:       "lateral raise dumbbell shoulder",
-  elevacion_frontal:           "front raise dumbbell shoulder",
-  pajaro_mancuernas:           "rear delt fly dumbbell bent over",
-  encogimientos_mancuernas:    "dumbbell shrug trapezius gym",
-  // ── Bíceps ──────────────────────────────────────────────────────
-  curl_barra:                  "barbell bicep curl gym",
-  curl_mancuernas:             "dumbbell bicep curl gym",
-  curl_martillo:               "hammer curl dumbbell bicep",
-  curl_predicador:             "preacher curl EZ bar bicep",
-  curl_concentrado:            "concentration curl bicep dumbbell",
-  // ── Tríceps ─────────────────────────────────────────────────────
-  extension_triceps_polea:     "tricep pushdown cable rope",
-  press_frances:               "skull crusher EZ bar tricep",
-  patada_triceps:              "tricep kickback dumbbell",
-  press_cerrado:               "close grip bench press tricep",
-  // ── Pierna ──────────────────────────────────────────────────────
-  sentadilla_barra:            "barbell back squat legs gym",
-  sentadilla_bulgara:          "bulgarian split squat dumbbell",
-  prensa_inclinada:            "leg press machine gym",
-  extension_cuadriceps:        "leg extension machine quadriceps",
-  curl_femoral_maquina:        "leg curl machine hamstring lying",
-  zancada_mancuernas:          "dumbbell lunge walking legs",
-  peso_muerto_rumano:          "romanian deadlift barbell hamstring",
-  peso_muerto_barra:           "deadlift barbell gym heavy",
-  hip_thrust:                  "hip thrust barbell glutes gym",
-  elevacion_gemelo_pie:        "standing calf raise machine",
-  elevacion_gemelo_sentado:    "seated calf raise machine",
-  abductor_maquina:            "hip abductor machine gym seated",
-  sentadilla_jump:             "jump squat plyometric legs",
-  // ── Core / Abdominales ──────────────────────────────────────────
-  plancha:                     "plank exercise core abs",
-  crunch:                      "crunch abs exercise floor mat",
-  elevacion_piernas:           "leg raise abs hanging bar",
-  ab_wheel:                    "ab wheel rollout core exercise",
-  mountain_climbers:           "mountain climbers plank abs exercise",
-  russian_twist:               "russian twist abs dumbbell oblique",
-  plancha_lateral:             "side plank oblique exercise",
-  pallof_press:                "pallof press cable core anti rotation",
-  // ── Cardio ──────────────────────────────────────────────────────
-  cardio_cinta_caminar:        "treadmill walking incline gym",
-  cardio_cinta_correr:         "treadmill running gym cardio",
-  cardio_bici:                 "stationary bike cycling gym",
-  cardio_eliptica:             "elliptical machine gym cardio",
-  cardio_escaladora:           "stairmaster step machine gym",
-  cardio_remo:                 "rowing machine ergometer gym",
-  cardio_hiit:                 "HIIT interval training gym",
-  burpee:                      "burpee exercise bodyweight cardio",
-  kettlebell_swing:            "kettlebell swing exercise gym",
+  // Pecho
+  press_banca_barra:          ["man barbell bench press gym", "bench press barbell chest"],
+  press_banca_mancuernas:     ["dumbbell flat bench press man gym", "dumbbell chest press"],
+  press_inclinado_mancuernas: ["incline dumbbell press gym man", "incline bench press dumbbell"],
+  press_inclinado_barra:      ["incline barbell bench press gym", "incline bench press"],
+  aperturas_mancuernas:       ["dumbbell chest fly bench gym", "pec fly dumbbell"],
+  fondos_paralelas:           ["parallel bar dips exercise gym", "dips tricep chest gym"],
+  fondos_bancos:              ["tricep bench dips bodyweight", "bench dips exercise"],
+  flexiones:                  ["push ups exercise floor man", "pushup bodyweight chest"],
+  // Espalda
+  jalon_polea:                ["lat pulldown cable machine gym", "lat pulldown exercise"],
+  remo_mancuerna:             ["dumbbell row exercise back gym", "one arm dumbbell row"],
+  remo_barra:                 ["barbell bent over row gym", "bent over barbell row"],
+  remo_polea:                 ["seated cable row machine gym", "cable row back exercise"],
+  dominadas:                  ["pull ups bar exercise man gym", "pullup chin up bar"],
+  dominada_asistida:          ["assisted pull up machine gym", "lat pulldown assisted"],
+  pullover_polea:             ["straight arm cable pulldown gym", "cable pullover back"],
+  face_pull:                  ["face pull cable rear delt gym", "cable face pull exercise"],
+  // Hombros
+  press_militar_barra:        ["overhead barbell press standing gym", "military press barbell"],
+  press_militar_mancuernas:   ["seated dumbbell shoulder press gym", "overhead dumbbell press"],
+  elevaciones_laterales:      ["lateral raise dumbbell gym man", "dumbbell lateral raise shoulder"],
+  elevacion_frontal:          ["dumbbell front raise shoulder gym", "front raise exercise"],
+  pajaro_mancuernas:          ["rear delt dumbbell fly bent over", "rear deltoid fly dumbbell"],
+  encogimientos_mancuernas:   ["dumbbell shrug shoulders gym trap", "shrug exercise trap"],
+  // Bíceps
+  curl_barra:                 ["barbell curl bicep gym man", "straight bar bicep curl"],
+  curl_mancuernas:            ["dumbbell bicep curl gym man", "alternating dumbbell curl"],
+  curl_martillo:              ["hammer curl dumbbell gym man", "neutral grip curl bicep"],
+  curl_predicador:            ["preacher curl EZ bar gym", "scott curl bicep machine"],
+  curl_concentrado:           ["concentration curl dumbbell seated", "seated dumbbell curl bicep"],
+  // Tríceps
+  extension_triceps_polea:    ["tricep pushdown cable rope gym", "cable tricep extension pulldown"],
+  press_frances:              ["skull crusher EZ bar lying gym", "lying tricep extension barbell"],
+  patada_triceps:             ["tricep kickback dumbbell gym", "dumbbell tricep kickback"],
+  press_cerrado:              ["close grip bench press barbell gym", "close grip bench tricep"],
+  // Pierna
+  sentadilla_barra:           ["barbell back squat gym rack man", "squat barbell legs"],
+  sentadilla_bulgara:         ["bulgarian split squat dumbbell gym", "rear foot elevated split squat"],
+  prensa_inclinada:           ["leg press machine gym man", "incline leg press exercise"],
+  extension_cuadriceps:       ["leg extension machine seated gym", "quad extension machine exercise"],
+  curl_femoral_maquina:       ["lying leg curl machine gym", "hamstring curl machine exercise"],
+  zancada_mancuernas:         ["dumbbell walking lunge legs gym", "lunge dumbbell exercise"],
+  peso_muerto_rumano:         ["romanian deadlift barbell gym man", "RDL hamstring barbell"],
+  peso_muerto_barra:          ["deadlift barbell gym heavy man", "conventional deadlift gym"],
+  hip_thrust:                 ["barbell hip thrust glutes gym bench", "hip thrust exercise glute"],
+  elevacion_gemelo_pie:       ["standing calf raise machine gym", "calf raise exercise"],
+  elevacion_gemelo_sentado:   ["seated calf raise machine gym", "seated calf raise"],
+  abductor_maquina:           ["hip abductor machine gym seated", "abductor machine inner thigh"],
+  sentadilla_jump:            ["jump squat plyometric gym", "squat jump explosive legs"],
+  // Core
+  plancha:                    ["plank exercise core abs floor man", "plank hold abs"],
+  crunch:                     ["crunch abs exercise floor mat gym", "abdominal crunch"],
+  elevacion_piernas:          ["hanging leg raise abs bar gym", "leg raise abs exercise"],
+  ab_wheel:                   ["ab wheel rollout exercise core gym", "ab roller wheel"],
+  mountain_climbers:          ["mountain climbers exercise core", "plank mountain climber"],
+  russian_twist:              ["russian twist abs medicine ball", "seated twist oblique"],
+  plancha_lateral:            ["side plank exercise oblique core", "lateral plank abs"],
+  pallof_press:               ["pallof press cable core gym", "anti rotation press cable"],
+  // Cardio
+  cardio_cinta_caminar:       ["treadmill walking gym incline", "walking treadmill gym"],
+  cardio_cinta_correr:        ["treadmill running gym man", "run treadmill fitness"],
+  cardio_bici:                ["stationary bike cycling gym", "indoor cycling fitness"],
+  cardio_eliptica:            ["elliptical machine gym workout", "elliptical trainer gym"],
+  cardio_escaladora:          ["stairmaster machine gym climbing", "step machine gym cardio"],
+  cardio_remo:                ["rowing machine concept2 gym", "indoor rowing ergometer gym"],
+  cardio_hiit:                ["HIIT workout gym training intense", "high intensity interval training"],
+  burpee:                     ["burpee exercise bodyweight", "burpee jump fitness"],
+  kettlebell_swing:           ["kettlebell swing exercise gym", "kettlebell workout swing"],
+  // Lumbar / Core extras
+  hiperextensiones:           ["hyperextension back machine gym", "back extension machine gym"],
+  superman:                   ["superman exercise back floor mat", "prone back extension"],
+  plancha_dinamica:           ["dynamic plank exercise core gym", "moving plank abs"],
 };
 
 function getExercisePhotoTerm(ex) {
-  if (!ex) return "gym exercise workout";
-  // Búsqueda exacta por ID primero
+  if (!ex) return ["gym exercise workout", null];
   if (EX_PHOTO[ex.id]) return EX_PHOTO[ex.id];
-  // Fallback: buscar por palabras clave del nombre en español
-  const n = ex.n?.toLowerCase() || "";
-  if (n.includes("sentadilla"))      return "squat exercise gym";
-  if (n.includes("press banca"))     return "bench press chest gym";
-  if (n.includes("curl"))            return "bicep curl dumbbell gym";
-  if (n.includes("jalón") || n.includes("jalon")) return "lat pulldown cable gym";
-  if (n.includes("extensión") && n.includes("cuádr")) return "leg extension machine quadriceps";
-  if (n.includes("curl femoral"))    return "leg curl machine hamstring";
-  if (n.includes("press militar"))   return "overhead press shoulder gym";
-  if (n.includes("peso muerto"))     return "deadlift barbell gym";
-  if (n.includes("plancha"))         return "plank core exercise";
-  if (n.includes("dominada"))        return "pull up bar back gym";
-  if (n.includes("remo"))            return "rowing back exercise gym";
-  if (n.includes("fondos"))          return "dips bodyweight gym";
-  if (n.includes("elevación lateral"))return "lateral raise shoulder gym";
-  // Último recurso: músculo principal
-  const m = ex.m?.[0]?.toLowerCase() || "";
-  if (m.includes("cuádr"))   return "leg extension machine gym";
-  if (m.includes("pecho"))   return "chest press gym workout";
-  if (m.includes("espalda")) return "back pulldown gym workout";
-  if (m.includes("hombro"))  return "shoulder press gym workout";
-  if (m.includes("bíceps"))  return "bicep curl gym workout";
-  if (m.includes("tríceps")) return "tricep extension gym workout";
-  if (m.includes("glúteo"))  return "glute hip thrust gym workout";
-  return "gym strength training exercise";
+  // Fallback por nombre
+  const n = (ex.n || "").toLowerCase();
+  if (n.includes("sentadilla"))      return ["squat barbell gym rack", null];
+  if (n.includes("press banca"))     return ["bench press barbell gym", null];
+  if (n.includes("curl"))            return ["bicep curl dumbbell gym", null];
+  if (n.includes("jalón") || n.includes("jalon")) return ["lat pulldown machine gym", null];
+  if (n.includes("peso muerto"))     return ["deadlift barbell gym", null];
+  if (n.includes("plancha"))         return ["plank core exercise abs", null];
+  if (n.includes("dominada"))        return ["pull up bar gym exercise", null];
+  if (n.includes("remo"))            return ["rowing back machine gym", null];
+  if (n.includes("fondos"))          return ["dips parallel bars gym", null];
+  if (n.includes("elevación lateral"))return ["lateral raise dumbbell gym", null];
+  const m = (ex.m?.[0] || "").toLowerCase();
+  if (m.includes("cuádr"))   return ["leg extension machine gym", null];
+  if (m.includes("pecho"))   return ["bench press chest gym", null];
+  if (m.includes("espalda")) return ["lat pulldown back gym", null];
+  if (m.includes("hombro"))  return ["shoulder press gym", null];
+  if (m.includes("bíceps"))  return ["bicep curl gym", null];
+  if (m.includes("tríceps")) return ["tricep cable gym", null];
+  if (m.includes("glúteo"))  return ["hip thrust glute gym", null];
+  return ["gym strength training exercise", null];
 }
 
 // ── Exercise Tutorial Modal (with Pexels photo) ───────────────────
@@ -858,18 +858,31 @@ function ExerciseTutorialModal({ ex, onClose }) {
     if (!ex) return;
     setPhotoLoading(true);
     setPhotoUrl(null);
-    const term = getExercisePhotoTerm(ex);
-    const page = Math.floor(Math.random() * 5) + 1;
-    fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(term)}&per_page=1&page=${page}&orientation=landscape`, {
-      headers: { Authorization: PEXELS_KEY }
-    })
-      .then(r => r.json())
+    const [primary, fallback] = getExercisePhotoTerm(ex);
+
+    const fetchPhoto = (term) =>
+      fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(term)}&per_page=5&page=1&orientation=landscape`, {
+        headers: { Authorization: PEXELS_KEY }
+      }).then(r => r.json());
+
+    fetchPhoto(primary)
       .then(data => {
-        if (data.photos?.[0]?.src?.large2x) setPhotoUrl(data.photos[0].src.large2x);
+        const photos = data.photos || [];
+        if (photos.length > 0) {
+          // Elegir aleatoriamente entre los primeros 3 (todos son relevantes, primer resultado)
+          const pick = photos[Math.floor(Math.random() * Math.min(3, photos.length))];
+          setPhotoUrl(pick.src.large2x || pick.src.large);
+        } else if (fallback) {
+          // Reintento con el término fallback
+          return fetchPhoto(fallback).then(d2 => {
+            const p2 = d2.photos?.[0];
+            if (p2) setPhotoUrl(p2.src.large2x || p2.src.large);
+          });
+        }
       })
       .catch(() => {})
       .finally(() => setPhotoLoading(false));
-  }, [ex?.n]);
+  }, [ex?.id]);
 
   if (!ex) return null;
 
