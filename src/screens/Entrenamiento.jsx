@@ -446,21 +446,63 @@ function Onboarding({ step, answers, onPick, onBack, onDone }) {
 }
 
 // ── PR Modal ──────────────────────────────────────────────────────
+function generateIaAdvice(currentSets, lastSession, exercise) {
+  const targetReps = exercise?.reps || 10;
+  const lastSetsData = lastSession?.setsData;
+  const currentVol = currentSets.reduce((s, x) => s + ((+x.weight || 0) * (+x.reps || 0)), 0);
+  const lastVol = lastSetsData ? lastSetsData.reduce((s, x) => s + ((+x.weight || 0) * (+x.reps || 0)), 0) : 0;
+  const workSets = currentSets.length > 1 ? currentSets.slice(1) : currentSets;
+  const allHitTarget = workSets.every(s => s.reps !== "" && +s.reps >= targetReps);
+  const lastSet = currentSets[currentSets.length - 1];
+  const lastSetReps = +lastSet?.reps || 0;
+  const volChange = lastVol > 0 ? Math.round((currentVol - lastVol) / lastVol * 100) : null;
+
+  // Generate next session targets
+  const nextSets = currentSets.map(s => {
+    if (!s.weight && !s.reps) return s;
+    const w = +s.weight || 0;
+    const r = +s.reps || 0;
+    const hitTarget = r >= targetReps;
+    if (w > 0 && hitTarget) {
+      const inc = w >= 100 ? 5 : w >= 60 ? 2.5 : 1.25;
+      return { weight: +(w + inc).toFixed(2), reps: targetReps };
+    }
+    if (w > 0 && !hitTarget) return { weight: w, reps: Math.min(r + 1, targetReps) };
+    return { weight: w, reps: r };
+  });
+
+  let msg, color, icon;
+  if (allHitTarget && volChange !== null && volChange > 0) {
+    msg = `Volumen +${volChange}% vs sesión anterior. Sube 2.5–5kg en las series de trabajo la próxima vez.`;
+    color = "#4ade80"; icon = "🚀";
+  } else if (allHitTarget) {
+    msg = `Todas las series completadas (${targetReps} reps objetivo). Aumenta el peso 2.5kg en la siguiente sesión.`;
+    color = "#86efac"; icon = "✅";
+  } else if (lastSetReps >= targetReps - 1) {
+    msg = `Cerca del objetivo. Mantén el mismo peso e intenta completar las ${targetReps} reps en todas las series.`;
+    color = "#fde68a"; icon = "💪";
+  } else if (lastSetReps < targetReps - 2) {
+    msg = `El peso de trabajo es alto para las reps objetivo. Baja 2.5–5kg para dominar la técnica y llegar a ${targetReps} reps.`;
+    color = "#f87171"; icon = "⚠️";
+  } else {
+    msg = `Progresión normal. Intenta sumar 1 rep más en cada serie la próxima sesión.`;
+    color = "#a78bfa"; icon = "📈";
+  }
+  return { msg, color, icon, nextSets, currentVol, lastVol, volChange };
+}
+
 function PRModal({ exercise, history, onSave, onClose }) {
   const numSets = exercise?.sets || 4;
   const suggestion = suggestPR(history);
 
-  // Pre-rellenar con progresión piramidal basada en sugerencia o último PR
   const initSets = () => {
     const lastSets = history?.[history.length - 1]?.setsData;
     if (lastSets && lastSets.length === numSets) {
-      // Reutilizar últimas series como punto de partida
-      return lastSets.map(s => ({ weight: s.weight || "", reps: s.reps || exercise?.reps || 10 }));
+      return lastSets.map(s => ({ weight: s.weight ?? "", reps: s.reps ?? (exercise?.reps || 10) }));
     }
     const baseW = suggestion?.weight || (history?.[history.length - 1]?.weight) || "";
     const baseR = exercise?.reps || 10;
-    if (!baseW) return Array.from({ length: numSets }, () => ({ weight: "", reps: baseR }));
-    // Pirámide ascendente: serie 1 más ligera, última más pesada/menos reps
+    if (!baseW) return Array.from({ length: numSets }, () => ({ weight: "", reps: "" }));
     const w = +baseW;
     if (numSets === 1) return [{ weight: w, reps: baseR }];
     if (numSets === 2) return [{ weight: Math.round(w * 0.85), reps: baseR + 2 }, { weight: w, reps: baseR }];
@@ -469,37 +511,48 @@ function PRModal({ exercise, history, onSave, onClose }) {
       { weight: Math.round(w * 0.90), reps: baseR },
       { weight: w, reps: Math.max(6, baseR - 2) },
     ];
-    // 4 series (más común)
     return [
-      { weight: Math.round(w * 0.65), reps: baseR + 4 },  // calentamiento
+      { weight: Math.round(w * 0.65), reps: baseR + 4 },
       { weight: Math.round(w * 0.80), reps: baseR + 2 },
       { weight: Math.round(w * 0.90), reps: baseR },
-      { weight: w,                    reps: Math.max(6, baseR - 2) },
+      { weight: w, reps: Math.max(6, baseR - 2) },
     ];
   };
 
   const [setsData, setSetsData] = useState(initSets);
+  const [advice, setAdvice] = useState(null);
 
   const updateSet = (i, field, val) => {
     setSetsData(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val === "" ? "" : +val } : s));
+    setAdvice(null);
   };
 
   const fillDown = (field, fromIdx) => {
-    // Rellenar el mismo valor hacia abajo
     const val = setsData[fromIdx][field];
     setSetsData(prev => prev.map((s, idx) => idx <= fromIdx ? s : { ...s, [field]: val }));
   };
 
-  const canSave = setsData.some(s => s.weight !== "" && s.weight > 0);
+  const hasAnyData = setsData.some(s => (s.weight !== "" && +s.weight > 0) || (s.reps !== "" && +s.reps > 0));
   const maxWeight = Math.max(...setsData.map(s => +s.weight || 0));
-  const totalVol  = setsData.reduce((sum, s) => sum + ((+s.weight || 0) * (+s.reps || 0)), 0);
-
-  // Última sesión por series si existe en nuevo formato
+  const totalVol = setsData.reduce((sum, s) => sum + ((+s.weight || 0) * (+s.reps || 0)), 0);
   const lastSession = history?.[history.length - 1];
   const lastSets = lastSession?.setsData;
 
+  const handleSave = () => {
+    const payload = {
+      weight: maxWeight || 0,
+      reps: +setsData[setsData.length - 1]?.reps || exercise?.reps || 0,
+      sets: numSets,
+      setsData,
+      targetReps: exercise?.reps || 10,
+    };
+    onSave(payload);
+    const a = generateIaAdvice(setsData, lastSession, exercise);
+    setAdvice(a);
+  };
+
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
+    <div onClick={advice ? undefined : onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
 
@@ -507,111 +560,141 @@ function PRModal({ exercise, history, onSave, onClose }) {
           <div>
             <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Registrar PR</div>
             <h2 style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", margin: 0 }}>{byId(exercise?.id)?.n || exercise?.id}</h2>
-            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{numSets} series</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{numSets} series · objetivo {exercise?.reps || 10} reps</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
         </div>
 
-        {suggestion && (
-          <div style={{ padding: "9px 12px", background: "rgba(245,158,11,0.07)", borderRadius: 10, marginBottom: 14, fontSize: 11, color: "#fde68a" }}>
-            💡 <strong>{suggestion.weight}kg × {suggestion.reps}</strong> — {suggestion.note}
-          </div>
-        )}
-
-        {/* Cabeceras */}
-        <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr 32px", gap: 8, marginBottom: 6, padding: "0 2px" }}>
-          <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>S</div>
-          <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Peso (kg)</div>
-          <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Reps</div>
-          <div />
-        </div>
-
-        {/* Fila por serie */}
-        {setsData.map((s, i) => {
-          const prevSet = lastSets?.[i];
-          const isHeaviest = s.weight !== "" && +s.weight === maxWeight;
-          return (
-            <div key={i} style={{ marginBottom: 8 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr 32px", gap: 8, alignItems: "center" }}>
-                {/* Número de serie */}
-                <div style={{ width: 32, height: 32, borderRadius: 9, background: isHeaviest ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: isHeaviest ? "#f59e0b" : "#64748b", fontFamily: "'DM Mono',monospace" }}>
-                  {i + 1}
+        {/* Análisis IA post-guardado */}
+        {advice && (
+          <div style={{ padding: "14px", background: "rgba(255,255,255,0.04)", borderRadius: 14, marginBottom: 16, border: `1px solid ${advice.color}30` }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: advice.color, marginBottom: 8 }}>{advice.icon} Análisis IA</div>
+            <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 12 }}>{advice.msg}</div>
+            {advice.currentVol > 0 && (
+              <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
+                <div style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 700, color: "#f59e0b" }}>{maxWeight}kg</div>
+                  <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>Peso máx</div>
                 </div>
-                {/* Peso */}
-                <input type="number" value={s.weight} onChange={e => updateSet(i, "weight", e.target.value)}
-                  placeholder="kg" step="2.5"
-                  style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${isHeaviest ? "rgba(245,158,11,0.4)" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, padding: "11px 8px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 18, textAlign: "center", width: "100%", outline: "none" }} />
-                {/* Reps */}
-                <input type="number" value={s.reps} onChange={e => updateSet(i, "reps", e.target.value)}
-                  placeholder="reps" step="1" min="1"
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "11px 8px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 18, textAlign: "center", width: "100%", outline: "none" }} />
-                {/* Copiar hacia abajo */}
-                {i < setsData.length - 1 && (
-                  <button onClick={() => fillDown("weight", i)} title="Copiar peso a series siguientes"
-                    style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#475569", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    ↓
-                  </button>
+                <div style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 700, color: "#a78bfa" }}>{advice.currentVol}</div>
+                  <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>Volumen kg</div>
+                </div>
+                {advice.volChange !== null && (
+                  <div style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 700, color: advice.volChange >= 0 ? "#4ade80" : "#f87171" }}>{advice.volChange >= 0 ? "+" : ""}{advice.volChange}%</div>
+                    <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>vs anterior</div>
+                  </div>
                 )}
               </div>
-              {/* Comparativa con última sesión */}
-              {prevSet && (
-                <div style={{ fontSize: 10, color: "#334155", paddingLeft: 40, marginTop: 2 }}>
-                  Anterior: {prevSet.weight}kg × {prevSet.reps}
-                  {s.weight && s.weight > prevSet.weight && <span style={{ color: "#4ade80", marginLeft: 4 }}>↑ +{(+s.weight - prevSet.weight).toFixed(1)}kg</span>}
-                </div>
-              )}
+            )}
+            <div style={{ fontSize: 10, color: "#475569", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>Objetivo próxima sesión</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {advice.nextSets.map((ns, i) => (
+                <span key={i} style={{ background: "rgba(245,158,11,0.1)", borderRadius: 8, padding: "4px 10px", color: "#fde68a", fontFamily: "'DM Mono',monospace", fontSize: 12 }}>
+                  S{i + 1}: {ns.weight ? `${ns.weight}kg` : "—"} × {ns.reps || "—"}
+                </span>
+              ))}
             </div>
-          );
-        })}
-
-        {/* Resumen volumen */}
-        {totalVol > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "14px 0 14px", padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#f59e0b" }}>{maxWeight}kg</div>
-              <div style={{ fontSize: 10, color: "#64748b" }}>Peso máximo</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#a78bfa" }}>{totalVol}</div>
-              <div style={{ fontSize: 10, color: "#64748b" }}>Volumen total (kg)</div>
-            </div>
+            <button onClick={onClose} style={{ ...C.btnA, marginTop: 14 }}>Cerrar</button>
           </div>
         )}
 
-        {/* Historial últimas sesiones */}
-        {history?.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <span style={C.lbl}>Sesiones anteriores</span>
-            {history.slice(-3).reverse().map((h, i) => {
-              const hSets = h.setsData;
+        {!advice && (
+          <>
+            {suggestion && (
+              <div style={{ padding: "9px 12px", background: "rgba(245,158,11,0.07)", borderRadius: 10, marginBottom: 14, fontSize: 11, color: "#fde68a" }}>
+                💡 Sugerencia: <strong>{suggestion.weight}kg × {suggestion.reps}</strong> — {suggestion.note}
+              </div>
+            )}
+
+            {/* Cabeceras */}
+            <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 28px", gap: 6, marginBottom: 6, padding: "0 2px" }}>
+              <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>S</div>
+              <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Peso (kg)</div>
+              <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Reps hechas</div>
+              <div />
+            </div>
+
+            {/* Fila por serie */}
+            {setsData.map((s, i) => {
+              const prevSet = lastSets?.[i];
+              const isHeaviest = s.weight !== "" && +s.weight > 0 && +s.weight === maxWeight;
+              const hitTarget = s.reps !== "" && +s.reps >= (exercise?.reps || 10);
               return (
-                <div key={i} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 11 }}>
-                  <div style={{ color: "#475569", marginBottom: 3 }}>{h.date}</div>
-                  {hSets ? (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {hSets.map((hs, j) => (
-                        <span key={j} style={{ background: "rgba(245,158,11,0.08)", borderRadius: 8, padding: "2px 8px", color: "#f59e0b", fontFamily: "'DM Mono',monospace" }}>
-                          {hs.weight}kg×{hs.reps}
-                        </span>
-                      ))}
+                <div key={i} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 28px", gap: 6, alignItems: "center" }}>
+                    <div style={{ width: 28, height: 44, borderRadius: 9, background: isHeaviest ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: isHeaviest ? "#f59e0b" : "#64748b", fontFamily: "'DM Mono',monospace" }}>
+                      {i + 1}
                     </div>
-                  ) : (
-                    <span style={{ ...C.mono, color: "#f59e0b" }}>{h.weight}kg × {h.reps} × {h.sets || numSets}</span>
+                    <input type="number" inputMode="decimal" value={s.weight} onChange={e => updateSet(i, "weight", e.target.value)}
+                      placeholder="ej. 80"
+                      style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${isHeaviest ? "rgba(245,158,11,0.5)" : "rgba(255,255,255,0.12)"}`, borderRadius: 10, padding: "12px 6px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 20, textAlign: "center", width: "100%", outline: "none", boxSizing: "border-box" }} />
+                    <input type="number" inputMode="numeric" value={s.reps} onChange={e => updateSet(i, "reps", e.target.value)}
+                      placeholder="reps"
+                      style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${hitTarget ? "rgba(74,222,128,0.4)" : "rgba(255,255,255,0.12)"}`, borderRadius: 10, padding: "12px 6px", color: hitTarget ? "#4ade80" : "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 20, textAlign: "center", width: "100%", outline: "none", boxSizing: "border-box" }} />
+                    {i < setsData.length - 1 ? (
+                      <button onClick={() => { fillDown("weight", i); fillDown("reps", i); }} title="Copiar a series siguientes"
+                        style={{ width: 28, height: 44, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#475569", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        ↓
+                      </button>
+                    ) : <div />}
+                  </div>
+                  {prevSet && (
+                    <div style={{ fontSize: 10, color: "#334155", paddingLeft: 34, marginTop: 3 }}>
+                      Anterior: {prevSet.weight ? `${prevSet.weight}kg` : "—"} × {prevSet.reps || "—"}
+                      {s.weight && prevSet.weight && +s.weight > +prevSet.weight && (
+                        <span style={{ color: "#4ade80", marginLeft: 4 }}>↑ +{(+s.weight - +prevSet.weight).toFixed(1)}kg</span>
+                      )}
+                    </div>
                   )}
                 </div>
               );
             })}
-          </div>
-        )}
 
-        <button onClick={() => {
-          onSave({ weight: maxWeight, reps: setsData[setsData.length - 1]?.reps || exercise?.reps, sets: numSets, setsData, targetReps: exercise?.reps });
-          onClose();
-        }}
-          disabled={!canSave}
-          style={{ ...C.btnA, opacity: canSave ? 1 : .4 }}>
-          Guardar {numSets} series
-        </button>
+            {/* Resumen volumen */}
+            {totalVol > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "14px 0", padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#f59e0b" }}>{maxWeight}kg</div>
+                  <div style={{ fontSize: 10, color: "#64748b" }}>Peso máximo</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#a78bfa" }}>{totalVol}</div>
+                  <div style={{ fontSize: 10, color: "#64748b" }}>Volumen total (kg)</div>
+                </div>
+              </div>
+            )}
+
+            {/* Historial */}
+            {history?.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <span style={C.lbl}>Sesiones anteriores</span>
+                {history.slice(-3).reverse().map((h, i) => (
+                  <div key={i} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 11 }}>
+                    <div style={{ color: "#475569", marginBottom: 3 }}>{h.date}</div>
+                    {h.setsData ? (
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {h.setsData.map((hs, j) => (
+                          <span key={j} style={{ background: "rgba(245,158,11,0.08)", borderRadius: 8, padding: "2px 8px", color: "#f59e0b", fontFamily: "'DM Mono',monospace" }}>
+                            {hs.weight ? `${hs.weight}kg` : "—"}×{hs.reps || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ ...C.mono, color: "#f59e0b" }}>{h.weight}kg × {h.reps} × {h.sets || numSets}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={handleSave} disabled={!hasAnyData}
+              style={{ ...C.btnA, opacity: hasAnyData ? 1 : 0.4 }}>
+              Guardar y analizar {numSets} series
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
