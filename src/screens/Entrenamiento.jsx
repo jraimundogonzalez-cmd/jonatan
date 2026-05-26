@@ -447,55 +447,170 @@ function Onboarding({ step, answers, onPick, onBack, onDone }) {
 
 // ── PR Modal ──────────────────────────────────────────────────────
 function PRModal({ exercise, history, onSave, onClose }) {
-  const [weight, setWeight] = useState("");
-  const [reps, setReps] = useState("");
-  const [sets, setSets] = useState(exercise?.sets || 4);
+  const numSets = exercise?.sets || 4;
   const suggestion = suggestPR(history);
 
+  // Pre-rellenar con progresión piramidal basada en sugerencia o último PR
+  const initSets = () => {
+    const lastSets = history?.[history.length - 1]?.setsData;
+    if (lastSets && lastSets.length === numSets) {
+      // Reutilizar últimas series como punto de partida
+      return lastSets.map(s => ({ weight: s.weight || "", reps: s.reps || exercise?.reps || 10 }));
+    }
+    const baseW = suggestion?.weight || (history?.[history.length - 1]?.weight) || "";
+    const baseR = exercise?.reps || 10;
+    if (!baseW) return Array.from({ length: numSets }, () => ({ weight: "", reps: baseR }));
+    // Pirámide ascendente: serie 1 más ligera, última más pesada/menos reps
+    const w = +baseW;
+    if (numSets === 1) return [{ weight: w, reps: baseR }];
+    if (numSets === 2) return [{ weight: Math.round(w * 0.85), reps: baseR + 2 }, { weight: w, reps: baseR }];
+    if (numSets === 3) return [
+      { weight: Math.round(w * 0.75), reps: baseR + 2 },
+      { weight: Math.round(w * 0.90), reps: baseR },
+      { weight: w, reps: Math.max(6, baseR - 2) },
+    ];
+    // 4 series (más común)
+    return [
+      { weight: Math.round(w * 0.65), reps: baseR + 4 },  // calentamiento
+      { weight: Math.round(w * 0.80), reps: baseR + 2 },
+      { weight: Math.round(w * 0.90), reps: baseR },
+      { weight: w,                    reps: Math.max(6, baseR - 2) },
+    ];
+  };
+
+  const [setsData, setSetsData] = useState(initSets);
+
+  const updateSet = (i, field, val) => {
+    setSetsData(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val === "" ? "" : +val } : s));
+  };
+
+  const fillDown = (field, fromIdx) => {
+    // Rellenar el mismo valor hacia abajo
+    const val = setsData[fromIdx][field];
+    setSetsData(prev => prev.map((s, idx) => idx <= fromIdx ? s : { ...s, [field]: val }));
+  };
+
+  const canSave = setsData.some(s => s.weight !== "" && s.weight > 0);
+  const maxWeight = Math.max(...setsData.map(s => +s.weight || 0));
+  const totalVol  = setsData.reduce((sum, s) => sum + ((+s.weight || 0) * (+s.reps || 0)), 0);
+
+  // Última sesión por series si existe en nuevo formato
+  const lastSession = history?.[history.length - 1];
+  const lastSets = lastSession?.setsData;
+
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "80vh", overflowY: "auto" }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", padding: "20px 18px 36px", width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Registrar PR</div>
             <h2 style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", margin: 0 }}>{byId(exercise?.id)?.n || exercise?.id}</h2>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{numSets} series</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
         </div>
 
         {suggestion && (
-          <div style={{ padding: "10px 12px", background: "rgba(245,158,11,0.08)", borderRadius: 10, marginBottom: 14, fontSize: 12, color: "#fde68a" }}>
-            💡 Sugerencia: <strong>{suggestion.weight}kg × {suggestion.reps} reps</strong> — {suggestion.note}
+          <div style={{ padding: "9px 12px", background: "rgba(245,158,11,0.07)", borderRadius: 10, marginBottom: 14, fontSize: 11, color: "#fde68a" }}>
+            💡 <strong>{suggestion.weight}kg × {suggestion.reps}</strong> — {suggestion.note}
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-          {[["Peso (kg)", weight, setWeight], ["Reps", reps, setReps], ["Series", sets, setSets]].map(([label, val, setter], i) => (
-            <div key={i}>
-              <span style={C.lbl}>{label}</span>
-              <input type="number" value={val} onChange={e => setter(e.target.value)} step={i === 0 ? "0.5" : "1"}
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 8px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 20, textAlign: "center", width: "100%", outline: "none" }} />
-            </div>
-          ))}
+        {/* Cabeceras */}
+        <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr 32px", gap: 8, marginBottom: 6, padding: "0 2px" }}>
+          <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>S</div>
+          <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Peso (kg)</div>
+          <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, textAlign: "center", textTransform: "uppercase" }}>Reps</div>
+          <div />
         </div>
 
-        {history?.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <span style={C.lbl}>Historial reciente</span>
-            {history.slice(-4).reverse().map((h, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 12, color: "#94a3b8" }}>
-                <span>{h.date}</span>
-                <span style={{ ...C.mono, color: "#f59e0b" }}>{h.weight}kg × {h.reps} × {h.sets}</span>
+        {/* Fila por serie */}
+        {setsData.map((s, i) => {
+          const prevSet = lastSets?.[i];
+          const isHeaviest = s.weight !== "" && +s.weight === maxWeight;
+          return (
+            <div key={i} style={{ marginBottom: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr 32px", gap: 8, alignItems: "center" }}>
+                {/* Número de serie */}
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: isHeaviest ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: isHeaviest ? "#f59e0b" : "#64748b", fontFamily: "'DM Mono',monospace" }}>
+                  {i + 1}
+                </div>
+                {/* Peso */}
+                <input type="number" value={s.weight} onChange={e => updateSet(i, "weight", e.target.value)}
+                  placeholder="kg" step="2.5"
+                  style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${isHeaviest ? "rgba(245,158,11,0.4)" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, padding: "11px 8px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 18, textAlign: "center", width: "100%", outline: "none" }} />
+                {/* Reps */}
+                <input type="number" value={s.reps} onChange={e => updateSet(i, "reps", e.target.value)}
+                  placeholder="reps" step="1" min="1"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "11px 8px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 18, textAlign: "center", width: "100%", outline: "none" }} />
+                {/* Copiar hacia abajo */}
+                {i < setsData.length - 1 && (
+                  <button onClick={() => fillDown("weight", i)} title="Copiar peso a series siguientes"
+                    style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#475569", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    ↓
+                  </button>
+                )}
               </div>
-            ))}
+              {/* Comparativa con última sesión */}
+              {prevSet && (
+                <div style={{ fontSize: 10, color: "#334155", paddingLeft: 40, marginTop: 2 }}>
+                  Anterior: {prevSet.weight}kg × {prevSet.reps}
+                  {s.weight && s.weight > prevSet.weight && <span style={{ color: "#4ade80", marginLeft: 4 }}>↑ +{(+s.weight - prevSet.weight).toFixed(1)}kg</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Resumen volumen */}
+        {totalVol > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "14px 0 14px", padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#f59e0b" }}>{maxWeight}kg</div>
+              <div style={{ fontSize: 10, color: "#64748b" }}>Peso máximo</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 20, fontWeight: 700, color: "#a78bfa" }}>{totalVol}</div>
+              <div style={{ fontSize: 10, color: "#64748b" }}>Volumen total (kg)</div>
+            </div>
           </div>
         )}
 
-        <button onClick={() => { onSave({ weight: +weight, reps: +reps, sets: +sets, targetReps: exercise?.reps }); onClose(); }}
-          disabled={!weight || !reps}
-          style={{ ...C.btnA, opacity: !weight || !reps ? .5 : 1 }}>
-          Guardar PR
+        {/* Historial últimas sesiones */}
+        {history?.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <span style={C.lbl}>Sesiones anteriores</span>
+            {history.slice(-3).reverse().map((h, i) => {
+              const hSets = h.setsData;
+              return (
+                <div key={i} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 11 }}>
+                  <div style={{ color: "#475569", marginBottom: 3 }}>{h.date}</div>
+                  {hSets ? (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {hSets.map((hs, j) => (
+                        <span key={j} style={{ background: "rgba(245,158,11,0.08)", borderRadius: 8, padding: "2px 8px", color: "#f59e0b", fontFamily: "'DM Mono',monospace" }}>
+                          {hs.weight}kg×{hs.reps}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ ...C.mono, color: "#f59e0b" }}>{h.weight}kg × {h.reps} × {h.sets || numSets}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button onClick={() => {
+          onSave({ weight: maxWeight, reps: setsData[setsData.length - 1]?.reps || exercise?.reps, sets: numSets, setsData, targetReps: exercise?.reps });
+          onClose();
+        }}
+          disabled={!canSave}
+          style={{ ...C.btnA, opacity: canSave ? 1 : .4 }}>
+          Guardar {numSets} series
         </button>
       </div>
     </div>
