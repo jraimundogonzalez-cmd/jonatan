@@ -482,15 +482,18 @@ function smartProgress(lastSets, targetReps) {
 function generateIaAdvice(currentSets, lastSession, exercise) {
   const targetReps = exercise?.reps || 10;
   const lastSetsData = lastSession?.setsData;
-  const currentVol = currentSets.reduce((s, x) => s + ((+x.weight || 0) * (+x.reps || 0)), 0);
+  // Solo analizar series con datos reales
+  const filledSets = currentSets.filter(s => (s.weight !== "" && +s.weight > 0) || (s.reps !== "" && +s.reps > 0));
+  const setsForAnalysis = filledSets.length > 0 ? filledSets : currentSets;
+  const currentVol = setsForAnalysis.reduce((s, x) => s + ((+x.weight || 0) * (+x.reps || 0)), 0);
   const lastVol = lastSetsData ? lastSetsData.reduce((s, x) => s + ((+x.weight || 0) * (+x.reps || 0)), 0) : 0;
-  const workSets = currentSets.length > 1 ? currentSets.slice(1) : currentSets;
+  const workSets = setsForAnalysis.length > 1 ? setsForAnalysis.slice(1) : setsForAnalysis;
   const allHitTarget = workSets.every(s => s.reps !== "" && +s.reps >= targetReps);
-  const lastSet = currentSets[currentSets.length - 1];
+  const lastSet = setsForAnalysis[setsForAnalysis.length - 1];
   const lastSetReps = +lastSet?.reps || 0;
   const volChange = lastVol > 0 ? Math.round((currentVol - lastVol) / lastVol * 100) : null;
   const nextSets = smartProgress(
-    currentSets.map(s => ({ weight: +s.weight || 0, reps: +s.reps || 0 })),
+    setsForAnalysis.map(s => ({ weight: +s.weight || 0, reps: +s.reps || 0 })),
     targetReps
   );
   let msg, color, icon;
@@ -558,6 +561,14 @@ function PRModal({ exercise, history, onSave, onClose }) {
   const fillDown = (field, fromIdx) => {
     const val = setsData[fromIdx][field];
     setSetsData(prev => prev.map((s, idx) => idx <= fromIdx ? s : { ...s, [field]: val }));
+  };
+
+  const removeLastSet = () => setSetsData(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
+  const addSet = () => {
+    setSetsData(prev => {
+      const last = prev[prev.length - 1];
+      return [...prev, { weight: last?.weight ?? "", reps: last?.reps ?? "" }];
+    });
   };
 
   const applyPlan = () => {
@@ -668,6 +679,27 @@ function PRModal({ exercise, history, onSave, onClose }) {
                 </div>
               </div>
             )}
+
+            {/* ── AJUSTE DE SERIES ─────────────────────────────────── */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "#64748b" }}>
+                <span style={{ color: "#94a3b8", fontWeight: 600 }}>{setsData.length}</span> series hoy
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {setsData.length > 1 && (
+                  <button onClick={removeLastSet}
+                    style={{ padding: "5px 14px", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 8, color: "#f87171", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    − Serie
+                  </button>
+                )}
+                {setsData.length < 6 && (
+                  <button onClick={addSet}
+                    style={{ padding: "5px 14px", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 8, color: "#4ade80", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    + Serie
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* ── FILAS POR SERIE ──────────────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 28px", gap: 6, marginBottom: 6, padding: "0 2px" }}>
