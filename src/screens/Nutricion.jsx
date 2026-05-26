@@ -3,6 +3,7 @@ import { useApp } from "../store/AppContext";
 import { FOODS, CATS, ALLERGIES_OPT, MEALS_NAMES, DAYS, GOALS, ACTIVITY } from "../data/foods";
 import { computeProfile, adjustMacros, buildPlan, buildShoppingList, generateRecipe } from "../utils/nutrition";
 import { foodAllergenMatch } from "../utils/allergens";
+import FoodScanner from "../components/FoodScanner";
 
 const C = {
   wrap:  { minHeight: "100vh", background: "#080d08" },
@@ -837,92 +838,35 @@ export default function Nutricion() {
               );
             })()}
 
-            {/* Balance del día — solo si hay comidas escaneadas hoy */}
-            {(() => {
+            <FoodScanner />
+
+            {planData.days.map((d, di) => {
               const todayKey = new Date().toISOString().slice(0, 10);
-              const scannedFoods = state.daily?.[todayKey]?.scannedFoods || [];
-              if (scannedFoods.length === 0) return null;
-              const consumed = scannedFoods.reduce((acc, f) => ({
+              const todayDayName = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][new Date().getDay()];
+              const isToday = d.dayName === todayDayName;
+              const dayScanned = isToday ? (state.daily?.[todayKey]?.scannedFoods || []) : [];
+              const doneMeals = new Set(dayScanned.map(f => f.meal).filter(Boolean));
+              const consumed = dayScanned.reduce((acc, f) => ({
                 proteina: acc.proteina + (f.proteina || 0),
                 carbos:   acc.carbos   + (f.carbos   || 0),
                 grasas:   acc.grasas   + (f.grasas   || 0),
                 kcal:     acc.kcal     + (f.kcal     || 0),
               }), { proteina: 0, carbos: 0, grasas: 0, kcal: 0 });
-              const allMealNames = MEALS_NAMES[meals] || MEALS_NAMES[4];
-              const doneMeals = new Set(scannedFoods.map(f => f.meal).filter(Boolean));
+              const totalKcal = Math.round(macros.proteina*4 + macros.carbos*4 + macros.grasas*9);
               const remaining = {
                 proteina: Math.max(0, macros.proteina - consumed.proteina),
                 carbos:   Math.max(0, macros.carbos   - consumed.carbos),
                 grasas:   Math.max(0, macros.grasas   - consumed.grasas),
-                kcal:     Math.max(0, Math.round(macros.proteina*4 + macros.carbos*4 + macros.grasas*9) - consumed.kcal),
+                kcal:     Math.max(0, totalKcal       - consumed.kcal),
               };
-              const pendingMeals = allMealNames.filter(m => !doneMeals.has(m));
-              const perMeal = pendingMeals.length > 0 ? {
-                proteina: Math.round(remaining.proteina / pendingMeals.length),
-                carbos:   Math.round(remaining.carbos   / pendingMeals.length),
-                grasas:   Math.round(remaining.grasas   / pendingMeals.length),
-                kcal:     Math.round(remaining.kcal     / pendingMeals.length),
+              const pendingMealsList = (MEALS_NAMES[meals] || MEALS_NAMES[4]).filter(n => !doneMeals.has(n));
+              const perPendingMeal = pendingMealsList.length > 0 ? {
+                proteina: Math.round(remaining.proteina / pendingMealsList.length),
+                carbos:   Math.round(remaining.carbos   / pendingMealsList.length),
+                grasas:   Math.round(remaining.grasas   / pendingMealsList.length),
+                kcal:     Math.round(remaining.kcal     / pendingMealsList.length),
               } : null;
-              const pct = (v, total) => total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0;
               return (
-                <div style={{ background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 14, padding: "14px", marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 10 }}>Balance del día</div>
-
-                  {/* Barras de progreso por macro */}
-                  {[
-                    { label: "Proteína", key: "proteina", color: "#4ade80", unit: "g" },
-                    { label: "Carbos",   key: "carbos",   color: "#60a5fa", unit: "g" },
-                    { label: "Grasas",   key: "grasas",   color: "#f59e0b", unit: "g" },
-                  ].map(({ label, key, color, unit }) => {
-                    const total = macros[key];
-                    const done  = consumed[key];
-                    const left  = Math.max(0, total - done);
-                    const p     = pct(done, total);
-                    return (
-                      <div key={key} style={{ marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-                          <span style={{ color: "#94a3b8" }}>{label}</span>
-                          <span><span style={{ color, fontWeight: 700 }}>{done}{unit}</span><span style={{ color: "#475569" }}> / {total}{unit} · quedan {left}{unit}</span></span>
-                        </div>
-                        <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 9 }}>
-                          <div style={{ height: "100%", width: `${p}%`, background: color, borderRadius: 9, transition: "width .4s" }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Comidas completadas vs pendientes */}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, marginBottom: pendingMeals.length > 0 ? 10 : 0 }}>
-                    {allMealNames.map(m => (
-                      <span key={m} style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: doneMeals.has(m) ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.06)", color: doneMeals.has(m) ? "#4ade80" : "#64748b", border: `1px solid ${doneMeals.has(m) ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)"}` }}>
-                        {doneMeals.has(m) ? "✓ " : ""}{m}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Objetivo para comidas restantes */}
-                  {perMeal && pendingMeals.length > 0 && (
-                    <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "10px 12px" }}>
-                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 6 }}>
-                        OBJETIVO PARA {pendingMeals.map(m => m.toUpperCase()).join(" + ")}
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, textAlign: "center" }}>
-                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#4ade80" }}>{perMeal.proteina}g</div><div style={{ fontSize: 9, color: "#64748b" }}>Prot</div></div>
-                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#60a5fa" }}>{perMeal.carbos}g</div><div style={{ fontSize: 9, color: "#64748b" }}>HC</div></div>
-                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b" }}>{perMeal.grasas}g</div><div style={{ fontSize: 9, color: "#64748b" }}>Grasa</div></div>
-                        <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#e2e8f0" }}>{perMeal.kcal}</div><div style={{ fontSize: 9, color: "#64748b" }}>kcal</div></div>
-                      </div>
-                    </div>
-                  )}
-
-                  {pendingMeals.length === 0 && (
-                    <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 700, textAlign: "center", paddingTop: 4 }}>✅ Todas las comidas del día registradas</div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {planData.days.map((d, di) => (
               <div key={di} style={{ marginBottom: 20 }}>
                 <div style={{ background: d.isRefeed ? "rgba(245,158,11,0.1)" : "rgba(74,222,128,0.07)", borderLeft: `3px solid ${d.isRefeed ? "#f59e0b" : "#4ade80"}`, borderRadius: "0 8px 8px 0", padding: "8px 12px", marginBottom: 8, color: d.isRefeed ? "#fbbf24" : "#4ade80", fontSize: 13, fontWeight: 700 }}>
                   📅 Día {di + 1} — {d.dayName}{d.isRefeed ? " 💥 REFEED" : ""}
@@ -934,11 +878,15 @@ export default function Nutricion() {
                   </div>
                 )}
 
-                {d.meals.map((m, mi) => (
+                {d.meals.map((m, mi) => {
+                  const mealScanned = dayScanned.filter(f => f.meal === m.name);
+                  const isLogged   = mealScanned.length > 0;
+                  const isPending  = isToday && !isLogged;
+                  return (
                   <div key={mi} style={{ ...C.card, marginBottom: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ color: m.isPostWorkout ? "#c084fc" : "#a3e635", fontWeight: 700, fontSize: 13 }}>
-                        {m.name}{m.isPostWorkout ? " 🏋️" : ""}
+                      <span style={{ color: m.isPostWorkout ? "#c084fc" : isLogged ? "#4ade80" : "#a3e635", fontWeight: 700, fontSize: 13 }}>
+                        {isLogged ? "✓ " : ""}{m.name}{m.isPostWorkout ? " 🏋️" : ""}
                       </span>
                       <button onClick={() => setRecipe({ mealName: m.name, items: m.items })}
                         style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 8, padding: "4px 10px", fontSize: 11, color: "#4ade80", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
@@ -1004,8 +952,35 @@ export default function Nutricion() {
                         </div>
                       );
                     })()}
+
+                    {/* Comidas registradas con IA para este slot */}
+                    {isLogged && (
+                      <div style={{ marginTop: 8, borderTop: "1px solid rgba(239,68,68,0.15)", paddingTop: 8 }}>
+                        <div style={{ fontSize: 9, color: "#f87171", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>📷 Registrado con IA</div>
+                        {mealScanned.map((f, fi) => (
+                          <div key={fi} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "4px 0", borderBottom: fi < mealScanned.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                            <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{f.descripcion}{f.grams ? ` · ${f.grams}g` : ""}</span>
+                            <span style={{ color: "#64748b", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>{f.proteina}p/{f.carbos}c/{f.grasas}g · {f.kcal}kcal</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Macros restantes para comidas pendientes de hoy */}
+                    {isPending && perPendingMeal && (
+                      <div style={{ marginTop: 8, padding: "8px 10px", background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.15)", borderRadius: 8 }}>
+                        <div style={{ fontSize: 9, color: "#60a5fa", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>Objetivo para esta comida</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, textAlign: "center" }}>
+                          <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 15, fontWeight: 700, color: "#4ade80" }}>{perPendingMeal.proteina}g</div><div style={{ fontSize: 9, color: "#64748b" }}>Prot</div></div>
+                          <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 15, fontWeight: 700, color: "#60a5fa" }}>{perPendingMeal.carbos}g</div><div style={{ fontSize: 9, color: "#64748b" }}>HC</div></div>
+                          <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 15, fontWeight: 700, color: "#f59e0b" }}>{perPendingMeal.grasas}g</div><div style={{ fontSize: 9, color: "#64748b" }}>Grasa</div></div>
+                          <div><div style={{ fontFamily: "'DM Mono',monospace", fontSize: 15, fontWeight: 700, color: "#e2e8f0" }}>{perPendingMeal.kcal}</div><div style={{ fontSize: 9, color: "#64748b" }}>kcal</div></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
 
                 {(() => {
                   const dt = d.meals.reduce((acc, m, mi) => {
@@ -1036,7 +1011,8 @@ export default function Nutricion() {
                   {savedDays.has(di) && !dayHasEdits(di) ? "✓ Guardado" : dayHasEdits(di) ? "💾 Guardar cambios" : "💾 Guardar día"}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </>
         )}
 
