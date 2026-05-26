@@ -1246,6 +1246,21 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const [showPost, setShowPost] = useState(false);
   const [showWarmUp, setShowWarmUp] = useState(false);
   const [showCoolDown, setShowCoolDown] = useState(false);
+  const [extAdded, setExtAdded] = useState(false);
+
+  const isQuadDay = initialPlan.some(x => byId(x.id)?.m?.some(m => /cuádriceps/i.test(m)));
+  const hasExtension = plan.some(x => x.id === 'extension_cuadriceps');
+  const showExtBanner = isQuadDay && !hasExtension && !extAdded;
+
+  const addExtension = () => {
+    const sc = repScheme(training.goal);
+    const newEx = { id: 'extension_cuadriceps', sets: sc.s, reps: sc.r, rest: sc.rest };
+    setPlan(p => {
+      const absStart = p.findIndex(x => x._isAbs);
+      return absStart >= 0 ? [...p.slice(0, absStart), newEx, ...p.slice(absStart)] : [...p, newEx];
+    });
+    setExtAdded(true);
+  };
   const warmUp   = buildWarmUp(initialPlan);
   const coolDown = buildCoolDown(initialPlan);
   const [done, setDone] = useState([]);
@@ -1332,6 +1347,20 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
           </div>
         )}
       </div>
+
+      {/* Banner ejercicio prioritario ausente */}
+      {showExtBanner && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#f59e0b" }}>⚡ Ejercicio prioritario no incluido</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Extensión de Cuádriceps en Máquina</div>
+          </div>
+          <button onClick={addExtension}
+            style={{ padding: "7px 14px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 9, color: "#f59e0b", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            + Añadir
+          </button>
+        </div>
+      )}
 
       {/* Exercises */}
       {plan.map((x, idx) => {

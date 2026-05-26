@@ -151,18 +151,18 @@ export const SPLITS = {
   3:[
     ['Empuje', ID('press_banca_barra','press_inclinado_mancuernas','press_militar_mancuernas','elevaciones_laterales','extension_triceps_polea','flexiones')],
     ['Tirón',  ID('jalon_polea','remo_mancuerna','dominada_asistida','remo_polea','curl_barra','curl_martillo')],
-    ['Pierna', ID('sentadilla_barra','prensa_inclinada','zancada_mancuernas','hip_thrust','curl_femoral_maquina','elevacion_gemelo_pie')],
+    ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','hip_thrust','curl_femoral_maquina','elevacion_gemelo_pie')],
   ],
   4:[
     ['Pecho y Tríceps', ID('press_banca_barra','press_inclinado_mancuernas','aperturas_mancuernas','extension_triceps_polea','fondos_bancos','press_frances')],
     ['Espalda y Bíceps', ID('jalon_polea','remo_mancuerna','dominada_asistida','remo_polea','curl_barra','curl_martillo')],
-    ['Pierna', ID('sentadilla_barra','prensa_inclinada','zancada_mancuernas','curl_femoral_maquina','hip_thrust','elevacion_gemelo_pie')],
+    ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','curl_femoral_maquina','hip_thrust','elevacion_gemelo_pie')],
     ['Hombro y Core', ID('press_militar_mancuernas','elevaciones_laterales','pajaro_mancuernas','elevacion_frontal','plancha','crunch')],
   ],
   5:[
     ['Pecho', ID('press_banca_barra','press_inclinado_mancuernas','press_banca_mancuernas','aperturas_mancuernas','fondos_paralelas')],
     ['Espalda', ID('dominada_asistida','jalon_polea','remo_barra','remo_mancuerna','face_pull')],
-    ['Pierna', ID('sentadilla_barra','prensa_inclinada','sentadilla_bulgara','curl_femoral_maquina','elevacion_gemelo_pie')],
+    ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','curl_femoral_maquina','elevacion_gemelo_pie')],
     ['Hombro', ID('press_militar_barra','elevaciones_laterales','pajaro_mancuernas','elevacion_frontal','encogimientos_mancuernas')],
     ['Brazo', ID('curl_barra','curl_mancuernas','curl_martillo','extension_triceps_polea','press_frances','curl_concentrado')],
   ],
