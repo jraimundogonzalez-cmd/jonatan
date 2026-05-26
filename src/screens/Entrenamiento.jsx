@@ -743,7 +743,123 @@ function SwapModal({ exerciseId, training, onPick, onClose }) {
   );
 }
 
-// ── Session Player ────────────────────────────────────────────────
+const PEXELS_KEY = "zGavr4Z4fCxMdbqCFvzuRLlqgMEAO4stKKEqfwC3Sn1eVKP3965YAsZ4";
+
+const EXERCISE_PHOTO_TERMS = {
+  "Cuádriceps":    "barbell squat legs gym workout",
+  "Glúteo":        "hip thrust glute gym workout",
+  "Isquios":       "deadlift hamstring gym workout",
+  "Isquiotibiales":"romanian deadlift hamstring workout",
+  "Gemelos":       "calf raise gym exercise",
+  "Pecho":         "bench press chest gym workout",
+  "Tríceps":       "tricep extension cable gym",
+  "Bíceps":        "bicep curl dumbbell gym",
+  "Espalda":       "lat pulldown back gym workout",
+  "Dorsal":        "pull up back gym workout",
+  "Hombros":       "overhead press shoulder workout",
+  "Deltoides":     "lateral raise shoulder workout",
+  "Core":          "plank abs core workout",
+  "Abdomen":       "crunch abs exercise gym",
+  "Oblicuos":      "oblique russian twist workout",
+  "Lumbar":        "hyperextension lower back gym",
+  "Cardio":        "treadmill running cardio gym",
+};
+
+function getExercisePhotoTerm(ex) {
+  if (!ex) return "gym exercise workout";
+  const primary = ex.m?.[0] || "";
+  for (const [key, term] of Object.entries(EXERCISE_PHOTO_TERMS)) {
+    if (primary.toLowerCase().includes(key.toLowerCase())) return term;
+  }
+  return `${ex.n} gym exercise workout`;
+}
+
+// ── Exercise Tutorial Modal (with Pexels photo) ───────────────────
+function ExerciseTutorialModal({ ex, onClose }) {
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [photoLoading, setPhotoLoading] = useState(true);
+
+  useEffect(() => {
+    if (!ex) return;
+    setPhotoLoading(true);
+    setPhotoUrl(null);
+    const term = getExercisePhotoTerm(ex);
+    const page = Math.floor(Math.random() * 5) + 1;
+    fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(term)}&per_page=1&page=${page}&orientation=landscape`, {
+      headers: { Authorization: PEXELS_KEY }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.photos?.[0]?.src?.large2x) setPhotoUrl(data.photos[0].src.large2x);
+      })
+      .catch(() => {})
+      .finally(() => setPhotoLoading(false));
+  }, [ex?.n]);
+
+  if (!ex) return null;
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 200, display: "flex", alignItems: "flex-end", overflow: "hidden" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0d0d0d", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
+
+        {/* Photo header */}
+        <div style={{ position: "relative", width: "100%", height: 220, borderRadius: "20px 20px 0 0", overflow: "hidden", flexShrink: 0 }}>
+          {photoUrl ? (
+            <img src={photoUrl} alt={ex.n}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ) : (
+            <div style={{ width: "100%", height: "100%", background: "linear-gradient(160deg,#1a0a0a,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {photoLoading
+                ? <div style={{ width: 28, height: 28, border: "2px solid rgba(239,68,68,0.3)", borderTop: "2px solid #dc2626", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                : <span style={{ fontSize: 48, opacity: .3 }}>🏋️</span>}
+            </div>
+          )}
+          {/* Gradient overlay at bottom of photo */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 80, background: "linear-gradient(transparent, #0d0d0d)" }} />
+          {/* Close button on photo */}
+          <button onClick={onClose}
+            style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+            ×
+          </button>
+          {/* Title overlay */}
+          <div style={{ position: "absolute", bottom: 14, left: 18, right: 50 }}>
+            <div style={{ fontSize: 10, color: "#f87171", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 2 }}>Tutorial de ejercicio</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "#fff", margin: 0, textShadow: "0 1px 6px rgba(0,0,0,0.8)" }}>{ex.n}</h2>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "14px 18px 36px", overflowY: "auto" }}>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 18px" }}>{ex.m?.join(" · ")}</p>
+
+          {/* Technique tips */}
+          {(ex.key?.length > 0 || ex.how) && (
+            <div style={{ marginBottom: 16 }}>
+              {ex.how && <p style={{ fontSize: 13, color: "#cbd5e1", lineHeight: 1.65, marginBottom: 10 }}>{ex.how}</p>}
+              {ex.key?.map((k, i) => (
+                <div key={i} style={{ fontSize: 12, color: "#4ade80", padding: "3px 0" }}>✓ {k}</div>
+              ))}
+              {ex.err?.map((e, i) => (
+                <div key={i} style={{ fontSize: 12, color: "#fca5a5", padding: "3px 0" }}>✗ {e}</div>
+              ))}
+            </div>
+          )}
+
+          <a
+            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.n + " ejercicio técnica correcta")}&hl=es`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "15px 16px", background: "#dc2626", borderRadius: 13, color: "#fff", fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 10 }}>
+            <span style={{ fontSize: 20 }}>▶</span> Ver en YouTube
+          </a>
+          <button onClick={onClose} style={{ ...C.btnS, width: "100%", textAlign: "center", padding: "12px" }}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function SessionPlayer({ entry, training, onComplete, onExit }) {
   const { logPR, state } = useApp();
   const absBlock = entry.hasAbs ? buildAbsBlock(training.level) : [];
@@ -1006,25 +1122,8 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
           onClose={() => setSwapModal(null)} />
       )}
 
-      {/* YouTube Tutorial Modal */}
-      {ytModal && (
-        <div onClick={() => setYtModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#0d0d0d", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "20px 20px 0 0", padding: "20px 18px 40px", width: "100%" }}>
-            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 18px" }} />
-            <div style={{ fontSize: 10, color: "#f87171", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>Tutorial de ejercicio</div>
-            <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>{ytModal.n}</h2>
-            <p style={{ fontSize: 12, color: "#64748b", marginBottom: 22 }}>{ytModal.m?.join(", ")}</p>
-            <a
-              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ytModal.n + " ejercicio técnica correcta")}&hl=es`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "15px 16px", background: "#dc2626", borderRadius: 13, color: "#fff", fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 10 }}>
-              <span style={{ fontSize: 20 }}>▶</span> Buscar en YouTube
-            </a>
-            <button onClick={() => setYtModal(null)} style={{ ...C.btnS, width: "100%", textAlign: "center", padding: "12px" }}>Cerrar</button>
-          </div>
-        </div>
-      )}
+      {/* Exercise Tutorial Modal with photo */}
+      {ytModal && <ExerciseTutorialModal ex={ytModal} onClose={() => setYtModal(null)} />}
     </div>
   );
 }

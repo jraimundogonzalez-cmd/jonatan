@@ -179,6 +179,7 @@ function Shell() {
         select{-webkit-appearance:none;appearance:none}
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+        @keyframes spin{to{transform:rotate(360deg)}}
         .screen-enter{animation:fadeUp .35s ease}
         .tap-scale:active{transform:scale(.96)}
       `}</style>
