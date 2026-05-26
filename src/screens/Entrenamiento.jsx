@@ -1244,7 +1244,7 @@ function ExerciseTutorialModal({ ex, onClose }) {
 
 
 function SessionPlayer({ entry, training, onComplete, onExit }) {
-  const { logPR, state } = useApp();
+  const { logPR, state, setState } = useApp();
   const absBlock = entry.hasAbs ? buildAbsBlock(training.level) : [];
   const initialPlan = [...buildSession(entry, training), ...absBlock];
   const [plan, setPlan] = useState(initialPlan);
@@ -1252,6 +1252,8 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const [showWarmUp, setShowWarmUp] = useState(false);
   const [showCoolDown, setShowCoolDown] = useState(false);
   const [extAdded, setExtAdded] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
 
   const isQuadDay = initialPlan.some(x => byId(x.id)?.m?.some(m => /cuádriceps/i.test(m)));
   const hasExtension = plan.some(x => x.id === 'extension_cuadriceps');
@@ -1265,7 +1267,9 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
       return absStart >= 0 ? [...p.slice(0, absStart), newEx, ...p.slice(absStart)] : [...p, newEx];
     });
     setExtAdded(true);
+    setPendingChanges(true);
   };
+
   const warmUp   = buildWarmUp(initialPlan);
   const coolDown = buildCoolDown(initialPlan);
   const [done, setDone] = useState([]);
@@ -1279,6 +1283,32 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 
   const swapExercise = (idx, newId) => {
     setPlan(p => p.map((x, i) => i === idx ? { ...x, id: newId } : x));
+    setPendingChanges(true);
+    setSavedOk(false);
+  };
+
+  const removeExercise = (idx) => {
+    setDone(d => d.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
+    setPlan(p => p.filter((_, i) => i !== idx));
+    setPendingChanges(true);
+    setSavedOk(false);
+  };
+
+  const savePlanChanges = () => {
+    const cursor = state.training.cursor;
+    const newBase = plan
+      .filter(x => !x._isAbs)
+      .map(x => ({ id: x.id, sets: x.sets, reps: x.reps, rest: x.rest }));
+    setState(s => ({
+      ...s,
+      training: {
+        ...s.training,
+        seq: s.training.seq.map((e, i) => i === cursor ? { ...e, base: newBase } : e),
+      },
+    }));
+    setPendingChanges(false);
+    setSavedOk(true);
+    setTimeout(() => setSavedOk(false), 2500);
   };
 
   const startRest = (secs) => {
@@ -1418,6 +1448,12 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
                     style={{ fontSize: 11, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
                     ▶ Ver
                   </button>
+                  {!x._isAbs && (
+                    <button onClick={() => removeExercise(idx)}
+                      style={{ fontSize: 11, color: "#94a3b8", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>
+                      🗑 Eliminar
+                    </button>
+                  )}
                 </div>
               </div>
               <button onClick={() => toggleDone(idx)}
@@ -1473,6 +1509,34 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
       <button onClick={() => setShowPost(true)} style={{ ...C.btnA, marginTop: 12 }}>
         ✅ Completar entrenamiento
       </button>
+
+      {/* Barra fija de guardar cambios */}
+      {(pendingChanges || savedOk) && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 16px 28px", background: "rgba(8,13,8,0.97)", borderTop: "1px solid rgba(245,158,11,0.25)", zIndex: 150 }}>
+          {savedOk ? (
+            <div style={{ textAlign: "center", padding: "12px", color: "#4ade80", fontWeight: 700, fontSize: 14 }}>
+              ✓ Cambios guardados en el plan
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginBottom: 8 }}>
+                Tienes cambios sin guardar en el plan
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setPendingChanges(false)}
+                  style={{ flex: 1, padding: "12px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#64748b", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                  Descartar
+                </button>
+                <button onClick={savePlanChanges}
+                  style={{ flex: 2, padding: "12px", background: "#f59e0b", border: "none", borderRadius: 12, color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                  💾 Guardar en el plan
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
 
       {/* Post-session modal */}
       {showPost && (
