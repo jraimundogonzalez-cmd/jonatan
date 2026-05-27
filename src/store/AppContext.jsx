@@ -51,6 +51,12 @@ const DEFAULT = {
   // Daily log: keyed by "YYYY-MM-DD"
   daily: {},
 
+  // Reminders
+  reminders: {
+    days: { lunes: false, martes: false, miercoles: false, jueves: false, viernes: false, sabado: false, domingo: false },
+    time: "18:30",
+  },
+
   // Progress
   progress: {
     measurements: [], // [{date, weight, waist, chest, hips, armL, armR, thigh, note}]

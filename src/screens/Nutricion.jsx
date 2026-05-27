@@ -879,7 +879,9 @@ export default function Nutricion() {
                 )}
 
                 {d.meals.map((m, mi) => {
-                  const mealScanned = dayScanned.filter(f => f.meal === m.name);
+                  // Include legacy entries without meal tag under the first meal slot
+                  const legacyUntagged = mi === 0 ? dayScanned.filter(f => !f.meal) : [];
+                  const mealScanned = [...dayScanned.filter(f => f.meal === m.name), ...legacyUntagged];
                   const isLogged   = mealScanned.length > 0;
                   const isPending  = isToday && !isLogged;
                   return (

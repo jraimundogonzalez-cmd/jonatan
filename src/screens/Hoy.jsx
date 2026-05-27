@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useApp } from "../store/AppContext";
 import { getDailyQuote } from "../data/quotes";
 
@@ -79,6 +79,13 @@ export default function Hoy({ onNavigate, updateReady, checking, onCheckUpdate }
   const cursor = state.training.cursor || 0;
   const nextWO = seq[cursor % seq.length];
 
+  // Reminder for today
+  const todayKeyName = ["domingo","lunes","martes","miercoles","jueves","viernes","sabado"][today.getDay()];
+  const remDays = state.reminders?.days || {};
+  const remTime = state.reminders?.time || "18:30";
+  const isTodayReminderDay = !!remDays[todayKeyName];
+  const showReminderBanner = isTodayReminderDay && undecided;
+
   const kcalBase = macros.kcal;
   const kcalBurned = macros.watchKcal || 0;
   const kcalAvailable = kcalBase;
@@ -90,6 +97,21 @@ export default function Hoy({ onNavigate, updateReady, checking, onCheckUpdate }
         <div style={{ fontSize: 11, color: "#475569", fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase" }}>{dayName} · {dateStr}</div>
         <h1 style={{ fontSize: 26, fontWeight: 700, margin: "4px 0 0", color: "#f1f5f9" }}>Buenos días 👋</h1>
       </div>
+
+      {/* Training reminder banner */}
+      {showReminderBanner && (
+        <div style={{ background: "linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.07))", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 14, padding: "12px 16px", marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 22 }}>⏰</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>Hoy toca entrenar</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Tienes recordatorio a las {remTime}. ¡Tú puedes!</div>
+          </div>
+          <button onClick={() => setTodayLog({ trained: true })}
+            style={{ background: "#f59e0b", border: "none", borderRadius: 10, padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#000", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+            ✓ Voy
+          </button>
+        </div>
+      )}
 
       {/* Quote card */}
       <div style={{ ...S.card, background: "linear-gradient(135deg,rgba(96,165,250,0.08),rgba(74,222,128,0.05))", borderColor: "rgba(96,165,250,0.15)", marginBottom: 16 }}>

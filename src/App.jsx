@@ -4,6 +4,7 @@ import Hoy from "./screens/Hoy";
 import Nutricion from "./screens/Nutricion";
 import Entrenamiento from "./screens/Entrenamiento";
 import Progreso from "./screens/Progreso";
+import Onboarding from "./screens/Onboarding";
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { err: null }; }
@@ -147,6 +148,9 @@ function Shell() {
   const { state, setTodayLog } = useApp();
   const { updateReady, checking, checkNow } = useUpdateCheck();
   const [watchBanner, setWatchBanner] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => !state.setupDone && !state.profile?.enabled && !state.nutrition?.planData
+  );
 
   // Detect ?kcal=X injected by iOS Shortcut after workout ends
   useEffect(() => {
@@ -190,7 +194,7 @@ function Shell() {
           {tab === "hoy"     && <Hoy     onNavigate={setTab} accentColor={accentColor} updateReady={updateReady} checking={checking} onCheckUpdate={checkNow} />}
           {tab === "nutri"   && <Nutricion accentColor={C.accent.nutri} />}
           {tab === "entreno" && <Entrenamiento accentColor={C.accent.entreno} onNavigate={setTab} />}
-          {tab === "progreso"&& <Progreso accentColor={C.accent.progreso} />}
+          {tab === "progreso"&& <Progreso accentColor={C.accent.progreso} onOpenSetup={() => setShowOnboarding(true)} />}
         </ErrorBoundary>
       </div>
 
@@ -215,6 +219,9 @@ function Shell() {
           );
         })}
       </div>
+      {showOnboarding && (
+        <Onboarding onDone={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 }

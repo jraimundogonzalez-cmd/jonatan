@@ -195,7 +195,7 @@ function WaistChart({ measurements }) {
   );
 }
 
-export default function Progreso() {
+export default function Progreso({ onOpenSetup }) {
   const { state, addMeasurement } = useApp();
   const [tab, setTab] = useState("body"); // body | prs | history
   const [showForm, setShowForm] = useState(false);
@@ -219,7 +219,15 @@ export default function Progreso() {
   return (
     <div style={{ background: "#080d08", minHeight: "100vh" }}>
       <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 10px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
-        <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#a78bfa", letterSpacing: 2, fontWeight: 500 }}>PROGRESO</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#a78bfa", letterSpacing: 2, fontWeight: 500 }}>PROGRESO</span>
+          {onOpenSetup && (
+            <button onClick={onOpenSetup}
+              style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 10, padding: "6px 12px", fontSize: 11, color: "#a78bfa", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              ⚙️ Configuración
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: "16px" }}>

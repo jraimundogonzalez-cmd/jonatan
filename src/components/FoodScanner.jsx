@@ -253,7 +253,7 @@ export default function FoodScanner() {
                       Descartar
                     </button>
                     <button onClick={addToLog} style={{ padding: "11px", background: "#4ade80", border: "none", borderRadius: 10, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-                      + Guardar
+                      ✓ Añadir a mi plan de hoy
                     </button>
                   </div>
                 </div>
