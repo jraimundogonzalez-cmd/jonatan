@@ -205,6 +205,14 @@ export default function Nutricion() {
   const [showShopping, setShowShopping] = useState(false);
   const [swapping, setSwapping] = useState(null);
   const [recipe, setRecipe] = useState(null);
+
+  // Clear modal/overlay state when navigating between steps to prevent
+  // the RecipeModal fixed overlay from blocking interactions in other steps
+  useEffect(() => {
+    setRecipe(null);
+    setSwapping(null);
+  }, [step]);
+
   const [viewTab, setViewTab] = useState("plan"); // "plan" | "shopping"
   const [localEdits, setLocalEdits] = useState({});  // { "di_mi_id": grams }
   const [savedDays, setSavedDays] = useState(new Set());
