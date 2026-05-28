@@ -154,7 +154,7 @@ export const SPLITS = {
     ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','hip_thrust','curl_femoral_maquina','elevacion_gemelo_pie')],
   ],
   4:[
-    ['Pecho y Tríceps', ID('press_banca_barra','press_inclinado_mancuernas','aperturas_mancuernas','extension_triceps_polea','fondos_bancos','press_frances')],
+    ['Pecho y Tríceps', ID('press_banca_barra','press_inclinado_mancuernas','aperturas_mancuernas','fondos_paralelas','extension_triceps_polea','press_frances')],
     ['Espalda y Bíceps', ID('jalon_polea','remo_mancuerna','dominada_asistida','remo_polea','curl_barra','curl_martillo')],
     ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','curl_femoral_maquina','hip_thrust','elevacion_gemelo_pie')],
     ['Hombro y Core', ID('press_militar_mancuernas','elevaciones_laterales','pajaro_mancuernas','elevacion_frontal','plancha','crunch')],

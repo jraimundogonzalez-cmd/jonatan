@@ -58,12 +58,6 @@ export function buildSession(entry, training) {
   const mins = entry.t || training.time;
   let plan = entry.base.map(x => ({ ...x, tech: null }));
 
-  const getGroups = () => {
-    const g = {};
-    plan.forEach(x => { (g[muscleOf(x)] = g[muscleOf(x)] || []).push(x); });
-    return g;
-  };
-
   // Step 1: fits as-is
   if (estMin(plan) <= mins) return tagDefaults(plan, training);
 
@@ -79,41 +73,8 @@ export function buildSession(entry, training) {
   });
   if (estMin(plan) <= mins) return tagDefaults(plan, training);
 
-  // Step 4: drop to 2 sets — always prefer this over removing exercises
+  // Step 4: drop to 2 sets — never remove exercises, always keep full routine
   plan = plan.map(x => ({ ...x, sets: 2 }));
-  if (estMin(plan) <= mins) return tagDefaults(plan, training);
-
-  // Step 5: remove individual exercises as last resort, respecting minimums:
-  // primary muscle group (most exercises) → keep at least 3
-  // secondary muscle groups → keep at least 2
-  const g0 = getGroups();
-  const primaryMuscle = Object.keys(g0).sort((a, b) => g0[b].length - g0[a].length)[0];
-  // Never go below initial count if it's already under the threshold
-  const muscleMin = {};
-  Object.entries(g0).forEach(([name, exs]) => {
-    const threshold = name === primaryMuscle ? 3 : 2;
-    muscleMin[name] = Math.min(exs.length, threshold);
-  });
-
-  while (estMin(plan) > mins) {
-    const g = getGroups();
-    let removed = false;
-    // Remove from the group with the most excess first (secondary before primary)
-    for (const name of Object.keys(g).sort((a, b) => {
-      const excessA = g[a].length - (muscleMin[a] ?? 2);
-      const excessB = g[b].length - (muscleMin[b] ?? 2);
-      return excessB - excessA;
-    })) {
-      const min = muscleMin[name] ?? 2;
-      if (g[name].length > min) {
-        const toRemove = g[name][g[name].length - 1].id;
-        plan = plan.filter(x => x.id !== toRemove);
-        removed = true;
-        break;
-      }
-    }
-    if (!removed) break;
-  }
   return tagDefaults(plan, training);
 }
 
