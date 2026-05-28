@@ -152,17 +152,25 @@ function Shell() {
     () => !state.setupDone && !state.profile?.enabled && !state.nutrition?.planData
   );
 
-  // Detect ?kcal=X injected by iOS Shortcut after workout ends
+  // Detect ?kcal=X injected by iOS Shortcut after workout ends.
+  // Runs on mount AND on visibilitychange (PWA resume) so iOS doesn't miss it.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const kcal = parseInt(params.get("kcal"), 10);
-    const type = params.get("type") || "";
-    const min = parseInt(params.get("min"), 10) || 0;
-    if (kcal > 0) {
-      setTodayLog({ watchKcal: kcal, watchType: type, watchMin: min, trained: true });
-      window.history.replaceState({}, "", window.location.pathname);
-      setWatchBanner({ kcal, type, min });
-    }
+    const readWatchParams = () => {
+      const params = new URLSearchParams(window.location.search);
+      const kcal = parseInt(params.get("kcal"), 10);
+      const type = params.get("type") || "";
+      const min = parseInt(params.get("min"), 10) || 0;
+      if (kcal > 0) {
+        setTodayLog({ watchKcal: kcal, watchType: type, watchMin: min, trained: true });
+        window.history.replaceState({}, "", window.location.pathname);
+        setWatchBanner({ kcal, type, min });
+      }
+    };
+    readWatchParams();
+    // Re-check when the PWA comes back to foreground (iOS opens URL → app resumes)
+    const onVisible = () => { if (document.visibilityState === "visible") readWatchParams(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   const accentColor = C.accent[tab] || "#4ade80";
