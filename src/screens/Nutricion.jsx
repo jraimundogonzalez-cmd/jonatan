@@ -205,6 +205,10 @@ export default function Nutricion() {
   const [showShopping, setShowShopping] = useState(false);
   const [swapping, setSwapping] = useState(null);
   const [recipe, setRecipe] = useState(null);
+  const [showMealAssign, setShowMealAssign] = useState(false);
+  const [mealAssign, setMealAssign] = useState({});   // { mealName: [{foodId, grams}] }
+  const [pickingFor, setPickingFor] = useState(null); // meal name currently adding food to
+  const [pickSearch, setPickSearch] = useState("");
 
   // Clear modal/overlay state when navigating between steps to prevent
   // the RecipeModal fixed overlay from blocking interactions in other steps
@@ -261,6 +265,31 @@ export default function Nutricion() {
       setStep(3);
     } catch (e) { setError(e.message || "Error generando el plan"); }
     finally { setLoading(false); }
+  };
+
+  const confirmManualPlan = () => {
+    const days = DAYS.slice(0, planDays).map(dayName => {
+      const mealsList = mealNames.map(mealName => {
+        const items = (mealAssign[mealName] || []).map(({ foodId, grams }) => {
+          const food = selFoods.find(f => f.id === foodId);
+          if (!food) return null;
+          const r = grams / 100;
+          const p = Math.round(food.p * r), c = Math.round(food.c * r), f = Math.round(food.f * r);
+          return { id: food.id, name: food.name, grams, p, c, f, kcal: Math.round(p*4+c*4+f*9), cat: food.cat };
+        }).filter(Boolean);
+        const totals = items.reduce((a, it) => ({ p:a.p+it.p, c:a.c+it.c, f:a.f+it.f, kcal:a.kcal+it.kcal }), { p:0, c:0, f:0, kcal:0 });
+        return { name: mealName, items, totals };
+      });
+      const dayTotals = mealsList.reduce((a, m) => ({ p:a.p+m.totals.p, c:a.c+m.totals.c, f:a.f+m.totals.f, kcal:a.kcal+m.totals.kcal }), { p:0, c:0, f:0, kcal:0 });
+      return { dayName, meals: mealsList, totals: dayTotals, target: { proteina: macros.proteina, carbos: macros.carbos, grasas: macros.grasas, kcal }, isRefeed: false, hasShake: false, shakeProt: 0 };
+    });
+    const data = { days };
+    setPlanData(data);
+    setLocalEdits({});
+    setSavedDays(new Set());
+    save({ planData: data, planDays });
+    setShowMealAssign(false);
+    setStep(3);
   };
 
   // ── Slider edit helpers ───────────────────────────────────────
@@ -623,6 +652,148 @@ export default function Nutricion() {
     </div>
   );
 
+  // Step 2.5: Manual meal assignment panel
+  if (step === 2 && showMealAssign) {
+    const updateGrams = (mn, foodId, g) =>
+      setMealAssign(prev => ({ ...prev, [mn]: (prev[mn]||[]).map(a => a.foodId===foodId ? {...a,grams:g} : a) }));
+    const removeFood = (mn, foodId) =>
+      setMealAssign(prev => ({ ...prev, [mn]: (prev[mn]||[]).filter(a => a.foodId!==foodId) }));
+    const addFood = (mn, foodId) => {
+      setMealAssign(prev => ({ ...prev, [mn]: [...(prev[mn]||[]), {foodId, grams:100}] }));
+      setPickingFor(null); setPickSearch("");
+    };
+    const dt = mealNames.reduce((acc, mn) => {
+      (mealAssign[mn]||[]).forEach(({foodId, grams}) => {
+        const food = selFoods.find(f=>f.id===foodId); if (!food) return;
+        const r = grams/100; acc.p += food.p*r; acc.c += food.c*r; acc.f += food.f*r;
+      }); return acc;
+    }, {p:0,c:0,f:0});
+    const dayTotal = { p:Math.round(dt.p), c:Math.round(dt.c), f:Math.round(dt.f), kcal:Math.round(dt.p*4+dt.c*4+dt.f*9) };
+
+    return (
+      <div>
+        <Header />
+        <div style={{ padding:"16px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <button onClick={()=>setShowMealAssign(false)} style={{ background:"none", border:"none", color:"#64748b", cursor:"pointer", fontSize:20, padding:0, fontFamily:"inherit" }}>←</button>
+            <h1 style={{ fontSize:20, fontWeight:700, color:"#f1f5f9", margin:0 }}>Asignar comidas</h1>
+          </div>
+          <p style={{ color:"#64748b", fontSize:12, marginBottom:16, paddingLeft:30 }}>
+            Asigna alimentos a cada comida. Se repetirá igual todos los días del plan.
+          </p>
+
+          {/* Day total progress card */}
+          <div style={{ ...C.card, background:"rgba(74,222,128,0.04)", borderColor:"rgba(74,222,128,0.2)", marginBottom:16 }}>
+            <div style={{ fontSize:10, color:"#4ade80", fontWeight:700, letterSpacing:".08em", marginBottom:8 }}>TOTAL DEL DÍA</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, textAlign:"center" }}>
+              {[
+                {label:"Prot", val:dayTotal.p,    target:macros.proteina, color:"#4ade80"},
+                {label:"HC",   val:dayTotal.c,    target:macros.carbos,   color:"#60a5fa"},
+                {label:"Grasa",val:dayTotal.f,    target:macros.grasas,   color:"#f59e0b"},
+                {label:"kcal", val:dayTotal.kcal, target:kcal,            color:"#e2e8f0"},
+              ].map(({label,val,target,color}) => {
+                const pct = target>0 ? Math.min(120, Math.round(val/target*100)) : 0;
+                const ok = pct>=90 && pct<=110;
+                return (
+                  <div key={label}>
+                    <div style={{ fontFamily:"'DM Mono',monospace", fontSize:16, fontWeight:700, color:ok?color:pct>110?"#f87171":"#475569" }}>{val}</div>
+                    <div style={{ fontSize:9, color:"#475569" }}>{label}/{target}</div>
+                    <div style={{ height:3, background:"rgba(255,255,255,0.06)", borderRadius:9, marginTop:4, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${Math.min(100,pct)}%`, background:ok?color:pct>110?"#f87171":"#334155", borderRadius:9, transition:"width .3s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* One box per meal */}
+          {mealNames.map(mealName => {
+            const assigned = mealAssign[mealName] || [];
+            const mt = assigned.reduce((acc, {foodId, grams}) => {
+              const food = selFoods.find(f=>f.id===foodId); if (!food) return acc;
+              const r=grams/100; return {p:acc.p+food.p*r, c:acc.c+food.c*r, f:acc.f+food.f*r};
+            }, {p:0,c:0,f:0});
+            mt.kcal = Math.round(mt.p*4+mt.c*4+mt.f*9);
+            const isPickingThis = pickingFor===mealName;
+            const available = selFoods.filter(f =>
+              !assigned.some(a=>a.foodId===f.id) &&
+              f.name.toLowerCase().includes(pickSearch.toLowerCase())
+            );
+            return (
+              <div key={mealName} style={{ ...C.card, marginBottom:10 }}>
+                {/* Meal header */}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:"#a3e635" }}>{mealName}</span>
+                  <span style={{ fontSize:10, color:"#475569", fontFamily:"'DM Mono',monospace" }}>
+                    P{Math.round(mt.p)} C{Math.round(mt.c)} G{Math.round(mt.f)} · {mt.kcal} kcal
+                  </span>
+                </div>
+
+                {/* Assigned foods */}
+                {assigned.map(({foodId, grams}) => {
+                  const food = selFoods.find(f=>f.id===foodId); if (!food) return null;
+                  const r=grams/100;
+                  return (
+                    <div key={foodId} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, color:"#cbd5e1", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{food.name}</div>
+                        <div style={{ fontSize:10, color:"#475569", fontFamily:"'DM Mono',monospace" }}>
+                          P{Math.round(food.p*r)} C{Math.round(food.c*r)} G{Math.round(food.f*r)}
+                        </div>
+                      </div>
+                      <input type="number" value={grams} min={5} max={1000}
+                        onChange={e => updateGrams(mealName, foodId, Math.max(5, +e.target.value||5))}
+                        style={{ width:52, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"5px 6px", color:"#e2e8f0", fontSize:13, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", flexShrink:0 }} />
+                      <span style={{ fontSize:10, color:"#475569", flexShrink:0 }}>g</span>
+                      <button onClick={() => removeFood(mealName, foodId)}
+                        style={{ background:"none", border:"none", color:"#64748b", cursor:"pointer", fontSize:18, padding:"0 2px", fontFamily:"inherit", lineHeight:1, flexShrink:0 }}>×</button>
+                    </div>
+                  );
+                })}
+
+                {/* Food picker */}
+                {isPickingThis ? (
+                  <div>
+                    <input autoFocus value={pickSearch} onChange={e=>setPickSearch(e.target.value)}
+                      placeholder="🔍 Buscar alimento..."
+                      style={{ ...C.inp, marginBottom:6, fontSize:12, padding:"8px 11px" }} />
+                    <div style={{ maxHeight:160, overflowY:"auto", border:"1px solid rgba(255,255,255,0.06)", borderRadius:9 }}>
+                      {available.slice(0,12).map(f => (
+                        <div key={f.id} onClick={()=>addFood(mealName, f.id)}
+                          style={{ padding:"8px 11px", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <span style={{ fontSize:12, color:"#cbd5e1" }}>{f.name}</span>
+                          <span style={{ fontSize:10, color:"#475569", fontFamily:"'DM Mono',monospace" }}>P{f.p} C{f.c} G{f.f}</span>
+                        </div>
+                      ))}
+                      {available.length===0 && (
+                        <div style={{ padding:"10px 11px", fontSize:12, color:"#475569", textAlign:"center" }}>Sin resultados</div>
+                      )}
+                    </div>
+                    <button onClick={()=>{setPickingFor(null);setPickSearch("");}}
+                      style={{ marginTop:6, fontSize:11, color:"#64748b", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={()=>{setPickingFor(mealName);setPickSearch("");}}
+                    style={{ width:"100%", marginTop:assigned.length>0?6:0, background:"rgba(74,222,128,0.05)", border:"1px dashed rgba(74,222,128,0.25)", borderRadius:9, padding:"8px", color:"#4ade80", fontSize:12, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
+                    + Añadir alimento
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <button onClick={()=>setShowMealAssign(false)} style={{ ...C.btnS, flex:1 }}>← Volver</button>
+            <button onClick={confirmManualPlan} style={{ ...C.btnG, flex:2 }}>✓ Confirmar plan</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Step 2: Macros & plan settings
   if (step === 2) return (
     <div>
@@ -766,9 +937,14 @@ export default function Nutricion() {
           <button onClick={() => setStep(1)} style={{ ...C.btnS, flex: 1 }}>← Volver</button>
           <button onClick={generate} disabled={loading}
             style={{ ...C.btnG, flex: 2, opacity: loading ? .7 : 1 }}>
-            {loading ? "⏳ Generando..." : "✨ Generar Plan"}
+            {loading ? "⏳ Generando..." : "✨ Auto-generar"}
           </button>
         </div>
+        <button
+          onClick={() => { if (selFoods.length < 3) { setError("Selecciona al menos 3 alimentos"); return; } setError(""); setShowMealAssign(true); }}
+          style={{ ...C.btnS, width: "100%", marginTop: 8, borderColor: "rgba(74,222,128,0.3)", color: "#4ade80", fontSize: 13, fontWeight: 700, padding: "12px 20px" }}>
+          📋 Asignar comidas manualmente
+        </button>
         {error && <div style={{ marginTop: 10, padding: "10px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, color: "#fca5a5", fontSize: 13 }}>{error}</div>}
       </div>
     </div>
