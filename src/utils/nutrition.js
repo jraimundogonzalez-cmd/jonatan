@@ -10,21 +10,35 @@ export const calcKatch = (weight, bodyFat) =>
 
 export const computeProfile = (profile) => {
   if (!profile.enabled || !profile.weight || !profile.height || !profile.age) return null;
+
+  // Clamp inputs to physiologically valid ranges (guards against typos like height=18 instead of 180)
+  const weight = Math.max(30, Math.min(300, +profile.weight || 70));
+  const height = Math.max(100, Math.min(250, +profile.height || 170));
+  const age    = Math.max(10, Math.min(100, +profile.age    || 30));
+
   const useKatch = profile.bodyFat >= 5 && profile.bodyFat <= 50;
   const bmr = useKatch
-    ? calcKatch(profile.weight, profile.bodyFat)
-    : calcMifflin(profile.sex, profile.weight, profile.height, profile.age);
+    ? calcKatch(weight, profile.bodyFat)
+    : calcMifflin(profile.sex, weight, height, age);
   const act = ACTIVITY[profile.activity] || ACTIVITY["moderada"] || Object.values(ACTIVITY)[2];
   const tdee = Math.round(bmr * act.mult);
   const goal = GOALS[profile.goal] || GOALS["mantener"] || Object.values(GOALS)[0];
-  const targetKcal = Math.round(tdee * (1 + goal.deficit));
-  const prot = Math.round(profile.weight * goal.protPerKg);
-  const fat  = Math.round(profile.weight * goal.fatPerKg);
+
+  // Apply deficit/surplus but never recommend below safe minimums
+  const minKcal = profile.sex === "h" ? 1500 : 1200;
+  const targetKcal = Math.max(minKcal, Math.round(tdee * (1 + goal.deficit)));
+
+  const prot  = Math.round(weight * goal.protPerKg);
+  const fat   = Math.round(weight * goal.fatPerKg);
   const carbs = Math.max(40, Math.round(Math.max(0, targetKcal - prot * 4 - fat * 9) / 4));
+
+  // Use actual macro sum as the displayed kcal (honest accounting)
+  const actualKcal = Math.round(prot * 4 + carbs * 4 + fat * 9);
+
   return {
     formula: useKatch ? "Katch-McArdle" : "Mifflin-St Jeor",
-    leanMass: useKatch ? +(profile.weight * (1 - profile.bodyFat / 100)).toFixed(1) : null,
-    bmr, tdee, targetKcal,
+    leanMass: useKatch ? +(weight * (1 - profile.bodyFat / 100)).toFixed(1) : null,
+    bmr, tdee, targetKcal: actualKcal,
     macros: { proteina: prot, carbos: carbs, grasas: fat },
     goalInfo: goal,
   };
