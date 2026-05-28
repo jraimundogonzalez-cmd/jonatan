@@ -58,27 +58,61 @@ export function buildSession(entry, training) {
   const mins = entry.t || training.time;
   let plan = entry.base.map(x => ({ ...x, tech: null }));
 
-  const groups = () => {
+  const getGroups = () => {
     const g = {};
     plan.forEach(x => { (g[muscleOf(x)] = g[muscleOf(x)] || []).push(x); });
     return g;
   };
 
+  // Step 1: fits as-is
   if (estMin(plan) <= mins) return tagDefaults(plan, training);
+
+  // Step 2: shorten rest periods
   const restFloor = training.goal === "fuerza" ? 90 : training.goal === "grasa" ? 35 : 50;
   plan = plan.map(x => ({ ...x, rest: Math.max(restFloor, Math.round(x.rest * 0.7)) }));
   if (estMin(plan) <= mins) return tagDefaults(plan, training);
+
+  // Step 3: drop to 3 sets + add intensity techniques
   plan = plan.map(x => {
-    let s = x.sets; if (s > 3) s = 3;
     const ex = byId(x.id);
-    return { ...x, sets: s, tech: canIntense(training.level) && ex ? techFor(ex).code : null };
+    return { ...x, sets: Math.min(x.sets, 3), tech: canIntense(training.level) && ex ? techFor(ex).code : null };
   });
   if (estMin(plan) <= mins) return tagDefaults(plan, training);
+
+  // Step 4: drop to 2 sets — always prefer this over removing exercises
+  plan = plan.map(x => ({ ...x, sets: 2 }));
+  if (estMin(plan) <= mins) return tagDefaults(plan, training);
+
+  // Step 5: remove individual exercises as last resort, respecting minimums:
+  // primary muscle group (most exercises) → keep at least 3
+  // secondary muscle groups → keep at least 2
+  const g0 = getGroups();
+  const primaryMuscle = Object.keys(g0).sort((a, b) => g0[b].length - g0[a].length)[0];
+  // Never go below initial count if it's already under the threshold
+  const muscleMin = {};
+  Object.entries(g0).forEach(([name, exs]) => {
+    const threshold = name === primaryMuscle ? 3 : 2;
+    muscleMin[name] = Math.min(exs.length, threshold);
+  });
+
   while (estMin(plan) > mins) {
-    const g = groups(), names = Object.keys(g);
-    if (names.length <= 1) break;
-    const cand = names.sort((a, b) => g[a].length - g[b].length)[0];
-    plan = plan.filter(x => muscleOf(x) !== cand);
+    const g = getGroups();
+    let removed = false;
+    // Remove from the group with the most excess first (secondary before primary)
+    for (const name of Object.keys(g).sort((a, b) => {
+      const excessA = g[a].length - (muscleMin[a] ?? 2);
+      const excessB = g[b].length - (muscleMin[b] ?? 2);
+      return excessB - excessA;
+    })) {
+      const min = muscleMin[name] ?? 2;
+      if (g[name].length > min) {
+        const toRemove = g[name][g[name].length - 1].id;
+        plan = plan.filter(x => x.id !== toRemove);
+        removed = true;
+        break;
+      }
+    }
+    if (!removed) break;
   }
   return tagDefaults(plan, training);
 }

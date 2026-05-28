@@ -149,7 +149,7 @@ export const CARDIO = [
 const ID = (...ids) => ids.join(',');
 export const SPLITS = {
   3:[
-    ['Empuje', ID('press_banca_barra','press_inclinado_mancuernas','press_militar_mancuernas','elevaciones_laterales','extension_triceps_polea','flexiones')],
+    ['Empuje', ID('press_banca_barra','press_inclinado_mancuernas','press_militar_mancuernas','elevaciones_laterales','extension_triceps_polea','fondos_bancos','flexiones')],
     ['Tirón',  ID('jalon_polea','remo_mancuerna','dominada_asistida','remo_polea','curl_barra','curl_martillo')],
     ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','hip_thrust','curl_femoral_maquina','elevacion_gemelo_pie')],
   ],
