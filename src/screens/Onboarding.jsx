@@ -44,7 +44,7 @@ export default function Onboarding({ onDone }) {
   const toggleDay = (key) => setRemDays(d => ({ ...d, [key]: !d[key] }));
 
   const finish = () => {
-    const profile = { enabled: true, name: name.trim() || "Usuario", sex, age, height, weight, bodyFat: null, activity, goal };
+    const profile = { enabled: true, name: name.trim() || "Usuario", sex, age: parseInt(age) || 28, height: parseInt(height) || 175, weight, bodyFat: null, activity, goal };
     const computed = computeProfile(profile);
     setState(s => ({
       ...s,
@@ -206,7 +206,7 @@ export default function Onboarding({ onDone }) {
               <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 16, padding: "14px 16px" }}>
                 <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Altura</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                  <input type="number" value={height} onChange={e => setHeight(+e.target.value || 175)} min="140" max="220"
+                  <input type="number" value={height} onChange={e => setHeight(e.target.value)} onBlur={() => { const n = parseInt(height); setHeight(isNaN(n) || n < 100 ? 175 : n > 250 ? 250 : n); }} min="140" max="220"
                     style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 700, color: "#e2e8f0", width: "100%", textAlign: "center" }} />
                   <span style={{ fontSize: 13, color: "#64748b" }}>cm</span>
                 </div>
@@ -214,7 +214,7 @@ export default function Onboarding({ onDone }) {
               <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 16, padding: "14px 16px" }}>
                 <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 10 }}>Edad</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                  <input type="number" value={age} onChange={e => setAge(+e.target.value || 25)} min="14" max="80"
+                  <input type="number" value={age} onChange={e => setAge(e.target.value)} onBlur={() => { const n = parseInt(age); setAge(isNaN(n) || n < 10 ? 18 : n > 100 ? 100 : n); }} min="10" max="100"
                     style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 700, color: "#e2e8f0", width: "100%", textAlign: "center" }} />
                   <span style={{ fontSize: 13, color: "#64748b" }}>años</span>
                 </div>
@@ -286,7 +286,7 @@ export default function Onboarding({ onDone }) {
 
         {/* STEP 6: Done */}
         {step === 6 && (() => {
-          const profile = { enabled: true, name: name.trim() || "Usuario", sex, age, height, weight, bodyFat: null, activity, goal };
+          const profile = { enabled: true, name: name.trim() || "Usuario", sex, age: parseInt(age) || 28, height: parseInt(height) || 175, weight, bodyFat: null, activity, goal };
           const computed = computeProfile(profile);
           const g = GOALS[goal];
           return (
