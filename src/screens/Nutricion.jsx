@@ -209,6 +209,7 @@ export default function Nutricion() {
   const [mealAssign, setMealAssign] = useState({});   // { mealName: [{foodId, grams}] }
   const [pickingFor, setPickingFor] = useState(null); // meal name currently adding food to
   const [pickSearch, setPickSearch] = useState("");
+  const [mealTargets, setMealTargets] = useState({}); // { mealName: {p, c, f} }
 
   // Clear modal/overlay state when navigating between steps to prevent
   // the RecipeModal fixed overlay from blocking interactions in other steps
@@ -290,6 +291,28 @@ export default function Nutricion() {
     save({ planData: data, planDays });
     setShowMealAssign(false);
     setStep(3);
+  };
+
+  const autoCalcGrams = (mealName, food) => {
+    const assigned = mealAssign[mealName] || [];
+    const used = assigned.reduce((acc, { foodId, grams }) => {
+      const f = selFoods.find(x => x.id === foodId); if (!f) return acc;
+      const r = grams / 100;
+      return { p: acc.p + f.p * r, c: acc.c + f.c * r, f: acc.f + f.f * r };
+    }, { p: 0, c: 0, f: 0 });
+    const n = mealNames.length;
+    const tgt = mealTargets[mealName] || { p: macros.proteina / n, c: macros.carbos / n, f: macros.grasas / n };
+    const remP = Math.max(0, tgt.p - used.p);
+    const remC = Math.max(0, tgt.c - used.c);
+    const remF = Math.max(0, tgt.f - used.f);
+    const sum = food.p + food.c + food.f;
+    let g = 100;
+    if (sum > 0) {
+      if (food.p / sum >= 0.35 && food.p > 0 && remP > 5)        g = remP / (food.p / 100);
+      else if (food.c / sum >= 0.45 && food.c > 0 && remC > 5)   g = remC / (food.c / 100);
+      else if (food.f > 5 && remF > 3)                            g = remF / (food.f / 100);
+    }
+    return Math.max(10, Math.min(600, Math.round(g / 5) * 5));
   };
 
   // ── Slider edit helpers ───────────────────────────────────────
@@ -659,7 +682,9 @@ export default function Nutricion() {
     const removeFood = (mn, foodId) =>
       setMealAssign(prev => ({ ...prev, [mn]: (prev[mn]||[]).filter(a => a.foodId!==foodId) }));
     const addFood = (mn, foodId) => {
-      setMealAssign(prev => ({ ...prev, [mn]: [...(prev[mn]||[]), {foodId, grams:100}] }));
+      const food = selFoods.find(f => f.id === foodId);
+      const grams = food ? autoCalcGrams(mn, food) : 100;
+      setMealAssign(prev => ({ ...prev, [mn]: [...(prev[mn]||[]), {foodId, grams}] }));
       setPickingFor(null); setPickSearch("");
     };
     const dt = mealNames.reduce((acc, mn) => {
@@ -707,6 +732,53 @@ export default function Nutricion() {
             </div>
           </div>
 
+          {/* Macro distribution grid */}
+          <div style={{ ...C.card, background:"rgba(167,139,250,0.04)", borderColor:"rgba(167,139,250,0.2)", marginBottom:16 }}>
+            <div style={{ fontSize:10, color:"#a78bfa", fontWeight:700, letterSpacing:".08em", marginBottom:10 }}>
+              OBJETIVO POR COMIDA · edita para redistribuir
+            </div>
+            {/* Header */}
+            <div style={{ display:"flex", gap:6, marginBottom:6, alignItems:"center" }}>
+              <div style={{ flex:2 }} />
+              {[{l:"Prot",c:"#4ade80"},{l:"HC",c:"#60a5fa"},{l:"Grasa",c:"#f59e0b"}].map(({l,c}) => (
+                <div key={l} style={{ flex:1, fontSize:9, color:c, fontWeight:700, textAlign:"center", textTransform:"uppercase", letterSpacing:".05em" }}>{l}</div>
+              ))}
+            </div>
+            {/* Per-meal rows */}
+            {mealNames.map(mn => (
+              <div key={mn} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8 }}>
+                <div style={{ flex:2, fontSize:11, color:"#cbd5e1", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{mn}</div>
+                {[
+                  {key:'p', color:'#4ade80'},
+                  {key:'c', color:'#60a5fa'},
+                  {key:'f', color:'#f59e0b'},
+                ].map(({key, color}) => (
+                  <input key={key} type="number" min={0} value={mealTargets[mn]?.[key] ?? 0}
+                    onChange={e => setMealTargets(prev => ({ ...prev, [mn]: { ...(prev[mn]||{}), [key]: Math.max(0, +e.target.value||0) } }))}
+                    style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, padding:"6px 3px", color, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"center", outline:"none", minWidth:0 }} />
+                ))}
+              </div>
+            ))}
+            {/* Total validation row */}
+            <div style={{ display:"flex", gap:6, borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:8, marginTop:2 }}>
+              <div style={{ flex:2, fontSize:10, color:"#64748b", fontWeight:600 }}>Total</div>
+              {[
+                {key:'p', target:macros.proteina, color:'#4ade80'},
+                {key:'c', target:macros.carbos,   color:'#60a5fa'},
+                {key:'f', target:macros.grasas,   color:'#f59e0b'},
+              ].map(({key, target, color}) => {
+                const sum = mealNames.reduce((s, mn) => s + (mealTargets[mn]?.[key] || 0), 0);
+                const ok = Math.abs(sum - target) <= 3;
+                return (
+                  <div key={key} style={{ flex:1, textAlign:"center" }}>
+                    <div style={{ fontSize:12, fontWeight:700, fontFamily:"'DM Mono',monospace", color:ok?color:"#f87171" }}>{sum}g</div>
+                    <div style={{ fontSize:8, color:"#475569" }}>obj:{target}g</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* One box per meal */}
           {mealNames.map(mealName => {
             const assigned = mealAssign[mealName] || [];
@@ -715,6 +787,7 @@ export default function Nutricion() {
               const r=grams/100; return {p:acc.p+food.p*r, c:acc.c+food.c*r, f:acc.f+food.f*r};
             }, {p:0,c:0,f:0});
             mt.kcal = Math.round(mt.p*4+mt.c*4+mt.f*9);
+            const tgt = mealTargets[mealName] || { p: macros.proteina/mealNames.length, c: macros.carbos/mealNames.length, f: macros.grasas/mealNames.length };
             const isPickingThis = pickingFor===mealName;
             const available = selFoods.filter(f =>
               !assigned.some(a=>a.foodId===f.id) &&
@@ -723,11 +796,39 @@ export default function Nutricion() {
             return (
               <div key={mealName} style={{ ...C.card, marginBottom:10 }}>
                 {/* Meal header */}
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <span style={{ fontSize:13, fontWeight:700, color:"#a3e635" }}>{mealName}</span>
-                  <span style={{ fontSize:10, color:"#475569", fontFamily:"'DM Mono',monospace" }}>
-                    P{Math.round(mt.p)} C{Math.round(mt.c)} G{Math.round(mt.f)} · {mt.kcal} kcal
-                  </span>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#a3e635", marginBottom:3 }}>{mealName}</div>
+                    <div style={{ fontSize:10, color:"#475569", fontFamily:"'DM Mono',monospace" }}>
+                      Asignado: P{Math.round(mt.p)} C{Math.round(mt.c)} G{Math.round(mt.f)} · {mt.kcal} kcal
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:9, color:"#64748b", marginBottom:3 }}>Objetivo</div>
+                    <div style={{ fontSize:10, fontFamily:"'DM Mono',monospace" }}>
+                      <span style={{ color:"#4ade80" }}>P{tgt.p}</span>{" "}
+                      <span style={{ color:"#60a5fa" }}>C{tgt.c}</span>{" "}
+                      <span style={{ color:"#f59e0b" }}>G{tgt.f}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Per-macro mini progress bars */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:4, marginBottom:10 }}>
+                  {[{key:'p',val:mt.p,tgt:tgt.p,color:'#4ade80',label:'P'},{key:'c',val:mt.c,tgt:tgt.c,color:'#60a5fa',label:'HC'},{key:'f',val:mt.f,tgt:tgt.f,color:'#f59e0b',label:'G'}].map(({key,val,tgt:t,color,label}) => {
+                    const pct = t>0 ? Math.min(100, Math.round(val/t*100)) : 0;
+                    const over = t>0 && val > t*1.05;
+                    return (
+                      <div key={key}>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#475569", marginBottom:2 }}>
+                          <span style={{ color }}>{label}</span>
+                          <span>{Math.round(val)}/{t}g</span>
+                        </div>
+                        <div style={{ height:4, background:"rgba(255,255,255,0.06)", borderRadius:9, overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:`${pct}%`, background:over?"#f87171":color, borderRadius:9, transition:"width .3s" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Assigned foods */}
@@ -941,7 +1042,26 @@ export default function Nutricion() {
           </button>
         </div>
         <button
-          onClick={() => { if (selFoods.length < 3) { setError("Selecciona al menos 3 alimentos"); return; } setError(""); setShowMealAssign(true); }}
+          onClick={() => {
+            if (selFoods.length < 3) { setError("Selecciona al menos 3 alimentos"); return; }
+            setError("");
+            const n = mealNames.length;
+            const targets = {};
+            mealNames.forEach((mn, i) => {
+              const base = Math.round(macros.proteina / n);
+              const baseC = Math.round(macros.carbos / n);
+              const baseF = Math.round(macros.grasas / n);
+              // Last meal absorbs rounding remainder
+              targets[mn] = {
+                p: i === n - 1 ? macros.proteina - base * (n - 1) : base,
+                c: i === n - 1 ? macros.carbos   - baseC * (n - 1) : baseC,
+                f: i === n - 1 ? macros.grasas   - baseF * (n - 1) : baseF,
+              };
+            });
+            setMealTargets(targets);
+            setMealAssign({});
+            setShowMealAssign(true);
+          }}
           style={{ ...C.btnS, width: "100%", marginTop: 8, borderColor: "rgba(74,222,128,0.3)", color: "#4ade80", fontSize: 13, fontWeight: 700, padding: "12px 20px" }}>
           📋 Asignar comidas manualmente
         </button>
