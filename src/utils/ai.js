@@ -210,6 +210,9 @@ export function buildSessionFromCats(cats, opts = {}) {
   };
   const repScheme = repSchemeMap[goal] || repSchemeMap.musculo;
 
+  // Big muscle groups get 4 exercises; small groups get 2
+  const BIG_CATS = new Set(["pecho","espalda","cuadriceps","isquios","gluteos","pierna"]);
+
   const exercisesForDay = [];
   cats.forEach(cat => {
     const pool = EX.filter(e =>
@@ -225,13 +228,17 @@ export function buildSessionFromCats(cats, opts = {}) {
       return sB - sA;
     });
 
+    const maxEx = BIG_CATS.has(cat) ? 4 : 2;
     const compounds = pool.filter(e => e.type === "comp" || e.type === "mach");
     const isolations = pool.filter(e => e.type === "iso" || e.type === "body");
 
     const picked = [];
-    if (compounds[0]) picked.push(compounds[0]);
-    if (compounds[1] && cats.length === 1) picked.push(compounds[1]);
-    if (isolations[0] && picked.length < (priorities.includes(cat) ? 3 : 2)) picked.push(isolations[0]);
+    // Fill with compounds first, then isolations, avoiding duplicate movement patterns
+    for (const e of [...compounds, ...isolations]) {
+      if (picked.length >= maxEx) break;
+      const dupPattern = e.pattern && picked.find(p => p.pattern === e.pattern);
+      if (!dupPattern) picked.push(e);
+    }
 
     picked.forEach(p => {
       const overlap = exercisesForDay.find(e => e.pattern && e.pattern === p.pattern && e.cat === p.cat);
@@ -239,10 +246,10 @@ export function buildSessionFromCats(cats, opts = {}) {
     });
   });
 
-  let plan = exercisesForDay.map(e => ({
+  // Never remove exercises to fit time — only sets reduction handles that (same as buildSession)
+  const plan = exercisesForDay.map(e => ({
     id: e.id, sets: repScheme.s, reps: repScheme.r, rest: repScheme.rest
   }));
-  while (plan.length > 0 && estimateMin(plan) > time) plan.pop();
 
   return {
     name: cats.map(c => labelOf(c)).join(" + "),
