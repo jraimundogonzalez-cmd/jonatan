@@ -1,5 +1,6 @@
 // AI engine for routine optimization and exercise substitution
 import { EX, byId, primary } from "../data/exercises";
+import { EX_SUBGROUPS } from "../data/coverage";
 
 // Available equipment categories used by the app
 export const EQUIPMENT_OPTIONS = [
@@ -210,8 +211,9 @@ export function buildSessionFromCats(cats, opts = {}) {
   };
   const repScheme = repSchemeMap[goal] || repSchemeMap.musculo;
 
-  // Big muscle groups get 4 exercises; small groups get 2
+  // Big muscle groups get 4 exercises; arm groups get 3 (one per subgroup); small groups get 2
   const BIG_CATS = new Set(["pecho","espalda","cuadriceps","isquios","gluteos","pierna"]);
+  const ARM_CATS = new Set(["biceps","triceps"]);
 
   const exercisesForDay = [];
   cats.forEach(cat => {
@@ -223,21 +225,36 @@ export function buildSessionFromCats(cats, opts = {}) {
     if (pool.length === 0) return;
 
     pool.sort((a, b) => {
-      const sA = (a.stimulus_score || 3) + (a.hypertrophy_eff || 3) + (priorities.includes(cat) ? 2 : 0);
-      const sB = (b.stimulus_score || 3) + (b.hypertrophy_eff || 3) + (priorities.includes(cat) ? 2 : 0);
+      let sA = (a.stimulus_score || 3) + (a.hypertrophy_eff || 3) + (priorities.includes(cat) ? 2 : 0);
+      let sB = (b.stimulus_score || 3) + (b.hypertrophy_eff || 3) + (priorities.includes(cat) ? 2 : 0);
+      // Penalize high-systemic-fatigue exercises for hypertrophy (e.g. peso_muerto_barra in back sessions)
+      if (goal === "musculo") {
+        if ((a.systemic_fatigue || 3) >= 5) sA -= 4;
+        if ((b.systemic_fatigue || 3) >= 5) sB -= 4;
+      }
       return sB - sA;
     });
 
-    const maxEx = BIG_CATS.has(cat) ? 4 : 2;
+    const maxEx = BIG_CATS.has(cat) ? 4 : ARM_CATS.has(cat) ? 3 : 2;
     const compounds = pool.filter(e => e.type === "comp" || e.type === "mach");
     const isolations = pool.filter(e => e.type === "iso" || e.type === "body");
 
     const picked = [];
-    // Fill with compounds first, then isolations, avoiding duplicate movement patterns
+    // For arm categories: use subgroup-based dedup so all 3 subgroups get covered
+    // For other categories: use movement pattern dedup to avoid redundant exercises
+    const isDupFor = ARM_CATS.has(cat)
+      ? (e, list) => {
+          const eSubs = EX_SUBGROUPS[e.id] || [];
+          return eSubs.length > 0 && list.some(p => {
+            const pSubs = EX_SUBGROUPS[p.id] || [];
+            return eSubs.some(s => pSubs.includes(s));
+          });
+        }
+      : (e, list) => e.pattern && list.some(p => p.pattern === e.pattern);
+
     for (const e of [...compounds, ...isolations]) {
       if (picked.length >= maxEx) break;
-      const dupPattern = e.pattern && picked.find(p => p.pattern === e.pattern);
-      if (!dupPattern) picked.push(e);
+      if (!isDupFor(e, picked)) picked.push(e);
     }
 
     picked.forEach(p => {
@@ -245,6 +262,12 @@ export function buildSessionFromCats(cats, opts = {}) {
       if (!overlap) exercisesForDay.push(p);
     });
   });
+
+  // Always add face_pull to back sessions — rear delt health is non-negotiable in prep
+  if (cats.includes("espalda") && !exercisesForDay.find(e => e.id === "face_pull")) {
+    const fp = byId("face_pull");
+    if (fp && canDo(fp, availableEq)) exercisesForDay.push(fp);
+  }
 
   // Never remove exercises to fit time — only sets reduction handles that (same as buildSession)
   const plan = exercisesForDay.map(e => ({

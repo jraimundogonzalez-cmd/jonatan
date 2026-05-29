@@ -149,39 +149,46 @@ export const CARDIO = [
 const ID = (...ids) => ids.join(',');
 export const SPLITS = {
   3:[
-    ['Empuje', ID('press_banca_barra','press_inclinado_mancuernas','press_militar_mancuernas','elevaciones_laterales','extension_triceps_polea','fondos_bancos','flexiones')],
-    ['Tirón',  ID('jalon_polea','remo_mancuerna','dominada_asistida','remo_polea','curl_barra','curl_martillo')],
+    // Push: pecho compuesto → inclinado → apertura/stretch · hombro press + lateral · tríceps pushdown + longhead
+    ['Empuje', ID('press_banca_barra','press_inclinado_mancuernas','aperturas_polea','press_militar_mancuernas','elevaciones_laterales','extension_triceps_polea','press_frances')],
+    // Pull (espalda + bíceps): tirón vertical → horizontal → pullover/stretch → deltoides post → 3 subgrupos de bíceps
+    ['Tirón',  ID('jalon_polea','remo_barra','pullover_polea','face_pull','curl_polea','curl_predicador','curl_martillo')],
     ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','hip_thrust','curl_femoral_maquina','elevacion_gemelo_pie')],
   ],
   4:[
-    ['Pecho y Tríceps', ID('press_banca_barra','press_inclinado_mancuernas','aperturas_mancuernas','fondos_paralelas','extension_triceps_polea','press_frances')],
-    ['Espalda y Bíceps', ID('jalon_polea','remo_mancuerna','dominada_asistida','remo_polea','curl_barra','curl_martillo')],
+    ['Pecho y Tríceps', ID('press_banca_barra','press_inclinado_mancuernas','aperturas_polea','fondos_paralelas','extension_triceps_polea','press_frances')],
+    // Competition-prep back+biceps: vertical pull · horizontal pull · pullover stretch · rear delt · 3 bíceps subgroups
+    ['Espalda y Bíceps', ID('jalon_polea','remo_barra','pullover_polea','face_pull','curl_polea','curl_predicador','curl_martillo')],
     ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','curl_femoral_maquina','hip_thrust','elevacion_gemelo_pie')],
-    ['Hombro y Core', ID('press_militar_mancuernas','elevaciones_laterales','pajaro_mancuernas','elevacion_frontal','plancha','crunch')],
+    ['Hombro y Core', ID('press_militar_mancuernas','elevaciones_laterales','pajaro_mancuernas','face_pull','encogimientos_mancuernas','plancha','crunch')],
   ],
   5:[
-    ['Pecho', ID('press_banca_barra','press_inclinado_mancuernas','press_banca_mancuernas','aperturas_mancuernas','fondos_paralelas')],
-    ['Espalda', ID('dominada_asistida','jalon_polea','remo_barra','remo_mancuerna','face_pull')],
+    ['Pecho', ID('press_banca_barra','press_inclinado_mancuernas','press_banca_mancuernas','aperturas_polea','fondos_paralelas')],
+    // Back-only day: dominadas (max estímulo) · 2 horizontales distintos · pullover · rear delt
+    ['Espalda', ID('dominadas','remo_barra','remo_mancuerna','pullover_polea','face_pull')],
     ['Pierna', ID('sentadilla_barra','prensa_inclinada','extension_cuadriceps','curl_femoral_maquina','elevacion_gemelo_pie')],
     ['Hombro', ID('press_militar_barra','elevaciones_laterales','pajaro_mancuernas','elevacion_frontal','encogimientos_mancuernas')],
-    ['Brazo', ID('curl_barra','curl_mancuernas','curl_martillo','extension_triceps_polea','press_frances','curl_concentrado')],
+    // Arm day: 3 bíceps subgroups + 3 tríceps subgroups
+    ['Brazo', ID('curl_polea','curl_predicador','curl_martillo','extension_triceps_polea','extension_triceps_overhead','press_frances')],
   ],
   6:[
-    ['Pecho', ID('press_banca_barra','press_inclinado_mancuernas','press_banca_mancuernas','aperturas_mancuernas','fondos_paralelas')],
-    ['Espalda', ID('dominadas','jalon_polea','remo_barra','remo_mancuerna','pullover_polea')],
+    ['Pecho', ID('press_banca_barra','press_inclinado_mancuernas','press_banca_mancuernas','aperturas_polea','fondos_paralelas')],
+    // 6-day back: high volume — dominadas + jalón (ancho + agarre) · 2 horizontales · pullover · rear delt
+    ['Espalda', ID('dominadas','jalon_polea','remo_barra','remo_mancuerna','pullover_polea','face_pull')],
     ['Pierna Cuádriceps', ID('sentadilla_barra','prensa_inclinada','sentadilla_bulgara','extension_cuadriceps','elevacion_gemelo_pie')],
     ['Hombro', ID('press_militar_barra','elevaciones_laterales','pajaro_mancuernas','face_pull','encogimientos_mancuernas')],
-    ['Brazo', ID('curl_barra','curl_mancuernas','curl_martillo','extension_triceps_polea','press_frances','curl_predicador')],
+    // Arm day: 3 bíceps subgroups + 3 tríceps subgroups
+    ['Brazo', ID('curl_polea','curl_predicador','curl_martillo','extension_triceps_polea','extension_triceps_overhead','press_frances')],
     ['Glúteo y Posterior', ID('hip_thrust','peso_muerto_rumano','sentadilla_bulgara','curl_femoral_maquina','abductor_maquina','plancha')],
   ],
 };
 
 export const FOCUS = {
   Pecho:  'press_banca_barra,press_inclinado_mancuernas,press_banca_mancuernas,aperturas_mancuernas,fondos_paralelas',
-  Espalda:'dominadas,jalon_polea,remo_barra,remo_mancuerna,pullover_polea',
+  Espalda:'dominadas,jalon_polea,remo_barra,remo_mancuerna,pullover_polea,face_pull',
   Pierna: 'sentadilla_barra,prensa_inclinada,sentadilla_bulgara,curl_femoral_maquina,elevacion_gemelo_pie',
   Hombro: 'press_militar_barra,elevaciones_laterales,pajaro_mancuernas,elevacion_frontal,face_pull',
-  Bíceps: 'curl_barra,curl_mancuernas,curl_martillo,curl_predicador,curl_concentrado',
+  Bíceps: 'curl_polea,curl_predicador,curl_martillo,curl_barra,curl_concentrado',
   Tríceps:'extension_triceps_polea,press_frances,patada_triceps,fondos_paralelas,press_cerrado',
   Glúteo: 'hip_thrust,peso_muerto_rumano,sentadilla_bulgara,patada_gluteo,abductor_maquina',
   Core:   'plancha,crunch,elevacion_piernas,mountain_climbers,ab_wheel',
