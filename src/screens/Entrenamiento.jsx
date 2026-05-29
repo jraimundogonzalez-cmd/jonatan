@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "../store/AppContext";
 import { EX, TECH, CARDIO, SPLITS, byId, cById, primary } from "../data/exercises";
+import { SUBGROUPS, EX_SUBGROUPS, VOLUME_LANDMARKS } from "../data/coverage";
 import { buildSchedule, buildSession, buildAbsBlock, buildWarmUp, buildCoolDown, estMin, canIntense, techFor, repScheme, alternatives, suggestPR } from "../utils/training";
 import { recommendSubstitutes, generateRoutine, buildSessionFromCats, inferCats, analyzeRoutine, GYM_DEFAULT, HOME_DEFAULT, CAT_LABELS_MAP } from "../utils/ai";
 
@@ -1261,63 +1262,237 @@ const MUSCLE_TABS = [
   { key: "abductores",label: "Abductores" },
 ];
 
-function AddExerciseModal({ place, onAdd, onClose }) {
+function SmartAddModal({ plan, place, onAdd, onClose }) {
+  const [tab, setTab] = useState("gaps");
   const [q, setQ] = useState("");
-  const [tab, setTab] = useState("all");
 
-  const filtered = EX.filter(e => {
-    if (place === "casa" && e.loc === "gym") return false;
-    if (tab !== "all" && e.cat !== tab) return false;
-    if (q) {
-      const qL = q.toLowerCase();
-      return e.n.toLowerCase().includes(qL) || (e.m || []).some(m => m.toLowerCase().includes(qL));
-    }
-    return true;
+  // ── Coverage analysis ──────────────────────────────────────────
+  const SKIP_CATS = new Set(['cardio','movilidad','core','lumbar','abs']);
+  const currentIds = new Set(plan.filter(x => !x._isAbs).map(x => x.id));
+
+  // Muscle cats in this session (excluding abs/cardio)
+  const sessionCats = [...new Set(
+    plan.filter(x => !x._isAbs).map(x => byId(x.id)?.cat).filter(c => c && !SKIP_CATS.has(c))
+  )];
+
+  // Sets covered per subgroup
+  const coverage = {};
+  plan.filter(x => !x._isAbs).forEach(item => {
+    (EX_SUBGROUPS[item.id] || []).forEach(sub => {
+      coverage[sub] = (coverage[sub] || 0) + (item.sets || 1);
+    });
   });
 
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 210, display: "flex", alignItems: "flex-end" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#0d1a0d", border: "1px solid rgba(74,222,128,0.2)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "16px 18px 12px" }}>
-          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 14px" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#4ade80" }}>＋ Añadir ejercicio</div>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
+  // Total sets per cat (for volume bars)
+  const catSets = {};
+  plan.filter(x => !x._isAbs).forEach(item => {
+    const ex = byId(item.id);
+    if (ex && !SKIP_CATS.has(ex.cat)) catSets[ex.cat] = (catSets[ex.cat] || 0) + (item.sets || 1);
+  });
+
+  const getStatus = (subId) => {
+    const s = coverage[subId] || 0;
+    if (s === 0) return 'missing';
+    if (s < 3) return 'partial';
+    return 'covered';
+  };
+
+  // All subgroups flat (for label lookup)
+  const ALL_SUBS = Object.values(SUBGROUPS).flat();
+  const subLabel = id => ALL_SUBS.find(s => s.id === id)?.label || id;
+
+  // Auto-complete: best exercise for each missing subgroup
+  const autoComplete = [];
+  sessionCats.forEach(cat => {
+    (SUBGROUPS[cat] || []).forEach(sub => {
+      if (getStatus(sub.id) === 'missing') {
+        const best = EX
+          .filter(e => !currentIds.has(e.id) && !SKIP_CATS.has(e.cat) && (place !== 'casa' || e.loc !== 'gym') && (EX_SUBGROUPS[e.id]||[]).includes(sub.id))
+          .sort((a, b) => ((b.stimulus_score||3)+(b.hypertrophy_eff||3)) - ((a.stimulus_score||3)+(a.hypertrophy_eff||3)))[0];
+        if (best && !autoComplete.find(x => x.id === best.id))
+          autoComplete.push({ ...best, _missingLabel: sub.label });
+      }
+    });
+  });
+
+  // ── Exercise lists ─────────────────────────────────────────────
+  const base = e => !SKIP_CATS.has(e.cat) && !(place === 'casa' && e.loc === 'gym');
+
+  // Fills any missing/partial subgroup that belongs to a session cat
+  const fillsSession = e => (EX_SUBGROUPS[e.id]||[]).some(sub =>
+    sessionCats.some(cat => (SUBGROUPS[cat]||[]).some(s => s.id === sub && getStatus(sub) !== 'covered'))
+  );
+
+  const gapList = EX.filter(e => base(e) && !currentIds.has(e.id) && fillsSession(e))
+    .sort((a, b) => {
+      const aM = (EX_SUBGROUPS[a.id]||[]).some(s => getStatus(s) === 'missing');
+      const bM = (EX_SUBGROUPS[b.id]||[]).some(s => getStatus(s) === 'missing');
+      if (aM !== bM) return aM ? -1 : 1;
+      return ((b.stimulus_score||3)+(b.hypertrophy_eff||3)) - ((a.stimulus_score||3)+(a.hypertrophy_eff||3));
+    });
+
+  const allList = EX.filter(e => {
+    if (!base(e)) return false;
+    if (q) { const qL = q.toLowerCase(); return e.n.toLowerCase().includes(qL) || (e.m||[]).some(m => m.toLowerCase().includes(qL)); }
+    return sessionCats.includes(e.cat) || fillsSession(e);
+  }).sort((a, b) => {
+    const aM = fillsSession(a) && (EX_SUBGROUPS[a.id]||[]).some(s => getStatus(s) === 'missing');
+    const bM = fillsSession(b) && (EX_SUBGROUPS[b.id]||[]).some(s => getStatus(s) === 'missing');
+    if (aM !== bM) return aM ? -1 : 1;
+    return ((b.stimulus_score||3)+(b.hypertrophy_eff||3)) - ((a.stimulus_score||3)+(a.hypertrophy_eff||3));
+  });
+
+  const displayList = tab === 'gaps' ? gapList : allList;
+
+  const ExRow = ({ e }) => {
+    const missing = (EX_SUBGROUPS[e.id]||[]).some(s => getStatus(s) === 'missing');
+    const partial  = !missing && (EX_SUBGROUPS[e.id]||[]).some(s => getStatus(s) === 'partial');
+    const subNames = [...new Set((EX_SUBGROUPS[e.id]||[]).map(subLabel))].slice(0,2).join(', ');
+    const border = missing ? "rgba(248,113,113,0.35)" : partial ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.06)";
+    const bg = missing ? "rgba(248,113,113,0.04)" : "rgba(255,255,255,0.02)";
+    return (
+      <button onClick={() => { onAdd(e); onClose(); }}
+        style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:bg, border:`1px solid ${border}`, borderRadius:11, padding:"10px 12px", marginBottom:5, cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:2, flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, fontWeight:600, color:"#e2e8f0" }}>{e.n}</span>
+            {missing && <span style={{ fontSize:8, fontWeight:800, color:"#f87171", background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.3)", borderRadius:10, padding:"1px 6px", textTransform:"uppercase", letterSpacing:".05em" }}>FALTA</span>}
+            {partial  && <span style={{ fontSize:8, fontWeight:800, color:"#f59e0b", background:"rgba(245,158,11,0.12)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:10, padding:"1px 6px", textTransform:"uppercase", letterSpacing:".05em" }}>REFUERZO</span>}
           </div>
-          {/* Search input */}
-          <input
-            autoFocus
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Buscar ejercicio..."
-            style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 14px", color: "#e2e8f0", fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
-          />
-          {/* Muscle tabs */}
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
-            {MUSCLE_TABS.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: "none", background: tab === t.key ? "#4ade80" : "rgba(255,255,255,0.06)", color: tab === t.key ? "#000" : "#94a3b8" }}>
-                {t.label}
+          <div style={{ fontSize:10, color:"#64748b" }}>
+            {(e.m||[]).slice(0,3).join(' · ')}
+            {subNames && <span style={{ color:"#334155", marginLeft:4 }}>· {subNames}</span>}
+          </div>
+        </div>
+        <span style={{ fontSize:16, color:missing?"#f87171":"#4ade80", fontWeight:800, marginLeft:8, flexShrink:0 }}>＋</span>
+      </button>
+    );
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:210, display:"flex", alignItems:"flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:"#0d1a0d", border:"1px solid rgba(74,222,128,0.2)", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
+
+        {/* ── Fixed header ─────────────────────────── */}
+        <div style={{ padding:"14px 18px 10px", flexShrink:0 }}>
+          <div style={{ width:36, height:4, background:"rgba(255,255,255,0.15)", borderRadius:9, margin:"0 auto 12px" }} />
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <span style={{ fontSize:13, fontWeight:700, color:"#4ade80" }}>＋ Añadir ejercicio</span>
+            <button onClick={onClose} style={{ background:"none", border:"none", color:"#64748b", fontSize:22, cursor:"pointer" }}>×</button>
+          </div>
+          {/* Tab switcher */}
+          <div style={{ display:"flex", gap:0, background:"rgba(255,255,255,0.04)", borderRadius:10, padding:3 }}>
+            {[{key:"gaps",label:`🎯 Prioritarios (${gapList.length})`},{key:"all",label:"📋 Todos"}].map(({key,label}) => (
+              <button key={key} onClick={() => setTab(key)} style={{ flex:1, padding:"7px 6px", border:"none", borderRadius:8, background:tab===key?"rgba(74,222,128,0.15)":"transparent", color:tab===key?"#4ade80":"#64748b", fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>
+                {label}
               </button>
             ))}
           </div>
+          {tab === "all" && (
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar ejercicio..."
+              style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, padding:"9px 13px", color:"#e2e8f0", fontSize:13, outline:"none", boxSizing:"border-box", marginTop:8 }} />
+          )}
         </div>
 
-        {/* Exercise list */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "0 18px 32px" }}>
-          {filtered.length === 0 && (
-            <div style={{ textAlign: "center", color: "#475569", fontSize: 13, padding: "32px 0" }}>No se encontraron ejercicios</div>
+        {/* ── Scrollable content ───────────────────── */}
+        <div style={{ overflowY:"auto", flex:1, padding:"0 18px 32px" }}>
+
+          {/* Coverage chips per muscle group */}
+          {sessionCats.length > 0 && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, color:"#64748b", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:8 }}>ANÁLISIS DE COBERTURA MUSCULAR</div>
+              {sessionCats.map(cat => {
+                const subs = SUBGROUPS[cat];
+                if (!subs || subs.length === 0) return null;
+                const nMissing = subs.filter(s => getStatus(s.id) === 'missing').length;
+                return (
+                  <div key={cat} style={{ marginBottom:10 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
+                      <span style={{ fontSize:9, color:"#475569", fontWeight:700, textTransform:"uppercase", letterSpacing:".07em" }}>{cat}</span>
+                      {nMissing > 0 && <span style={{ fontSize:8, color:"#f87171", fontWeight:800, background:"rgba(248,113,113,0.12)", borderRadius:8, padding:"1px 6px" }}>{nMissing} patrón{nMissing>1?'es':''} faltante{nMissing>1?'s':''}</span>}
+                      {nMissing === 0 && <span style={{ fontSize:8, color:"#4ade80", fontWeight:700 }}>completo ✅</span>}
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                      {subs.map(sub => {
+                        const status = getStatus(sub.id);
+                        const C = {
+                          covered:{ bg:"rgba(74,222,128,0.12)", color:"#4ade80", border:"rgba(74,222,128,0.3)",  icon:"✅" },
+                          partial:{ bg:"rgba(245,158,11,0.12)", color:"#f59e0b", border:"rgba(245,158,11,0.3)",  icon:"⚠️" },
+                          missing:{ bg:"rgba(239,68,68,0.12)",  color:"#f87171", border:"rgba(239,68,68,0.35)", icon:"❌" },
+                        }[status];
+                        return (
+                          <div key={sub.id} title={sub.desc} style={{ fontSize:10, fontWeight:700, color:C.color, background:C.bg, border:`1px solid ${C.border}`, borderRadius:20, padding:"3px 9px 3px 6px", display:"flex", alignItems:"center", gap:3 }}>
+                            <span style={{ fontSize:9 }}>{C.icon}</span>{sub.label}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
-          {filtered.map(e => (
-            <button key={e.id} onClick={() => { onAdd(e); onClose(); }}
-              style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "12px 14px", marginBottom: 6, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", marginBottom: 2 }}>{e.n}</div>
-                <div style={{ fontSize: 11, color: "#64748b" }}>{(e.m || []).join(" · ")}</div>
+
+          {/* Volume landmarks bars */}
+          {sessionCats.some(c => VOLUME_LANDMARKS[c]) && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, color:"#64748b", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:8 }}>VOLUMEN ESTA SESIÓN (semanal si entrenas 1×/semana)</div>
+              {sessionCats.filter(c => VOLUME_LANDMARKS[c]).map(cat => {
+                const { mev, mav, mrv } = VOLUME_LANDMARKS[cat];
+                const sets = catSets[cat] || 0;
+                const pct = Math.min(100, sets / mrv * 100);
+                const zone = sets < mev
+                  ? { label:`bajo MEV (mín ${mev})`, color:"#60a5fa" }
+                  : sets <= mav
+                  ? { label:"zona óptima ✅", color:"#4ade80" }
+                  : sets <= mrv
+                  ? { label:`cerca del MRV ⚠️`, color:"#f59e0b" }
+                  : { label:"sobre MRV 🔴", color:"#f87171" };
+                return (
+                  <div key={cat} style={{ marginBottom:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, marginBottom:2 }}>
+                      <span style={{ color:"#475569", fontWeight:700, textTransform:"uppercase", letterSpacing:".04em" }}>{cat}</span>
+                      <span style={{ color:zone.color, fontWeight:700 }}>{sets} series · {zone.label}</span>
+                    </div>
+                    <div style={{ height:6, background:"rgba(255,255,255,0.06)", borderRadius:9, overflow:"hidden", position:"relative" }}>
+                      <div style={{ height:"100%", width:`${pct}%`, background:zone.color, borderRadius:9, transition:"width .3s" }} />
+                      <div style={{ position:"absolute", top:0, left:`${mev/mrv*100}%`, width:1, height:"100%", background:"rgba(255,255,255,0.25)" }} />
+                      <div style={{ position:"absolute", top:0, left:`${Math.min(99,mav/mrv*100)}%`, width:1, height:"100%", background:"rgba(255,255,255,0.25)" }} />
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:7, color:"#334155", marginTop:1 }}>
+                      <span>0</span><span>MEV {mev}</span><span>MAV {mav}</span><span>MRV {mrv}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Auto-complete button */}
+          {autoComplete.length > 0 && (
+            <button onClick={() => { autoComplete.forEach(ex => onAdd(ex)); onClose(); }}
+              style={{ width:"100%", marginBottom:14, background:"rgba(74,222,128,0.08)", border:"1px solid rgba(74,222,128,0.3)", borderRadius:11, padding:"11px 13px", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#4ade80", marginBottom:3 }}>
+                ⚡ Auto-completar sesión · añadir {autoComplete.length} ejercicio{autoComplete.length>1?'s':''} óptimo{autoComplete.length>1?'s':''}
               </div>
-              <div style={{ fontSize: 18, color: "#4ade80", fontWeight: 700, marginLeft: 8 }}>＋</div>
+              <div style={{ fontSize:10, color:"#64748b" }}>
+                {autoComplete.map(e => `${e.n} (${e._missingLabel})`).join(' · ')}
+              </div>
             </button>
-          ))}
+          )}
+
+          {/* Exercise list */}
+          <div style={{ fontSize:9, color:"#64748b", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:8 }}>
+            {tab==="gaps" ? `EJERCICIOS PRIORITARIOS (${gapList.length})` : `TODOS LOS EJERCICIOS (${allList.length})`}
+          </div>
+          {tab === "gaps" && gapList.length === 0 && (
+            <div style={{ textAlign:"center", padding:"28px 0" }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>✅</div>
+              <div style={{ fontSize:14, color:"#4ade80", fontWeight:700 }}>¡Sesión completa!</div>
+              <div style={{ fontSize:11, color:"#64748b", marginTop:4 }}>Todos los patrones musculares están cubiertos.<br/>Usa "Todos" para añadir trabajo de refuerzo.</div>
+            </div>
+          )}
+          {displayList.map(e => <ExRow key={e.id} e={e} />)}
         </div>
       </div>
     </div>
@@ -1539,6 +1714,14 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
     setPlan(p => p.filter((_, i) => i !== idx));
   };
 
+  // Permanently delete exercise from today's session (marks plan as changed)
+  const deleteExercise = (idx) => {
+    setDone(d => d.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
+    setPlan(p => p.filter((_, i) => i !== idx));
+    setPendingChanges(true);
+    setSavedOk(false);
+  };
+
   const addExerciseToSession = (ex) => {
     const sc = repScheme(training.goal);
     const newEx = { id: ex.id, sets: sc.s, reps: sc.r, rest: sc.rest };
@@ -1728,6 +1911,12 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
                       ⏭ Saltar hoy
                     </button>
                   )}
+                  {!x._isAbs && (
+                    <button onClick={() => deleteExercise(idx)}
+                      style={{ fontSize: 11, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                      🗑️ Borrar
+                    </button>
+                  )}
                 </div>
               </div>
               <button onClick={() => toggleDone(idx)}
@@ -1883,7 +2072,8 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 
       {/* Add exercise modal */}
       {addModal && (
-        <AddExerciseModal
+        <SmartAddModal
+          plan={plan}
           place={training.place || "gym"}
           onAdd={addExerciseToSession}
           onClose={() => setAddModal(false)}
