@@ -227,7 +227,12 @@ export default function Nutricion() {
   const mealNames = MEALS_NAMES[meals] || MEALS_NAMES[4];
   const computed = useMemo(() => computeProfile(profile), [profile]);
   const refeedFat = Math.max(30, Math.round(macros.grasas - (refeedCarbs - macros.carbos) * 0.3));
-  const visible = FOODS.filter(f => (catFilter === "all" || f.cat === catFilter) && f.name.toLowerCase().includes(query.toLowerCase()));
+  const visible = FOODS.filter(f => {
+    if (catFilter !== "all" && f.cat !== catFilter) return false;
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const name = f.name.toLowerCase();
+    return words.every(w => name.includes(w));
+  });
 
   const save = (extra = {}) => {
     setState(s => ({
@@ -703,7 +708,7 @@ export default function Nutricion() {
             const isPickingThis = pickingFor===mealName;
             const available = selFoods.filter(f =>
               !assigned.some(a=>a.foodId===f.id) &&
-              f.name.toLowerCase().includes(pickSearch.toLowerCase())
+              pickSearch.toLowerCase().split(/\s+/).filter(Boolean).every(w => f.name.toLowerCase().includes(w))
             );
             return (
               <div key={mealName} style={{ ...C.card, marginBottom:10 }}>
