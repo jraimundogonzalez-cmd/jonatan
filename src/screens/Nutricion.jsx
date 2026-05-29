@@ -17,7 +17,7 @@ const C = {
   mono:  { fontFamily: "'DM Mono',monospace" },
 };
 
-const STEPS = ["Perfil", "Alimentos", "Macros", "Plan"];
+const STEPS = ["Alimentos", "Macros", "Plan"];
 
 // ── Subcomponents ─────────────────────────────────────────────────
 
@@ -181,8 +181,8 @@ export default function Nutricion() {
   const { state, setState, setTodayLog } = useApp();
   const saved = state.nutrition || {};
 
-  const [step, setStep] = useState(saved.planData ? 3 : 0);
-  const [profile, setProfile] = useState(state.profile || { enabled: false, sex: "h", age: 30, height: 175, weight: 75, bodyFat: null, activity: "moderada", goal: "definicion" });
+  const [step, setStep] = useState(saved.planData ? 3 : 1);
+  const profile = state.profile || { enabled: false, sex: "h", age: 30, height: 175, weight: 75, bodyFat: null, activity: "moderada", goal: "definicion" };
   const [macros, setMacros] = useState(saved.macros || { proteina: 180, carbos: 200, grasas: 70 });
   const [targetKcal, setTargetKcal] = useState(saved.targetKcal || null);
   const [meals, setMeals] = useState(saved.meals || 4);
@@ -472,103 +472,16 @@ export default function Nutricion() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#4ade80", letterSpacing: 2, fontWeight: 500 }}>NUTRICIÓN</span>
         <div style={{ display: "flex", gap: 4 }}>
-          {STEPS.map((l, i) => (
-            <div key={i} onClick={() => { if (i <= step || planData) setStep(i); }}
-              style={{ width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, background: step >= i ? "#4ade80" : "rgba(255,255,255,0.06)", color: step >= i ? "#080d08" : "#475569", cursor: i <= step ? "pointer" : "default", transition: "all .3s" }}>
-              {step > i ? "✓" : i + 1}
-            </div>
-          ))}
+          {STEPS.map((l, i) => {
+            const s = i + 1;
+            return (
+              <div key={i} onClick={() => { if (s <= step || planData) setStep(s); }}
+                style={{ width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, background: step >= s ? "#4ade80" : "rgba(255,255,255,0.06)", color: step >= s ? "#080d08" : "#475569", cursor: s <= step ? "pointer" : "default", transition: "all .3s" }}>
+                {step > s ? "✓" : s}
+              </div>
+            );
+          })}
         </div>
-      </div>
-    </div>
-  );
-
-  // Step 0: Perfil
-  if (step === 0) return (
-    <div>
-      <Header />
-      <div style={{ padding: "16px" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>Perfil metabólico</h1>
-        <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>Opcional. Calcula kcal y macros automáticamente.</p>
-
-        <div style={{ ...C.card, borderColor: profile.enabled ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <p style={{ color: profile.enabled ? "#4ade80" : "#94a3b8", fontSize: 12, fontWeight: 700, margin: "0 0 2px" }}>🎯 PERFIL INTELIGENTE</p>
-            <p style={{ color: "#475569", fontSize: 11, margin: 0 }}>Cálculo automático de kcal y macros</p>
-          </div>
-          <div onClick={() => setProfile(p => ({ ...p, enabled: !p.enabled }))}
-            style={{ width: 44, height: 24, borderRadius: 12, background: profile.enabled ? "#16a34a" : "rgba(255,255,255,0.1)", position: "relative", cursor: "pointer", flexShrink: 0 }}>
-            <div style={{ position: "absolute", top: 2, left: profile.enabled ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
-          </div>
-        </div>
-
-        {profile.enabled && <>
-          <div style={C.card}>
-            <span style={C.lbl}>SEXO</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[["h","Hombre"],["m","Mujer"]].map(([v, l]) => (
-                <div key={v} onClick={() => setProfile(p => ({ ...p, sex: v }))}
-                  style={{ flex: 1, border: `1px solid ${profile.sex === v ? "#4ade80" : "rgba(255,255,255,0.08)"}`, background: profile.sex === v ? "rgba(74,222,128,0.08)" : "transparent", borderRadius: 10, padding: "10px", cursor: "pointer", textAlign: "center", fontSize: 13, fontWeight: 600, color: profile.sex === v ? "#4ade80" : "#94a3b8" }}>
-                  {l}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ ...C.card, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[["Edad","age","number"],["Altura (cm)","height","number"],["Peso (kg)","weight","number"],["% Grasa (opt)","bodyFat","number"]].map(([label, key, type]) => (
-              <div key={key}>
-                <span style={{ ...C.lbl, marginBottom: 6 }}>{label.toUpperCase()}</span>
-                <input type={type} value={profile[key] || ""} placeholder={key === "bodyFat" ? "ej: 18" : ""}
-                  onChange={e => setProfile(p => ({ ...p, [key]: e.target.value ? +e.target.value : null }))}
-                  style={C.inp} step={key === "weight" ? "0.1" : "1"} />
-              </div>
-            ))}
-          </div>
-
-          <div style={C.card}>
-            <span style={C.lbl}>ACTIVIDAD DIARIA</span>
-            {Object.entries(ACTIVITY).map(([key, act]) => (
-              <div key={key} onClick={() => setProfile(p => ({ ...p, activity: key }))}
-                style={{ border: `1px solid ${profile.activity === key ? "#4ade80" : "rgba(255,255,255,0.08)"}`, background: profile.activity === key ? "rgba(74,222,128,0.06)" : "transparent", borderRadius: 10, padding: "10px 12px", cursor: "pointer", marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: profile.activity === key ? "#4ade80" : "#cbd5e1" }}>{act.label}</div>
-                  <div style={{ fontSize: 10, color: "#64748b" }}>{act.desc}</div>
-                </div>
-                <span style={{ fontSize: 10, color: "#475569", ...C.mono }}>×{act.mult}</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={C.card}>
-            <span style={C.lbl}>OBJETIVO</span>
-            {Object.entries(GOALS).map(([key, g]) => (
-              <div key={key} onClick={() => setProfile(p => ({ ...p, goal: key }))}
-                style={{ border: `1px solid ${profile.goal === key ? g.color : "rgba(255,255,255,0.08)"}`, background: profile.goal === key ? g.color + "18" : "transparent", borderRadius: 10, padding: "10px 12px", cursor: "pointer", marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: profile.goal === key ? g.color : "#cbd5e1" }}>{g.emoji} {g.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {computed && (
-            <div style={{ ...C.card, background: "rgba(74,222,128,0.05)", borderColor: "rgba(74,222,128,0.2)" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}>
-                <div>BMR: <strong style={{ color: "#4ade80" }}>{computed.bmr} kcal</strong></div>
-                <div>TDEE: <strong style={{ color: "#4ade80" }}>{computed.tdee} kcal</strong></div>
-                <div>Objetivo: <strong style={{ color: "#4ade80" }}>{computed.targetKcal} kcal</strong></div>
-                <div>Fórmula: <strong style={{ color: "#4ade80" }}>{computed.formula.split("-")[0]}</strong></div>
-              </div>
-              <button onClick={() => { setMacros(computed.macros); setTargetKcal(computed.targetKcal); }}
-                style={{ width: "100%", background: "rgba(74,222,128,0.15)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.3)", borderRadius: 10, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                ✓ Aplicar estos macros
-              </button>
-            </div>
-          )}
-        </>}
-
-        <button onClick={() => { save(); setStep(1); }} style={C.btnG}>
-          {profile.enabled ? "Continuar →" : "Saltar al paso de alimentos →"}
-        </button>
       </div>
     </div>
   );
@@ -665,9 +578,8 @@ export default function Nutricion() {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setStep(0)} style={{ ...C.btnS, flex: 1 }}>← Volver</button>
           <button onClick={() => { save(); setStep(2); }} disabled={selected.length < 3}
-            style={{ ...C.btnG, flex: 2, opacity: selected.length < 3 ? .5 : 1 }}>
+            style={{ ...C.btnG, flex: 1, opacity: selected.length < 3 ? .5 : 1 }}>
             {selected.length < 3 ? `Selecciona 3+ (${selected.length}/3)` : `Continuar →`}
           </button>
         </div>
