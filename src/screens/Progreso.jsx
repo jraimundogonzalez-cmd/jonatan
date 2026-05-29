@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useApp } from "../store/AppContext";
 import { byId } from "../data/exercises";
+import { computeProfile } from "../utils/nutrition";
+import { buildSchedule } from "../utils/training";
+import { HOME_DEFAULT, GYM_DEFAULT } from "../utils/ai";
+import { GOALS, ACTIVITY } from "../data/foods";
+import ScrollPicker from "../components/ScrollPicker";
 
 // Body fat estimation (Deurenberg formula)
 function estimateBodyFat(weight, heightCm, age, sex) {
@@ -195,11 +200,215 @@ function WaistChart({ measurements }) {
   );
 }
 
+const GOAL_TO_TRAINING = { definicion: "musculo", ganar: "musculo", mantener: "musculo", perder: "grasa" };
+
+function ProfileEditor({ onClose }) {
+  const { state, setState } = useApp();
+  const p = state.profile || {};
+  const t = state.training || {};
+
+  const [name, setName]     = useState(p.name || "");
+  const [sex, setSex]       = useState(p.sex || "h");
+  const [age, setAge]       = useState(p.age || 28);
+  const [height, setHeight] = useState(p.height || 175);
+  const [weight, setWeight] = useState(p.weight || 80);
+  const [goal, setGoal]     = useState(p.goal || "definicion");
+  const [activity, setActivity] = useState(p.activity || "moderada");
+  const [place, setPlace]   = useState(t.place || "gym");
+  const [days, setDays]     = useState(t.days || 4);
+  const [time, setTime]     = useState(t.time || 60);
+  const [level, setLevel]   = useState(t.level || "inter");
+  const [section, setSection] = useState("perfil");
+
+  const save = () => {
+    const profile = {
+      ...p, enabled: true,
+      name: name.trim() || p.name || "Usuario",
+      sex, age: parseInt(age) || p.age,
+      height: parseInt(height) || p.height,
+      weight, goal, activity,
+    };
+    const computed = computeProfile(profile);
+    const equipment = place === "casa" ? HOME_DEFAULT : GYM_DEFAULT;
+    const newSchedule = buildSchedule({ goal: GOAL_TO_TRAINING[goal] || "musculo", days, time, level, place, equipment });
+    setState(s => ({
+      ...s,
+      profile,
+      nutrition: { ...s.nutrition, macros: computed.macros, targetKcal: computed.targetKcal },
+      training: {
+        ...newSchedule, equipment,
+        // preserve training history
+        done: s.training?.done || [],
+        hist: s.training?.hist || {},
+        streak: s.training?.streak || 0,
+      },
+    }));
+    onClose();
+  };
+
+  const field = (label, children) => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
+      {children}
+    </div>
+  );
+
+  const selBtn = (val, cur, set, label, color = "#a78bfa") => (
+    <button key={val} onClick={() => set(val)}
+      style={{
+        flex: 1, padding: "10px 6px", borderRadius: 10, border: `1.5px solid ${cur === val ? color : "rgba(255,255,255,0.08)"}`,
+        background: cur === val ? `${color}18` : "rgba(255,255,255,0.03)",
+        color: cur === val ? color : "#94a3b8", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer",
+      }}>{label}</button>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#080d08", zIndex: 200, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", paddingTop: "env(safe-area-inset-top)" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#a78bfa", letterSpacing: 2, fontWeight: 500 }}>EDITAR PERFIL</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 20, cursor: "pointer", padding: 4 }}>✕</button>
+      </div>
+
+      {/* Section tabs */}
+      <div style={{ display: "flex", gap: 0, padding: "10px 16px 0", background: "#080d08" }}>
+        {[["perfil","👤 Datos personales"],["entreno","🏋️ Entrenamiento"]].map(([id, label]) => (
+          <button key={id} onClick={() => setSection(id)}
+            style={{
+              flex: 1, padding: "10px 8px", border: "none", borderBottom: `2px solid ${section === id ? "#a78bfa" : "transparent"}`,
+              background: "transparent", color: section === id ? "#a78bfa" : "#475569",
+              fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all .2s",
+            }}>{label}</button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px" }}>
+        {section === "perfil" && (
+          <>
+            {field("Nombre",
+              <input value={name} onChange={e => setName(e.target.value)}
+                style={{ width: "100%", padding: "12px 14px", fontSize: 16, fontWeight: 600, background: "rgba(255,255,255,0.06)", border: "1.5px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#e2e8f0", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+            )}
+            {field("Género",
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["h","♂️ Hombre"],["m","♀️ Mujer"]].map(([v, l]) => selBtn(v, sex, setSex, l))}
+              </div>
+            )}
+            {field("Edad · Altura",
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px 14px" }}>
+                  <input type="number" value={age} onChange={e => setAge(e.target.value)}
+                    style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontFamily: "'DM Mono',monospace", fontSize: 24, fontWeight: 700, color: "#e2e8f0", textAlign: "center" }} />
+                  <div style={{ fontSize: 10, color: "#64748b", textAlign: "center", marginTop: 4 }}>años</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px 14px" }}>
+                  <input type="number" value={height} onChange={e => setHeight(e.target.value)}
+                    style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontFamily: "'DM Mono',monospace", fontSize: 24, fontWeight: 700, color: "#e2e8f0", textAlign: "center" }} />
+                  <div style={{ fontSize: 10, color: "#64748b", textAlign: "center", marginTop: 4 }}>cm</div>
+                </div>
+              </div>
+            )}
+            {field("Peso corporal",
+              <ScrollPicker min={40} max={180} value={weight} onChange={setWeight} unit="kg" />
+            )}
+            {field("Objetivo",
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(GOALS).map(([key, g]) => (
+                  <button key={key} onClick={() => setGoal(key)}
+                    style={{
+                      padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${goal === key ? g.color : "rgba(255,255,255,0.07)"}`,
+                      background: goal === key ? `${g.color}18` : "rgba(255,255,255,0.02)",
+                      fontFamily: "inherit", cursor: "pointer", textAlign: "left",
+                      display: "flex", alignItems: "center", gap: 10,
+                    }}>
+                    <span style={{ fontSize: 20 }}>{g.emoji}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: goal === key ? g.color : "#e2e8f0" }}>{g.label}</span>
+                    {goal === key && <span style={{ marginLeft: "auto", color: g.color }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            {field("Actividad diaria",
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {Object.entries(ACTIVITY).map(([key, a]) => (
+                  <button key={key} onClick={() => setActivity(key)}
+                    style={{
+                      padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${activity === key ? "#a78bfa" : "rgba(255,255,255,0.07)"}`,
+                      background: activity === key ? "rgba(167,139,250,0.08)" : "rgba(255,255,255,0.02)",
+                      fontFamily: "inherit", cursor: "pointer", textAlign: "left",
+                      display: "flex", justifyContent: "space-between",
+                    }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: activity === key ? "#a78bfa" : "#e2e8f0" }}>{a.label}</div>
+                      <div style={{ fontSize: 10, color: "#64748b" }}>{a.desc}</div>
+                    </div>
+                    {activity === key && <span style={{ color: "#a78bfa" }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {section === "entreno" && (
+          <>
+            {field("Lugar",
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["gym","🏋️ Gimnasio"],["casa","🏠 Casa"]].map(([v, l]) => selBtn(v, place, setPlace, l, "#f59e0b"))}
+              </div>
+            )}
+            {field("Días por semana",
+              <div style={{ display: "flex", gap: 8 }}>
+                {[3,4,5,6].map(d => selBtn(d, days, setDays, `${d} días`, "#f59e0b"))}
+              </div>
+            )}
+            {field("Duración por sesión",
+              <div style={{ display: "flex", gap: 8 }}>
+                {[[30,"30 min"],[45,"45 min"],[60,"60 min"],[90,"90 min"]].map(([t, l]) => selBtn(t, time, setTime, l, "#f59e0b"))}
+              </div>
+            )}
+            {field("Nivel de entrenamiento",
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[["ppal","🌱 Principiante"],["inter","📈 Intermedio"],["avz","🔺 Avanzado"]].map(([v, l]) => (
+                  <button key={v} onClick={() => setLevel(v)}
+                    style={{
+                      padding: "14px 16px", borderRadius: 12, border: `1.5px solid ${level === v ? "#f59e0b" : "rgba(255,255,255,0.07)"}`,
+                      background: level === v ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.02)",
+                      fontFamily: "inherit", cursor: "pointer", textAlign: "left",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: level === v ? "#f59e0b" : "#e2e8f0" }}>{l}</span>
+                    {level === v && <span style={{ color: "#f59e0b" }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 12, padding: "12px 14px", marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700, marginBottom: 4 }}>⚠️ Regenerar plan</div>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>Guardar cambios aquí regenerará tu plan de entrenamiento. Tu historial y PRs se conservan.</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Save button */}
+      <div style={{ padding: "12px 16px", paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)", borderTop: "1px solid rgba(255,255,255,0.06)", background: "#080d08" }}>
+        <button onClick={save}
+          style={{ width: "100%", padding: 16, border: "none", borderRadius: 16, background: "#a78bfa", color: "#000", fontFamily: "inherit", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+          Guardar cambios ✓
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Progreso({ onOpenSetup }) {
   const { state, addMeasurement } = useApp();
   const [tab, setTab] = useState("body"); // body | prs | history
   const [showForm, setShowForm] = useState(false);
   const [showPREx, setShowPREx] = useState(null);
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
 
   const measurements = state.progress?.measurements || [];
   const prs = state.progress?.prs || {};
@@ -217,16 +426,15 @@ export default function Progreso({ onOpenSetup }) {
   };
 
   return (
+    <>
     <div style={{ background: "#080d08", minHeight: "100vh" }}>
       <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 16px 10px", position: "sticky", top: 0, background: "#080d08", borderBottom: "1px solid rgba(255,255,255,0.05)", zIndex: 5 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#a78bfa", letterSpacing: 2, fontWeight: 500 }}>PROGRESO</span>
-          {onOpenSetup && (
-            <button onClick={onOpenSetup}
-              style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 10, padding: "6px 12px", fontSize: 11, color: "#a78bfa", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              ⚙️ Configuración
-            </button>
-          )}
+          <button onClick={() => setShowProfileEditor(true)}
+            style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 10, padding: "6px 12px", fontSize: 11, color: "#a78bfa", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            ✏️ Editar perfil
+          </button>
         </div>
       </div>
 
@@ -482,5 +690,7 @@ export default function Progreso({ onOpenSetup }) {
         )}
       </div>
     </div>
+    {showProfileEditor && <ProfileEditor onClose={() => setShowProfileEditor(false)} />}
+    </>
   );
 }
