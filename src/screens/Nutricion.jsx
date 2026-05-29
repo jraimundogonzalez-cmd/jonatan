@@ -206,10 +206,10 @@ export default function Nutricion() {
   const [swapping, setSwapping] = useState(null);
   const [recipe, setRecipe] = useState(null);
   const [showMealAssign, setShowMealAssign] = useState(false);
-  const [mealAssign, setMealAssign] = useState({});   // { mealName: [{foodId, grams}] }
+  const [mealAssign, setMealAssign] = useState(saved.mealAssign || {});
   const [pickingFor, setPickingFor] = useState(null); // meal name currently adding food to
   const [pickSearch, setPickSearch] = useState("");
-  const [mealTargets, setMealTargets] = useState({}); // { mealName: {p, c, f} }
+  const [mealTargets, setMealTargets] = useState(saved.mealTargets || {});
 
   // Clear modal/overlay state when navigating between steps to prevent
   // the RecipeModal fixed overlay from blocking interactions in other steps
@@ -242,7 +242,7 @@ export default function Nutricion() {
         ...s.nutrition,
         macros, targetKcal, meals, selected, allergies,
         priorities, postWorkoutMeal, refeedOn, refeedDays, refeedCarbs,
-        shakeOn, shakeProt, shakeDays, planData, ...extra,
+        shakeOn, shakeProt, shakeDays, planData, mealAssign, mealTargets, ...extra,
       }
     }));
   };
@@ -804,7 +804,7 @@ export default function Nutricion() {
           })}
 
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <button onClick={()=>setShowMealAssign(false)} style={{ ...C.btnS, flex:1 }}>← Volver</button>
+            <button onClick={() => { save(); setShowMealAssign(false); }} style={{ ...C.btnS, flex:1 }}>← Volver</button>
             <button onClick={confirmManualPlan} style={{ ...C.btnG, flex:2 }}>✓ Confirmar plan</button>
           </div>
         </div>
@@ -952,7 +952,7 @@ export default function Nutricion() {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setStep(1)} style={{ ...C.btnS, flex: 1 }}>← Volver</button>
+          <button onClick={() => { save(); setStep(1); }} style={{ ...C.btnS, flex: 1 }}>← Volver</button>
           <button onClick={generate} disabled={loading}
             style={{ ...C.btnG, flex: 2, opacity: loading ? .7 : 1 }}>
             {loading ? "⏳ Generando..." : "✨ Auto-generar"}
@@ -975,8 +975,7 @@ export default function Nutricion() {
                 f: i === n - 1 ? macros.grasas   - baseF * (n - 1) : baseF,
               };
             });
-            setMealTargets(targets);
-            setMealAssign({});
+            setMealTargets(prev => ({ ...targets, ...prev }));
             setShowMealAssign(true);
           }}
           style={{ ...C.btnS, width: "100%", marginTop: 8, borderColor: "rgba(74,222,128,0.3)", color: "#4ade80", fontSize: 13, fontWeight: 700, padding: "12px 20px" }}>
@@ -1023,10 +1022,16 @@ export default function Nutricion() {
 
         {viewTab === "plan" && planData && (
           <>
-            <button onClick={generate} disabled={loading}
-              style={{ ...C.btnS, width: "100%", marginBottom: 14, fontSize: 12 }}>
-              🔄 Regenerar plan
-            </button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <button onClick={() => { setShowMealAssign(true); setStep(2); }}
+                style={{ ...C.btnS, flex: 1, fontSize: 12 }}>
+                ← Editar asignación
+              </button>
+              <button onClick={generate} disabled={loading}
+                style={{ ...C.btnS, flex: 1, fontSize: 12, opacity: loading ? .7 : 1 }}>
+                🔄 Regenerar plan
+              </button>
+            </div>
 
             {/* Feature 7: Nutrición periódica — daily adjustment banner */}
             {(() => {
