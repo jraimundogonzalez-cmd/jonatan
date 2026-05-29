@@ -1656,6 +1656,8 @@ export const FOODS = [
   {id:1632, name:"Cereales Smacks Kellogg's", cat:"cereales", p:7.1, c:81, f:1.6, cal:377},
   {id:1633, name:"Corn Flakes Hacendado", cat:"cereales", p:6.3, c:84, f:1.1, cal:378},
   {id:1634, name:"Aros de Cebolla Rebozados Metro Chef", cat:"snacks", p:0, c:25, f:8.1, cal:188},
+  {id:1635, name:"Fajitas Relleno Pollo Hacendado", cat:"aves", p:8.9, c:7.3, f:0, cal:73},
+  {id:1636, name:"Risotto Microondas Hacendado", cat:"cereales", p:0, c:17, f:7.2, cal:145},
 ];
 
 export const ALLERGIES_OPT = [
