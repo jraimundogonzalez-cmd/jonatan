@@ -85,6 +85,29 @@ export function AppProvider({ children }) {
     });
   }, []);
 
+  // Sync state from localStorage when another tab/window (e.g. Safari opened by
+  // iOS Shortcut) writes to it. The PWA standalone instance never gets the URL
+  // params directly — only the Safari tab does — so cross-tab sync via storage
+  // event is the only reliable way for the PWA to receive the kcal data.
+  useEffect(() => {
+    const syncFromStorage = () => {
+      try {
+        const saved = localStorage.getItem(KEY);
+        if (saved) setStateRaw(prev => ({ ...prev, ...JSON.parse(saved) }));
+      } catch {}
+    };
+    // storage event fires in every OTHER window when localStorage changes
+    const onStorage = (e) => { if (e.key === KEY) syncFromStorage(); };
+    window.addEventListener("storage", onStorage);
+    // Also re-read on visibilitychange in case the app was suspended and missed the event
+    const onVisible = () => { if (document.visibilityState === "visible") syncFromStorage(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   // Daily log helpers
   const today = todayKey();
   const todayLog = state.daily[today] || { trained: null, watchKcal: 0, notes: "" };

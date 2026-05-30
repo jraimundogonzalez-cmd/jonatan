@@ -155,6 +155,7 @@ function Shell() {
   // Detect ?kcal=X injected by iOS Shortcut after workout ends.
   // Runs on mount AND on visibilitychange (PWA resume) so iOS doesn't miss it.
   useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
     const readWatchParams = () => {
       const params = new URLSearchParams(window.location.search);
       const kcal = parseInt(params.get("kcal"), 10);
@@ -166,9 +167,29 @@ function Shell() {
         setWatchBanner({ kcal, type, min });
       }
     };
+    // Check localStorage for kcal written by another tab (Safari opened by iOS Shortcut).
+    // The standalone PWA never receives the URL params when already running, so the
+    // Safari instance writes to localStorage and the PWA picks it up here.
+    const checkStorageKcal = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("fitpro-v1") || "{}");
+        const savedKcal = saved?.daily?.[today]?.watchKcal || 0;
+        const savedType = saved?.daily?.[today]?.watchType || "";
+        const savedMin  = saved?.daily?.[today]?.watchMin  || 0;
+        const currentKcal = state.daily?.[today]?.watchKcal || 0;
+        if (savedKcal > 0 && savedKcal !== currentKcal) {
+          setWatchBanner({ kcal: savedKcal, type: savedType, min: savedMin });
+        }
+      } catch {}
+    };
     readWatchParams();
-    // Re-check when the PWA comes back to foreground (iOS opens URL → app resumes)
-    const onVisible = () => { if (document.visibilityState === "visible") readWatchParams(); };
+    checkStorageKcal();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        readWatchParams();
+        checkStorageKcal();
+      }
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
