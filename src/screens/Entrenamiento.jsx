@@ -84,6 +84,53 @@ function getCoachMessage(sessionName, muscles, rpe) {
   return msg;
 }
 
+// ── Cardio Prescription (science-based post-workout) ──────────────
+function prescribeCardio(rpe, muscles, age, weekHiitCount) {
+  const maxHR = 220 - (age || 30);
+  const isLegDay = muscles.some(m => ["Cuádriceps","Isquios","Glúteos"].some(g => m.includes(g)));
+  const isHighRPE = rpe >= 8;
+  const canHiit = !isHighRPE && !isLegDay && weekHiitCount < 3;
+
+  if (canHiit) {
+    const hiLow  = Math.round(maxHR * 0.85);
+    const hiHigh = Math.round(maxHR * 0.92);
+    const recLow  = Math.round(maxHR * 0.60);
+    const recHigh = Math.round(maxHR * 0.68);
+    return {
+      type: "hiit", emoji: "⚡", name: "HIIT Tabata",
+      totalMin: 25,
+      why: weekHiitCount === 0
+        ? "Fuerza + HIIT = máxima reducción de grasa. Objetivo: 3 sesiones/semana. Primera de esta semana."
+        : `${weekHiitCount}/3 sesiones HIIT completadas esta semana. Mantén el protocolo para maximizar la quema.`,
+      phases: [
+        { name: "Calentamiento", min: 5, bpmLow: recLow, bpmHigh: recHigh, color: "#60a5fa" },
+        { name: "Tabata · 8 rounds", min: 16, bpmLow: hiLow, bpmHigh: hiHigh, color: "#ef4444", note: "20s esfuerzo máximo · 10s descanso · 8 rondas · 4 series" },
+        { name: "Enfriamiento", min: 4, bpmLow: recLow, bpmHigh: recHigh, color: "#4ade80" },
+      ],
+    };
+  }
+
+  const lissMin = isHighRPE ? 20 : 30;
+  const lissLow  = Math.round(maxHR * 0.65);
+  const lissHigh = Math.round(maxHR * 0.72);
+  const why = isHighRPE
+    ? "RPE alto — cardio suave activa la recuperación activa sin estresar el sistema nervioso."
+    : isLegDay
+    ? "Día de pierna — el HIIT interferiría en la recuperación muscular. Zona 2 es la opción óptima hoy."
+    : weekHiitCount >= 3
+    ? "Ya completaste 3 sesiones HIIT esta semana. Zona 2 para consolidar adaptaciones aeróbicas."
+    : "Zona 2 para quemar grasa y mejorar la base aeróbica sin interferir en las ganancias de músculo.";
+
+  return {
+    type: "liss", emoji: "🚶", name: "LISS · Zona 2",
+    totalMin: lissMin,
+    why,
+    phases: [
+      { name: "Zona 2 constante", min: lissMin, bpmLow: lissLow, bpmHigh: lissHigh, color: "#60a5fa" },
+    ],
+  };
+}
+
 // ── Goal Date Card ────────────────────────────────────────────────
 function GoalDateCard({ training, setState }) {
   const [editing, setEditing] = useState(false);
@@ -265,52 +312,133 @@ function RecoveryMap({ daily }) {
   );
 }
 
-// ── Post-Session Modal (RPE + Coach) ──────────────────────────────
-function PostSessionModal({ sessionName, muscles, hasCardio, onDone }) {
+// ── Post-Session Modal (RPE → Cardio Prescription → Coach) ────────
+function PostSessionModal({ sessionName, muscles, onDone }) {
+  const { state } = useApp();
+  const age = state.profile?.age || 30;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const weekStart = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    return d.toISOString().slice(0, 10);
+  })();
+  const weekHiitCount = Object.entries(state.daily || {})
+    .filter(([k]) => k >= weekStart && k < todayStr)
+    .filter(([, v]) => v.training?.cardio?.protocol === "hiit")
+    .length;
+
   const [rpe, setRpe] = useState(7);
-  const [step, setStep] = useState(hasCardio ? "cardio" : "rpe"); // cardio → rpe → coach
+  const [step, setStep] = useState("rpe");
+  const [prescription, setPrescription] = useState(null);
   const [cardioSel, setCardioSel] = useState(null);
-  const [cardioDur, setCardioDur] = useState(20);
+  const [cardioDur, setCardioDur] = useState(25);
   const [cardioSelecting, setCardioSelecting] = useState(null);
+  const [skipCardio, setSkipCardio] = useState(false);
 
   const coachMsg = getCoachMessage(sessionName, muscles, rpe);
+  const rpeColor = rpe <= 4 ? "#4ade80" : rpe <= 6 ? "#f59e0b" : rpe <= 8 ? "#f97316" : "#ef4444";
+  const rpeLabels = ["","Muy fácil","Fácil","Suave","Moderado","Moderado+","Difícil","Difícil+","Muy difícil","Máximo-1","Máximo"];
 
-  const finish = () => onDone({ rpe, cardio: cardioSel ? { id: cardioSel, min: cardioDur } : null });
+  const handleRpeDone = () => {
+    const p = prescribeCardio(rpe, muscles, age, weekHiitCount);
+    setPrescription(p);
+    setCardioDur(p.totalMin);
+    setStep("prescripcion");
+  };
 
-  if (step === "cardio") {
+  const finish = (noCardio) => {
+    onDone({
+      rpe,
+      cardio: (!noCardio && cardioSel) ? { id: cardioSel, min: cardioDur, protocol: prescription?.type } : null,
+    });
+  };
+
+  if (step === "rpe") {
     return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
-        <div style={{ background: "#080d08", border: "1px solid rgba(96,165,250,0.25)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflowY: "auto", padding: "20px 16px 40px" }}>
-          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
-          <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Cardio del día</div>
-          <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>¿Añadir cardio?</h2>
-          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 14px" }}>Hoy es día de cardio · mínimo 20 min</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-            {CARDIO_MENU.map(c => (
-              <div key={c.id} onClick={() => setCardioSelecting(c.id)}
-                style={{ border: `1.5px solid ${cardioSelecting === c.id ? "#60a5fa" : "rgba(255,255,255,0.1)"}`, borderRadius: 14, padding: "12px 10px", cursor: "pointer", background: cardioSelecting === c.id ? "rgba(96,165,250,0.1)" : "rgba(255,255,255,0.025)", textAlign: "center" }}>
-                <div style={{ fontSize: 26, marginBottom: 3 }}>{c.ic}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: cardioSelecting === c.id ? "#93c5fd" : "#e2e8f0" }}>{c.n}</div>
+      <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:250,display:"flex",alignItems:"flex-end" }}>
+        <div style={{ background:"#080d08",border:"1px solid rgba(245,158,11,0.2)",borderRadius:"20px 20px 0 0",width:"100%",padding:"20px 16px 40px" }}>
+          <div style={{ width:36,height:4,background:"rgba(255,255,255,0.15)",borderRadius:9,margin:"0 auto 16px" }} />
+          <div style={{ fontSize:10,color:"#f59e0b",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4 }}>Valoración RPE</div>
+          <h2 style={{ fontSize:19,fontWeight:700,color:"#f1f5f9",margin:"0 0 4px" }}>¿Cómo fue la sesión?</h2>
+          <p style={{ fontSize:12,color:"#64748b",margin:"0 0 20px" }}>Rate of Perceived Exertion · 1 (muy fácil) → 10 (máximo)</p>
+          <div style={{ textAlign:"center",marginBottom:20 }}>
+            <div style={{ fontFamily:"'DM Mono',monospace",fontSize:64,fontWeight:800,color:rpeColor,lineHeight:1 }}>{rpe}</div>
+            <div style={{ fontSize:14,color:rpeColor,fontWeight:600,marginTop:4 }}>{rpeLabels[rpe]}</div>
+          </div>
+          <input type="range" min={1} max={10} value={rpe} onChange={e => setRpe(+e.target.value)}
+            style={{ width:"100%",accentColor:rpeColor,marginBottom:20,height:6 }} />
+          <button onClick={handleRpeDone} style={{ ...C.btnA }}>Ver prescripción de cardio →</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "prescripcion" && prescription) {
+    const hiitMachines = ["bici","eliptica","remoergo","escalera","correr"];
+    const machineList = prescription.type === "hiit"
+      ? CARDIO_MENU.filter(c => hiitMachines.includes(c.id))
+      : CARDIO_MENU;
+    return (
+      <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:250,display:"flex",alignItems:"flex-end" }}>
+        <div style={{ background:"#080d08",border:"1px solid rgba(96,165,250,0.25)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"90vh",overflowY:"auto",padding:"20px 16px 40px" }}>
+          <div style={{ width:36,height:4,background:"rgba(255,255,255,0.15)",borderRadius:9,margin:"0 auto 16px" }} />
+          <div style={{ fontSize:10,color:"#60a5fa",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4 }}>Cardio post-entreno</div>
+          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:6 }}>
+            <span style={{ fontSize:28 }}>{prescription.emoji}</span>
+            <h2 style={{ fontSize:19,fontWeight:700,color:"#f1f5f9",margin:0,flex:1 }}>{prescription.name}</h2>
+            <span style={{ fontFamily:"'DM Mono',monospace",fontSize:22,fontWeight:800,color:"#60a5fa" }}>{cardioDur}m</span>
+          </div>
+          <p style={{ fontSize:12,color:"#94a3b8",margin:"0 0 14px",lineHeight:1.5 }}>{prescription.why}</p>
+
+          {/* Phases */}
+          <div style={{ marginBottom:14 }}>
+            {prescription.phases.map((ph, i) => (
+              <div key={i} style={{ background:`${ph.color}10`,border:`1px solid ${ph.color}30`,borderRadius:12,padding:"11px 14px",marginBottom:8 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5 }}>
+                  <div style={{ fontSize:12,fontWeight:700,color:ph.color }}>{ph.name}</div>
+                  <div style={{ fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:"#f1f5f9" }}>{ph.min} min</div>
+                </div>
+                <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                  <span style={{ fontSize:11,color:"#64748b" }}>FC objetivo:</span>
+                  <span style={{ fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:800,color:ph.color }}>{ph.bpmLow}–{ph.bpmHigh} bpm</span>
+                </div>
+                {ph.note && <div style={{ fontSize:10,color:"#64748b",marginTop:5,lineHeight:1.4 }}>{ph.note}</div>}
               </div>
             ))}
           </div>
-          {cardioSelecting && (
-            <div style={{ marginBottom: 14 }}>
-              <span style={C.lbl}>Duración</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <input type="range" min={20} max={90} value={cardioDur} onChange={e => setCardioDur(+e.target.value)}
-                  style={{ flex: 1, accentColor: "#60a5fa" }} />
-                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#60a5fa", minWidth: 50, textAlign: "right" }}>{cardioDur}m</span>
-              </div>
+
+          {/* Machine selector */}
+          <div style={{ marginBottom:12 }}>
+            <span style={C.lbl}>Máquina</span>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              {machineList.map(c => (
+                <div key={c.id} onClick={() => setCardioSelecting(c.id)}
+                  style={{ border:`1.5px solid ${cardioSelecting===c.id?"#60a5fa":"rgba(255,255,255,0.1)"}`,borderRadius:12,padding:"10px 8px",cursor:"pointer",background:cardioSelecting===c.id?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.025)",textAlign:"center" }}>
+                  <div style={{ fontSize:22,marginBottom:2 }}>{c.ic}</div>
+                  <div style={{ fontSize:10,fontWeight:700,color:cardioSelecting===c.id?"#93c5fd":"#e2e8f0" }}>{c.n}</div>
+                </div>
+              ))}
             </div>
-          )}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { if (cardioSelecting) setCardioSel(cardioSelecting); setStep("rpe"); }}
+          </div>
+
+          {/* Duration */}
+          <div style={{ marginBottom:16 }}>
+            <span style={C.lbl}>Duración</span>
+            <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+              <input type="range" min={prescription.type==="hiit"?20:15} max={60} value={cardioDur} onChange={e => setCardioDur(+e.target.value)}
+                style={{ flex:1,accentColor:"#60a5fa" }} />
+              <span style={{ fontFamily:"'DM Mono',monospace",fontSize:22,fontWeight:700,color:"#60a5fa",minWidth:50,textAlign:"right" }}>{cardioDur}m</span>
+            </div>
+          </div>
+
+          <div style={{ display:"flex",gap:8 }}>
+            <button onClick={() => { if (cardioSelecting) { setCardioSel(cardioSelecting); setSkipCardio(false); } setStep("coach"); }}
               disabled={!cardioSelecting}
-              style={{ ...C.btnA, flex: 2, background: cardioSelecting ? "linear-gradient(135deg,#3b82f6,#1d4ed8)" : "#1e293b", color: cardioSelecting ? "#fff" : "#475569" }}>
-              Añadir {cardioDur} min de cardio
+              style={{ ...C.btnA,flex:2,background:cardioSelecting?"linear-gradient(135deg,#3b82f6,#1d4ed8)":"#1e293b",color:cardioSelecting?"#fff":"#475569" }}>
+              ✅ Confirmar cardio
             </button>
-            <button onClick={() => setStep("rpe")} style={{ flex: 1, background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 11, padding: "13px 8px", fontSize: 12, color: "#64748b", cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={() => { setSkipCardio(true); setStep("coach"); }}
+              style={{ flex:1,background:"none",border:"1px solid rgba(255,255,255,0.1)",borderRadius:11,padding:"13px 8px",fontSize:12,color:"#64748b",cursor:"pointer",fontFamily:"inherit" }}>
               Sin cardio
             </button>
           </div>
@@ -319,67 +447,51 @@ function PostSessionModal({ sessionName, muscles, hasCardio, onDone }) {
     );
   }
 
-  if (step === "rpe") {
-    const rpeColor = rpe <= 4 ? "#4ade80" : rpe <= 6 ? "#f59e0b" : rpe <= 8 ? "#f97316" : "#ef4444";
-    const rpeLabels = ["","Muy fácil","Fácil","Suave","Moderado","Moderado+","Difícil","Difícil+","Muy difícil","Máximo-1","Máximo"];
-    return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
-        <div style={{ background: "#080d08", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "20px 20px 0 0", width: "100%", padding: "20px 16px 40px" }}>
-          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
-          <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Valoración RPE</div>
-          <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>¿Cómo fue la sesión?</h2>
-          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 20px" }}>Rate of Perceived Exertion · 1 (muy fácil) → 10 (máximo)</p>
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 64, fontWeight: 800, color: rpeColor, lineHeight: 1 }}>{rpe}</div>
-            <div style={{ fontSize: 14, color: rpeColor, fontWeight: 600, marginTop: 4 }}>{rpeLabels[rpe]}</div>
-          </div>
-          <input type="range" min={1} max={10} value={rpe} onChange={e => setRpe(+e.target.value)}
-            style={{ width: "100%", accentColor: rpeColor, marginBottom: 20, height: 6 }} />
-          <button onClick={() => setStep("coach")} style={{ ...C.btnA }}>Ver feedback del coach →</button>
-        </div>
-      </div>
-    );
-  }
-
   if (step === "coach") {
-    const cardioInfo = cardioSel ? CARDIO_MENU.find(c => c.id === cardioSel) : null;
+    const cardioInfo = (!skipCardio && cardioSel) ? CARDIO_MENU.find(c => c.id === cardioSel) : null;
     return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 250, display: "flex", alignItems: "flex-end" }}>
-        <div style={{ background: "#080d08", border: "1px solid rgba(167,139,250,0.25)", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "80vh", overflowY: "auto", padding: "20px 16px 40px" }}>
-          <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 9, margin: "0 auto 16px" }} />
-          <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Coach IA</div>
-          <h2 style={{ fontSize: 19, fontWeight: 700, color: "#f1f5f9", margin: "0 0 16px" }}>Análisis post-sesión</h2>
+      <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:250,display:"flex",alignItems:"flex-end" }}>
+        <div style={{ background:"#080d08",border:"1px solid rgba(167,139,250,0.25)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"80vh",overflowY:"auto",padding:"20px 16px 40px" }}>
+          <div style={{ width:36,height:4,background:"rgba(255,255,255,0.15)",borderRadius:9,margin:"0 auto 16px" }} />
+          <div style={{ fontSize:10,color:"#a78bfa",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4 }}>Coach IA</div>
+          <h2 style={{ fontSize:19,fontWeight:700,color:"#f1f5f9",margin:"0 0 16px" }}>Análisis post-sesión</h2>
 
-          <div style={{ padding: "14px", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 14, marginBottom: 14 }}>
-            <div style={{ fontSize: 13, color: "#e2e8f0", lineHeight: 1.65 }}>{coachMsg}</div>
+          <div style={{ padding:"14px",background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:14,marginBottom:14 }}>
+            <div style={{ fontSize:13,color:"#e2e8f0",lineHeight:1.65 }}>{coachMsg}</div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 4 }}>RPE</div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 800, color: rpe >= 8 ? "#ef4444" : rpe >= 6 ? "#f59e0b" : "#4ade80" }}>{rpe}/10</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16 }}>
+            <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:12,padding:"12px",textAlign:"center" }}>
+              <div style={{ fontSize:10,color:"#64748b",fontWeight:700,marginBottom:4 }}>RPE</div>
+              <div style={{ fontFamily:"'DM Mono',monospace",fontSize:28,fontWeight:800,color:rpeColor }}>{rpe}/10</div>
             </div>
-            {cardioInfo && (
-              <div style={{ background: "rgba(96,165,250,0.06)", borderRadius: 12, padding: "12px", textAlign: "center", border: "1px solid rgba(96,165,250,0.15)" }}>
-                <div style={{ fontSize: 10, color: "#60a5fa", fontWeight: 700, marginBottom: 4 }}>Cardio</div>
-                <div style={{ fontSize: 22 }}>{cardioInfo.ic}</div>
-                <div style={{ fontSize: 11, color: "#93c5fd", fontWeight: 700 }}>{cardioDur} min</div>
+            {cardioInfo ? (
+              <div style={{ background:"rgba(96,165,250,0.06)",borderRadius:12,padding:"12px",textAlign:"center",border:"1px solid rgba(96,165,250,0.15)" }}>
+                <div style={{ fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:4 }}>{prescription?.type==="hiit"?"HIIT":"Cardio"}</div>
+                <div style={{ fontSize:22 }}>{cardioInfo.ic}</div>
+                <div style={{ fontSize:11,color:"#93c5fd",fontWeight:700 }}>{cardioDur} min</div>
+              </div>
+            ) : (
+              <div style={{ background:"rgba(255,255,255,0.02)",borderRadius:12,padding:"12px",textAlign:"center" }}>
+                <div style={{ fontSize:10,color:"#64748b",fontWeight:700,marginBottom:4 }}>Cardio</div>
+                <div style={{ fontSize:20 }}>—</div>
+                <div style={{ fontSize:11,color:"#475569" }}>No registrado</div>
               </div>
             )}
           </div>
 
           {muscles.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".08em" }}>Músculos trabajados</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {muscles.slice(0, 8).map((m, i) => (
-                  <span key={i} style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, color: "#fbbf24" }}>{m}</span>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10,color:"#64748b",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:".08em" }}>Músculos trabajados</div>
+              <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                {muscles.slice(0,8).map((m,i) => (
+                  <span key={i} style={{ background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#fbbf24" }}>{m}</span>
                 ))}
               </div>
             </div>
           )}
 
-          <button onClick={finish} style={{ ...C.btnA }}>Finalizar sesión</button>
+          <button onClick={() => finish(skipCardio)} style={{ ...C.btnA }}>Finalizar sesión</button>
         </div>
       </div>
     );
@@ -2031,7 +2143,6 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
         <PostSessionModal
           sessionName={entry.name}
           muscles={[...new Set(plan.flatMap(x => byId(x.id)?.m || []))]}
-          hasCardio={!!entry.hasCardio}
           onDone={(result) => { setShowPost(false); onComplete(result); }}
         />
       )}
@@ -2298,6 +2409,145 @@ function DayDetailModal({ dateStr, daily, onClose }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Weekly Dashboard ──────────────────────────────────────────────
+function WeeklyDashboard({ daily = {}, profile = {} }) {
+  const [expanded, setExpanded] = useState(false);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().slice(0, 10);
+  });
+
+  const trainDays = days.filter(d => !!(daily[d]?.training || daily[d]?.trained));
+  const sessions = trainDays.length;
+  const rpeValues = trainDays.map(d => daily[d]?.training?.rpe).filter(Boolean);
+  const avgRpe = rpeValues.length > 0 ? (rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length).toFixed(1) : null;
+  const hiitSessions = trainDays.filter(d => daily[d]?.training?.cardio?.protocol === "hiit").length;
+  const cardioSessions = trainDays.filter(d => !!daily[d]?.training?.cardio).length;
+
+  const muscleCounts = {};
+  trainDays.forEach(d => {
+    (daily[d]?.training?.muscles || []).forEach(m => {
+      const gKey = MUSCLE_GROUPS.find(g =>
+        (MUSCLE_MAP[g.id] || [g.id]).some(a => m.toLowerCase().includes(a.toLowerCase()))
+      )?.id || m;
+      muscleCounts[gKey] = (muscleCounts[gKey] || 0) + 1;
+    });
+  });
+
+  const getWeeklyInsight = () => {
+    if (sessions === 0) return "Sin entrenos registrados esta semana. Cada sesión cuenta — ¡empieza hoy!";
+    const targetDays = profile?.training?.days || 4;
+    if (hiitSessions >= 3) return `Excelente: ${hiitSessions}/3 sesiones HIIT completadas. Estás en la zona óptima de quema de grasa.`;
+    if (sessions >= targetDays) return `Objetivo de ${targetDays} días cumplido. Respeta el descanso — la recuperación es donde creces.`;
+    if (hiitSessions === 0 && sessions >= 2) return "Añade HIIT post-entreno. El protocolo recomienda 3 sesiones/semana para maximizar la pérdida de grasa.";
+    if (avgRpe && +avgRpe > 8.5) return `RPE promedio alto (${avgRpe}). Considera una sesión de descarga para consolidar las adaptaciones.`;
+    if (avgRpe && +avgRpe < 5 && sessions >= 3) return `RPE promedio bajo (${avgRpe}). Puedes progresar subiendo la carga gradualmente la próxima semana.`;
+    return `${sessions} sesión${sessions !== 1 ? "es" : ""} esta semana${avgRpe ? ` · RPE medio ${avgRpe}` : ""}${cardioSessions > 0 ? ` · ${cardioSessions} con cardio` : ""}. Sigue el plan para alcanzar tu objetivo.`;
+  };
+
+  const rpeColor = avgRpe ? (+avgRpe >= 8 ? "#ef4444" : +avgRpe >= 6 ? "#f59e0b" : "#4ade80") : "#64748b";
+  const WEEK_LABELS = ["L","M","X","J","V","S","D"];
+
+  return (
+    <div style={{ ...C.card, marginBottom: 12 }}>
+      <div onClick={() => setExpanded(e => !e)} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer" }}>
+        <div>
+          <span style={{ ...C.lbl, marginBottom: 4 }}>Esta semana</span>
+          <div style={{ display:"flex",gap:14,alignItems:"center" }}>
+            <span style={{ fontFamily:"'DM Mono',monospace",fontSize:22,fontWeight:800,color:"#f59e0b" }}>{sessions}</span>
+            <span style={{ fontSize:12,color:"#64748b" }}>sesion{sessions!==1?"es":""} entrenadas</span>
+            {avgRpe && <span style={{ fontFamily:"'DM Mono',monospace",fontSize:12,color:rpeColor,fontWeight:700 }}>RPE {avgRpe}</span>}
+            {hiitSessions > 0 && <span style={{ fontSize:11,color:"#ef4444",fontWeight:700 }}>⚡{hiitSessions} HIIT</span>}
+          </div>
+        </div>
+        <span style={{ fontSize:20,color:"#64748b",transform:expanded?"rotate(180deg)":"none",transition:"transform .2s",display:"inline-block" }}>⌄</span>
+      </div>
+
+      {expanded && (
+        <>
+          {/* Coach weekly insight */}
+          <div style={{ background:"rgba(167,139,250,0.07)",border:"1px solid rgba(167,139,250,0.18)",borderRadius:12,padding:"10px 14px",margin:"12px 0 14px" }}>
+            <div style={{ fontSize:9,color:"#a78bfa",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4 }}>Coach semanal</div>
+            <div style={{ fontSize:12,color:"#e2e8f0",lineHeight:1.55 }}>{getWeeklyInsight()}</div>
+          </div>
+
+          {/* Stats */}
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14 }}>
+            <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 6px",textAlign:"center" }}>
+              <div style={{ fontSize:9,color:"#64748b",fontWeight:700,marginBottom:3 }}>SESIONES</div>
+              <div style={{ fontFamily:"'DM Mono',monospace",fontSize:24,fontWeight:800,color:"#f59e0b" }}>{sessions}</div>
+            </div>
+            <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 6px",textAlign:"center" }}>
+              <div style={{ fontSize:9,color:"#64748b",fontWeight:700,marginBottom:3 }}>RPE MEDIO</div>
+              <div style={{ fontFamily:"'DM Mono',monospace",fontSize:24,fontWeight:800,color:rpeColor }}>{avgRpe || "—"}</div>
+            </div>
+            <div style={{ background:"rgba(239,68,68,0.06)",borderRadius:10,padding:"10px 6px",textAlign:"center",border:"1px solid rgba(239,68,68,0.15)" }}>
+              <div style={{ fontSize:9,color:"#ef4444",fontWeight:700,marginBottom:3 }}>HIIT</div>
+              <div style={{ fontFamily:"'DM Mono',monospace",fontSize:24,fontWeight:800,color:"#ef4444" }}>{hiitSessions}/3</div>
+            </div>
+          </div>
+
+          {/* Day timeline */}
+          <div style={{ marginBottom:14 }}>
+            <span style={C.lbl}>Días</span>
+            <div style={{ display:"flex",gap:4 }}>
+              {days.map((d, i) => {
+                const log = daily[d] || {};
+                const hasTrain = !!(log.training || log.trained);
+                const hasCardio = !!log.training?.cardio;
+                const rpeV = log.training?.rpe;
+                const rc = rpeV ? (rpeV >= 8 ? "#ef4444" : rpeV >= 6 ? "#f59e0b" : "#4ade80") : null;
+                const isToday = d === todayStr;
+                const dow = (new Date(d + "T12:00:00").getDay() + 6) % 7;
+                return (
+                  <div key={d} style={{ flex:1,textAlign:"center" }}>
+                    <div style={{ fontSize:9,color:isToday?"#f59e0b":"#475569",fontWeight:isToday?700:400,marginBottom:3 }}>{WEEK_LABELS[dow]}</div>
+                    <div style={{ height:34,borderRadius:8,background:hasTrain?(rc||"#f59e0b")+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${isToday?"rgba(245,158,11,0.5)":hasTrain?(rc||"#f59e0b")+"44":"rgba(255,255,255,0.07)"}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2 }}>
+                      {hasTrain && <div style={{ width:6,height:6,borderRadius:"50%",background:rc||"#f59e0b" }} />}
+                      {hasCardio && <div style={{ width:4,height:4,borderRadius:"50%",background:"#60a5fa" }} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display:"flex",gap:10,marginTop:5,fontSize:9,color:"#475569" }}>
+              <span><span style={{ color:"#f59e0b" }}>●</span> Entreno</span>
+              <span><span style={{ color:"#60a5fa" }}>●</span> Cardio</span>
+            </div>
+          </div>
+
+          {/* Muscle frequency */}
+          {Object.keys(muscleCounts).length > 0 && (
+            <div>
+              <span style={C.lbl}>Frecuencia muscular</span>
+              {Object.entries(muscleCounts).sort(([,a],[,b]) => b - a).slice(0, 6).map(([muscle, count]) => {
+                const vlKey = Object.keys(VOLUME_LANDMARKS).find(k => muscle.toLowerCase().includes(k) || k.includes(muscle.toLowerCase()));
+                const targetFreq = VOLUME_LANDMARKS[vlKey]?.freq || 2;
+                const pct = Math.min(100, (count / Math.max(targetFreq, 1)) * 100);
+                const barColor = count >= targetFreq ? "#4ade80" : count >= 1 ? "#f59e0b" : "#ef4444";
+                return (
+                  <div key={muscle} style={{ marginBottom:7 }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",marginBottom:2 }}>
+                      <span style={{ fontSize:11,color:"#94a3b8" }}>{muscle}</span>
+                      <span style={{ fontSize:11,color:barColor,fontFamily:"'DM Mono',monospace",fontWeight:700 }}>{count}/{targetFreq}×</span>
+                    </div>
+                    <div style={{ height:5,background:"rgba(255,255,255,0.06)",borderRadius:9,overflow:"hidden" }}>
+                      <div style={{ height:"100%",width:`${pct}%`,background:barColor,borderRadius:9 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -2598,6 +2848,9 @@ export default function Entrenamiento({ onNavigate }) {
 
         {/* Goal Date Countdown */}
         <GoalDateCard training={training} setState={setState} />
+
+        {/* Weekly Dashboard */}
+        <WeeklyDashboard daily={state.daily || {}} profile={state.profile} />
 
         {/* Migration notice: old plans don't have abs/cardio flags */}
         {seq.length > 0 && !seq.some(e => e.hasAbs !== undefined) && (
