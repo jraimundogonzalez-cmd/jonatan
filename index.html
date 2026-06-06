@@ -13,6 +13,30 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Writes Apple Watch kcal to localStorage BEFORE React loads.
+         The iOS Shortcut opens a URL like ?kcal=524&type=fuerza&min=49 in Safari.
+         This runs instantly so the data is saved even if Safari closes in <1s. -->
+    <script>
+      (function() {
+        try {
+          var p = new URLSearchParams(location.search);
+          var kcal = parseInt(p.get('kcal'), 10);
+          if (kcal > 0) {
+            var today = new Date().toISOString().slice(0, 10);
+            var data = {};
+            try { data = JSON.parse(localStorage.getItem('fitpro-v1') || '{}'); } catch(e) {}
+            if (!data.daily) data.daily = {};
+            if (!data.daily[today]) data.daily[today] = {};
+            data.daily[today].watchKcal = kcal;
+            data.daily[today].watchType = p.get('type') || '';
+            data.daily[today].watchMin = parseInt(p.get('min'), 10) || 0;
+            data.daily[today].trained = true;
+            localStorage.setItem('fitpro-v1', JSON.stringify(data));
+            history.replaceState({}, '', location.pathname);
+          }
+        } catch(e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

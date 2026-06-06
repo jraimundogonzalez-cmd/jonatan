@@ -1775,6 +1775,7 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const { logPR, state, setState } = useApp();
   const absBlock = entry.hasAbs ? buildAbsBlock(training.level) : [];
   const initialPlan = [...buildSession(entry, training), ...absBlock];
+  const originalPlanRef = useRef(initialPlan);
   const [plan, setPlan] = useState(initialPlan);
   const [showPost, setShowPost] = useState(false);
   const [showWarmUp, setShowWarmUp] = useState(false);
@@ -1782,6 +1783,9 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
   const [extAdded, setExtAdded] = useState(false);
   const [pendingChanges, setPendingChanges] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
+  const [lastDeleted, setLastDeleted] = useState(null); // {idx, ex} for undo
+  const [undoVisible, setUndoVisible] = useState(false);
+  const undoTimerRef = useRef(null);
 
   const isQuadDay = initialPlan.some(x => byId(x.id)?.m?.some(m => /cuádriceps/i.test(m)));
   const hasExtension = plan.some(x => x.id === 'extension_cuadriceps');
@@ -1847,10 +1851,34 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
 
   // Permanently delete exercise from today's session (marks plan as changed)
   const deleteExercise = (idx) => {
+    const removed = plan[idx];
+    setLastDeleted({ idx, ex: removed });
+    setUndoVisible(true);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoVisible(false), 7000);
     setDone(d => d.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
     setPlan(p => p.filter((_, i) => i !== idx));
     setPendingChanges(true);
     setSavedOk(false);
+  };
+
+  const undoDelete = () => {
+    if (!lastDeleted) return;
+    setUndoVisible(false);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const { idx, ex } = lastDeleted;
+    setPlan(p => { const n = [...p]; n.splice(idx, 0, ex); return n; });
+    setDone(d => d.map(i => i >= idx ? i + 1 : i));
+    setLastDeleted(null);
+  };
+
+  const restoreOriginalPlan = () => {
+    if (!window.confirm("¿Restaurar todos los ejercicios originales de esta sesión?")) return;
+    setPlan(originalPlanRef.current);
+    setDone([]);
+    setLastDeleted(null);
+    setUndoVisible(false);
+    setPendingChanges(false);
   };
 
   const addExerciseToSession = (ex) => {
@@ -2058,6 +2086,25 @@ function SessionPlayer({ entry, training, onComplete, onExit }) {
           </div>
         );
       })}
+
+      {/* Undo delete toast */}
+      {undoVisible && lastDeleted && (
+        <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 12, padding: "10px 14px", marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <span style={{ fontSize: 12, color: "#fca5a5" }}>«{byId(lastDeleted.ex?.id)?.n || "Ejercicio"}» borrado</span>
+          <button onClick={undoDelete}
+            style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, color: "#fca5a5", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+            ↺ Deshacer
+          </button>
+        </div>
+      )}
+
+      {/* Restore original plan button */}
+      {plan.filter(x => !x._isAbs).length < originalPlanRef.current.filter(x => !x._isAbs).length && (
+        <button onClick={restoreOriginalPlan}
+          style={{ width: "100%", marginTop: 8, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 11, padding: "10px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", fontFamily: "inherit" }}>
+          ↺ Restaurar sesión original
+        </button>
+      )}
 
       {/* Abs section label */}
       {entry.hasAbs && plan.some(x => x._isAbs) && (
