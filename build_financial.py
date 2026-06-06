@@ -153,7 +153,7 @@ for i, (name, desc) in enumerate(sheets_info):
     c2 = ws0.cell(row=row, column=2, value=desc)
     c2.fill = fill(bg); c2.font = Font(color="212529", size=10, name="Calibri")
     c2.alignment = left(); c2.border = thin_border()
-    ws0.row_dimensions[row].height = 18
+    ws0.row_dimensions[row].height = 35
     row += 1
 
 # Legend
@@ -177,7 +177,7 @@ for hex_bg, hex_fg, txt in legend:
     c = ws0.cell(row=row, column=1, value=txt)
     c.fill = fill(hex_bg); c.font = Font(bold=True, color=hex_fg, size=10, name="Calibri")
     c.alignment = left(); c.border = thin_border()
-    ws0.row_dimensions[row].height = 18
+    ws0.row_dimensions[row].height = 22
     row += 1
 
 # Config info
@@ -205,11 +205,12 @@ for label, val in config_data:
     c2 = ws0.cell(row=row, column=2, value=val)
     c2.fill = fill(bg); c2.font = Font(color="212529", size=10, name="Calibri")
     c2.alignment = left(); c2.border = thin_border()
-    ws0.row_dimensions[row].height = 18
+    ws0.row_dimensions[row].height = 22
     row += 1
 
-set_col_width(ws0, 1, 35)
-set_col_width(ws0, 2, 70)
+set_col_width(ws0, 1, 38)
+set_col_width(ws0, 2, 80)
+ws0.sheet_view.showGridLines = False
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SHEET 2: REGISTRO DE MOVIMIENTOS (created first for references)
@@ -1432,19 +1433,21 @@ components = [
 ]
 
 comp_rows = []
-for i, (name, weight, desc, actual, target) in enumerate(components, row):
+comp_start_row = row
+for comp_idx, (name, weight, desc, actual, target) in enumerate(components):
+    i = comp_start_row + comp_idx
     bg = LGRAY if i % 2 == 0 else WHITE
     data_cell(ws15, i, 1, name, bg, bold=True)
     data_cell(ws15, i, 2, weight, bg, align="center")
     data_cell(ws15, i, 3, desc, bg)
-    # Points formula
-    if i == row:  # Ahorro
+    # Points formula — use comp_idx to identify which component
+    if comp_idx == 0:  # Ahorro
         formula = f"=MIN(20,IFERROR({actual}/{target}*20,0))"
-    elif i == row+1:  # Bankroll
+    elif comp_idx == 1:  # Bankroll
         formula = f"=MIN(20,IFERROR({actual}/{target}*20,0))"
-    elif i == row+2:  # Gastos
+    elif comp_idx == 2:  # Gastos
         formula = f"=IF({actual}<={target},20,MAX(0,20-(({actual}-{target})/{target})*20))"
-    elif i == row+3:  # Patrimonio
+    elif comp_idx == 3:  # Patrimonio (target may be 0, use fixed denominator 5000)
         formula = f"=MIN(20,IFERROR(({actual}-0)/5000*20,0))"
     else:  # Trading
         formula = f"=MIN(20,IFERROR({actual}/{target}*20,0))"
@@ -1453,7 +1456,7 @@ for i, (name, weight, desc, actual, target) in enumerate(components, row):
     c4.fill = fill(bg); c4.font = Font(bold=True, color=NAVY, size=10, name="Calibri")
     c4.number_format = "0.0 \"pts\""; c4.alignment = right(); c4.border = thin_border()
     comp_rows.append(i)
-    row = i + 1
+row = comp_start_row + len(components)
 
 # Total score
 total_row = row
@@ -1674,7 +1677,7 @@ for idx, name in enumerate(sheet_order):
 # Set print areas and final polish
 # ══════════════════════════════════════════════════════════════════════════════
 for ws in wb.worksheets:
-    ws.sheet_view.showGridLines = True
+    ws.sheet_view.showGridLines = ws.title != "GUÍA DE USO"
     # Set print area
     max_row = ws.max_row + 5
     max_col = ws.max_column + 2
