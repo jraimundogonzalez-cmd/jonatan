@@ -1550,7 +1550,7 @@ def kpi_box(ws, start_row, start_col, end_col, title, value_formula, fmt, indica
 kpis = [
     (1, 2, "Ingresos del Mes", "='REGISTRO DE MOVIMIENTOS'!H3", euro_fmt(), TEAL),
     (3, 4, "Gastos Totales", '=SUMIF(\'REGISTRO DE MOVIMIENTOS\'!D3:D1000,"Gasto",\'REGISTRO DE MOVIMIENTOS\'!H3:H1000)', euro_fmt(), RED),
-    (5, 6, "Flujo de Caja", "='PRESUPUESTO MENSUAL'!C3-SUMIF('REGISTRO DE MOVIMIENTOS'!D3:D1000,\"Gasto\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)", euro_fmt(), BLUE),
+    (5, 6, "Flujo de Caja", "='PRESUPUESTO MENSUAL'!D3-SUMIF('REGISTRO DE MOVIMIENTOS'!D3:D1000,\"Gasto\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)", euro_fmt(), BLUE),
     (7, 8, "Ahorro Mensual", "='CONTROL DE AHORRO'!D3", euro_fmt(), GREEN),
     (9, 10, "Ahorro Acumulado", "=MAX('CONTROL DE AHORRO'!E3:E1000)", euro_fmt(), GREEN),
     (11, 12, "Bankroll Capital", "=MAX('CONTROL DE BANKROLL'!E3:E1000)", euro_fmt(), ORANGE),
@@ -1564,9 +1564,9 @@ row = 8
 kpis2 = [
     (1, 2, "Benef. Trading Mes", "=SUM('DASHBOARD DE TRADING'!C3:C1000)", euro_fmt(), ORANGE),
     (3, 4, "Payouts Cobrados", "='CONTROL DE PAYOUTS'!B6", euro_fmt(), ORANGE),
-    (5, 6, "Patrimonio Neto", "='PATRIMONIO NETO'!B21", euro_fmt(), NAVY),
+    (5, 6, "Patrimonio Neto", "='PATRIMONIO NETO'!B20", euro_fmt(), NAVY),
     (7, 8, "ROI Trading %", "=IFERROR(SUM('DASHBOARD DE TRADING'!C3:C1000)/MAX('CONTROL DE BANKROLL'!E3:E1000),0)", pct_fmt(), BLUE),
-    (9, 10, "Score Financiero", "='SCORE DEL TRADER'!D14", "0.0 \"/100\"", GOLD),
+    (9, 10, "Score Financiero", "='SCORE DEL TRADER'!D10", "0.0 \"/100\"", GOLD),
     (11, 12, "Libertad Financiera", "='LIBERTAD FINANCIERA'!B5", pct_fmt(), TEAL),
 ]
 for sc, ec, title, formula, fmt, color in kpis2:
@@ -1584,7 +1584,7 @@ tl_items = [
     ("Ahorro", "=MAX('CONTROL DE AHORRO'!E3:E1000)", euro_fmt(), ">=2000", ">=1000"),
     ("Gastos Fijos", "=SUMIF('REGISTRO DE MOVIMIENTOS'!E3:E1000,\"Vivienda\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)+SUMIF('REGISTRO DE MOVIMIENTOS'!E3:E1000,\"Transporte\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)", euro_fmt(), "<=1575", "<=1700"),
     ("ROI Trading", "=IFERROR(SUM('DASHBOARD DE TRADING'!C3:C1000)/MAX('CONTROL DE BANKROLL'!E3:E1000),0)", pct_fmt(), ">=0.15", ">=0.05"),
-    ("Flujo de Caja", "='PRESUPUESTO MENSUAL'!C3-SUMIF('REGISTRO DE MOVIMIENTOS'!D3:D1000,\"Gasto\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)", euro_fmt(), ">=0", ">=(-200)"),
+    ("Flujo de Caja", "='PRESUPUESTO MENSUAL'!D3-SUMIF('REGISTRO DE MOVIMIENTOS'!D3:D1000,\"Gasto\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)", euro_fmt(), ">=0", ">=(-200)"),
 ]
 
 for col_start, (label, formula, fmt, good, warn) in enumerate(tl_items):
