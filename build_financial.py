@@ -281,8 +281,6 @@ ts2 = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
 table2.tableStyleInfo = ts2
 ws2.add_table(table2)
 
-# Auto filter
-ws2.auto_filter.ref = "A2:J2"
 
 freeze(ws2, "A3")
 widths2 = [13,10,6,10,18,18,35,14,18,30]
@@ -417,7 +415,7 @@ summary_data = [
     ("(-) Bankroll (10%)", f"=-C{row_bankroll}", euro_fmt()),
     ("(-) Ahorro (10%)", f"=-C{row_ahorro}", euro_fmt()),
     ("(-) Caprichos (5%)", f"=-C{row_caprichos}", euro_fmt()),
-    ("= DISPONIBLE RESTANTE", None, euro_fmt()),
+    ("DISPONIBLE RESTANTE", None, euro_fmt()),
     ("% Gastado (fijos/ingreso)", None, pct_fmt()),
     ("Desviación vs presupuesto", None, euro_fmt()),
 ]
@@ -673,8 +671,8 @@ c.alignment = center()
 row += 1
 
 stats = [
-    ("Beneficio mensual (Jun 2026)", "=SUMIF(MONTH(A3:A1000),6,C3:C1000)"),
-    ("Beneficio anual 2026", "=SUMIF(YEAR(A3:A1000),2026,C3:C1000)"),
+    ("Beneficio mensual (Jun 2026)", "=SUMPRODUCT((ISNUMBER(A3:A1000))*(MONTH(IF(ISNUMBER(A3:A1000),A3:A1000,1))=6)*(YEAR(IF(ISNUMBER(A3:A1000),A3:A1000,1))=2026)*(C3:C1000))"),
+    ("Beneficio anual 2026", "=SUMPRODUCT((ISNUMBER(A3:A1000))*(YEAR(IF(ISNUMBER(A3:A1000),A3:A1000,1))=2026)*(C3:C1000))"),
     ("Total payouts recibidos", "=SUM(D3:D1000)"),
     ("ROI % (sobre bankroll 2.000€)", "=IFERROR(SUM(C3:C1000)/2000,0)"),
     ("Mejor mes (max beneficio)", "=IFERROR(MAX(C3:C1000),0)"),
@@ -758,7 +756,7 @@ row = 6
 for label, val in [
     ("Total cobrado", '=SUMIF(D3:D1000,"Cobrado",C3:C1000)'),
     ("Total pendiente", '=SUMIF(D3:D1000,"Pendiente",C3:C1000)'),
-    ("Total anual 2026", "=SUMIF(YEAR(A3:A1000),2026,C3:C1000)"),
+    ("Total anual 2026", "=SUMPRODUCT((ISNUMBER(A3:A1000))*(YEAR(IF(ISNUMBER(A3:A1000),A3:A1000,1))=2026)*(C3:C1000))"),
     ("Total histórico", "=SUM(C3:C1000)"),
 ]:
     c1 = ws7.cell(row=row, column=1, value=label)
