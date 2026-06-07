@@ -193,28 +193,7 @@ for i, h in enumerate(headers2, 1):
     W(ws2, 2, i, h, "col_hdr")
 ws2.row_dimensions[2].height = 20
 
-sample_movimientos = [
-    (date(2026,6,1),  "Junio", 2026, "Ingreso", "Nomina",       "Salario neto",  "Salario neto junio 2026",         2000.00, "Transferencia", "Ingreso mensual regular"),
-    (date(2026,6,1),  "Junio", 2026, "Gasto",   "Vivienda",     "Alquiler",      "Piso alquiler junio",             1000.00, "Transferencia", "Gasto fijo"),
-    (date(2026,6,1),  "Junio", 2026, "Gasto",   "Transporte",   "Coche",         "Cuota coche junio",                450.00, "Domiciliacion", "Gasto fijo"),
-    (date(2026,6,1),  "Junio", 2026, "Gasto",   "Salud/Deporte","Gimnasio",      "Cuota gimnasio junio",              25.00, "Domiciliacion", "Gasto fijo"),
-    (date(2026,6,1),  "Junio", 2026, "Gasto",   "Formacion",    "TraderLab",     "Suscripcion TraderLab junio",      100.00, "Tarjeta",       "Gasto fijo"),
-    (date(2026,6,5),  "Junio", 2026, "Gasto",   "Alimentacion", "Supermercado",  "Compra semanal Mercadona",          85.50, "Tarjeta",       ""),
-    (date(2026,6,10), "Junio", 2026, "Gasto",   "Restaurantes", "Comida fuera",  "Restaurante con familia",           35.00, "Tarjeta",       "Gasto capricho"),
-    (date(2026,6,15), "Junio", 2026, "Ingreso", "Trading",      "Payout",        "Payout FTMO junio",                350.00, "Transferencia", "Beneficios trading"),
-    (date(2026,6,20), "Junio", 2026, "Gasto",   "Ahorro",       "Ahorro mensual","Aportacion ahorro junio",          200.00, "Transferencia", "10% ingreso mensual"),
-    (date(2026,6,20), "Junio", 2026, "Gasto",   "Inversion",    "Bankroll",      "Aportacion bankroll junio",        200.00, "Transferencia", "10% ingreso mensual"),
-]
-
-for i, row_data in enumerate(sample_movimientos, 3):
-    pfx = "alt_" if i % 2 == 0 else "data_"
-    for j, val in enumerate(row_data, 1):
-        sty = pfx + ("c" if j in [1,2,3,4,9] else ("r" if j==8 else "l"))
-        c = W(ws2, i, j, val, sty)
-        if j == 1:
-            c.number_format = FMT_DATE
-        if j == 8:
-            c.number_format = FMT_EUR
+sample_movimientos = []  # Sin datos de ejemplo — el usuario rellena desde cero
 
 # Data validations
 dv_tipo = DataValidation(type="list", formula1='"Ingreso,Gasto"', allow_blank=False)
@@ -232,7 +211,7 @@ dv_met.sqref = "I3:I1000"
 ws2.add_data_validation(dv_met)
 
 # Table (no ws.auto_filter.ref — table handles it)
-table2 = Table(displayName="Movimientos", ref=f"A2:J{len(sample_movimientos)+2}")
+table2 = Table(displayName="Movimientos", ref="A2:J2")
 ts2 = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
                      showLastColumn=False, showRowStripes=True, showColumnStripes=False)
 table2.tableStyleInfo = ts2
@@ -399,15 +378,7 @@ ws4.row_dimensions[1].height = 30
 for i, h in enumerate(["Fecha","Mes","Anio","Cantidad (EUR)","Acumulado (EUR)","Tasa Ahorro %"], 1):
     W(ws4, 2, i, h, "col_hdr")
 
-sample_ahorro = [(date(2026,6,20), "Junio", 2026, 200.00, 2000.00)]
-for i, (dt, mes, anio, cant, acum) in enumerate(sample_ahorro, 3):
-    pfx = "alt_" if i % 2 == 0 else "data_"
-    W(ws4, i, 1, dt,   pfx + "c", FMT_DATE)
-    W(ws4, i, 2, mes,  pfx + "c")
-    W(ws4, i, 3, anio, pfx + "c")
-    W(ws4, i, 4, cant, pfx + "r", FMT_EUR)
-    W(ws4, i, 5, acum, pfx + "r", FMT_EUR)
-    W(ws4, i, 6, f"=D{i}/'PRESUPUESTO MENSUAL'!$D$3", pfx + "r", FMT_PCT)
+# Sin datos de ejemplo — el usuario rellena
 
 # Summary
 r = 6
@@ -523,14 +494,7 @@ ws6.row_dimensions[1].height = 30
 for i, h in enumerate(["Fecha","Cuenta / Plataforma","Beneficio/Perdida (EUR)","Payout Recibido (EUR)","Observaciones"], 1):
     W(ws6, 2, i, h, "col_hdr")
 
-trading_data = [(date(2026,6,15), "FTMO", 350.00, 350.00, "Cuenta 10K - challenge superado")]
-for i, row_data in enumerate(trading_data, 3):
-    pfx = "alt_" if i % 2 == 0 else "data_"
-    W(ws6, i, 1, row_data[0], pfx + "c", FMT_DATE)
-    W(ws6, i, 2, row_data[1], pfx + "c")
-    W(ws6, i, 3, row_data[2], pfx + "r", FMT_EUR)
-    W(ws6, i, 4, row_data[3], pfx + "r", FMT_EUR)
-    W(ws6, i, 5, row_data[4], pfx + "l")
+# Sin datos de ejemplo — el usuario rellena
 
 ws6.conditional_formatting.add("C3:C1000",
     CellIsRule(operator="greaterThan", formula=["0"],
@@ -588,17 +552,7 @@ ws7.row_dimensions[1].height = 30
 for i, h in enumerate(["Fecha","Empresa / Plataforma","Importe (EUR)","Estado","Observaciones"], 1):
     W(ws7, 2, i, h, "col_hdr")
 
-payout_data = [
-    (date(2026,6,15), "FTMO", 350.00, "Cobrado",   "Payout junio 2026"),
-    (date(2026,7,1),  "FTMO", 400.00, "Pendiente", "Payout julio 2026 - estimado"),
-]
-for i, row_data in enumerate(payout_data, 3):
-    pfx = "alt_" if i % 2 == 0 else "data_"
-    W(ws7, i, 1, row_data[0], pfx + "c", FMT_DATE)
-    W(ws7, i, 2, row_data[1], pfx + "c")
-    W(ws7, i, 3, row_data[2], pfx + "r", FMT_EUR)
-    W(ws7, i, 4, row_data[3], pfx + "c")
-    W(ws7, i, 5, row_data[4], pfx + "l")
+# Sin datos de ejemplo — el usuario rellena
 
 ws7.conditional_formatting.add("D3:D1000",
     FormulaRule(formula=['D3="Cobrado"'],   fill=PatternFill("solid", fgColor="C6EFCE")))
@@ -715,14 +669,7 @@ for col, h in enumerate(["Mes","Activos (EUR)","Pasivos (EUR)","Patrimonio Neto 
 r += 1
 
 hist_start = r
-history_data = [("Junio 2026", 2700.00, 0.00)]
-for i, (mes, act, pas) in enumerate(history_data):
-    pfx = "alt_" if i % 2 == 0 else "data_"
-    W(ws8, r, 1, mes, pfx + "l")
-    W(ws8, r, 2, act, pfx + "r", FMT_EUR)
-    W(ws8, r, 3, pas, pfx + "r", FMT_EUR)
-    W(ws8, r, 4, f"=B{r}-C{r}", pfx + "r", FMT_EUR)
-    r += 1
+# Sin datos de ejemplo — el usuario rellena el historial mensual
 
 chart8 = AreaChart()
 chart8.title = "Evolucion del Patrimonio Neto"
@@ -818,10 +765,10 @@ for i, h in enumerate(["Objetivo","Meta Anual (EUR)","Actual (EUR)","Diferencia 
     W(ws10, 2, i, h, "col_hdr")
 
 objetivos = [
-    ("Ahorro anual",           2400.00, 200.00),
-    ("Bankroll anual",         2400.00, 200.00),
-    ("Patrimonio anual",       5000.00, 2700.00),
-    ("Beneficios trading",     4200.00, 350.00),
+    ("Ahorro anual",       2400.00, 0.00),
+    ("Bankroll anual",     2400.00, 0.00),
+    ("Patrimonio anual",   5000.00, 0.00),
+    ("Beneficios trading", 4200.00, 0.00),
 ]
 
 for i, (name, meta, actual) in enumerate(objetivos, 3):
@@ -948,8 +895,8 @@ for rank_title, col_start in rankings:
     for ri in range(5):
         sty = "gold" if ri == 0 else ("alt_l" if ri % 2 == 0 else "data_l")
         W(ws12, 5+ri, col_start,   medals[ri], sty)
-        W(ws12, 5+ri, col_start+1, "Junio 2026" if ri == 0 else "-", sty)
-        W(ws12, 5+ri, col_start+2, 2350.00 if ri == 0 else 0.00, sty, FMT_EUR)
+        W(ws12, 5+ri, col_start+1, "-", sty)
+        W(ws12, 5+ri, col_start+2, 0.00, sty, FMT_EUR)
 
 note_row = 12
 ws12.merge_cells(f"A{note_row}:I{note_row}")
@@ -971,9 +918,9 @@ ws13.row_dimensions[1].height = 30
 r = 3
 lf_data = [
     ("Gastos mensuales fijos",                  1575.00, FMT_EUR),
-    ("Beneficio medio mensual trading (editar)", 350.00, FMT_EUR),
+    ("Beneficio medio mensual trading (editar)", 0.00,   FMT_EUR),
     ("% Cobertura actual",                       "=B4/B3", FMT_PCT),
-    ("Meses con datos de trading",               1,         FMT_INT),
+    ("Meses con datos de trading",               0,         FMT_INT),
 ]
 pct_row_lf = r + 2
 
@@ -1004,7 +951,7 @@ milestones13 = [
     (1.00, "100% - LIBERTAD FINANCIERA: trading cubre todos los gastos"),
 ]
 for pct, desc in milestones13:
-    achieved = 350/1575 >= pct
+    achieved = False  # Sin datos reales aun
     sty = "green" if achieved else "alt_l"
     W(ws13, r, 1, f"{pct*100:.0f}%", sty)
     W(ws13, r, 2, desc, sty)
@@ -1028,7 +975,7 @@ r += 1
 inputs14 = [
     ("Ingreso medio mensual neto",        2000.00, FMT_EUR),
     ("Tasa de ahorro mensual %",          0.10,    FMT_PCT),
-    ("Beneficio medio mensual trading",   350.00,  FMT_EUR),
+    ("Beneficio medio mensual trading",   0.00,    FMT_EUR),
     ("Rentabilidad anual inversion %",    0.05,    FMT_PCT),
     ("Aportacion bankroll mensual",       200.00,  FMT_EUR),
 ]
@@ -1093,11 +1040,11 @@ for col, h in enumerate(["Componente","Peso","Descripcion","Puntos (max 20)"], 1
 r += 1
 
 components = [
-    ("Cumplimiento Ahorro",   "20 pts", "200/2400 = 8.3% completado",  "=MIN(20,IFERROR(200/2400*20,0))"),
-    ("Cumplimiento Bankroll", "20 pts", "200/2400 = 8.3% completado",  "=MIN(20,IFERROR(200/2400*20,0))"),
-    ("Control de Gastos",     "20 pts", "Gastos vs ingreso mensual",   "=IF(1575<=2000,20,MAX(0,20-((1575-2000)/2000)*20))"),
-    ("Crecimiento Patrimonio","20 pts", "2700/5000 objetivo",          "=MIN(20,IFERROR(2700/5000*20,0))"),
-    ("Resultados Trading",    "20 pts", "350/2000 objetivo anual",     "=MIN(20,IFERROR(350/2000*20,0))"),
+    ("Cumplimiento Ahorro",   "20 pts", "Ahorro actual / objetivo anual",       "=MIN(20,IFERROR('CONTROL DE AHORRO'!B7/('PRESUPUESTO MENSUAL'!$D$3*0.10*12)*20,0))"),
+    ("Cumplimiento Bankroll", "20 pts", "Bankroll actual / objetivo anual",     "=MIN(20,IFERROR('CONTROL DE BANKROLL'!B7/('PRESUPUESTO MENSUAL'!$D$3*0.10*12)*20,0))"),
+    ("Control de Gastos",     "20 pts", "Gastos vs ingreso mensual",            "=IFERROR(IF('REGISTRO DE MOVIMIENTOS'!B502<='PRESUPUESTO MENSUAL'!$D$3,20,MAX(0,20-(('REGISTRO DE MOVIMIENTOS'!B502-'PRESUPUESTO MENSUAL'!$D$3)/'PRESUPUESTO MENSUAL'!$D$3)*20)),0)"),
+    ("Crecimiento Patrimonio","20 pts", "Patrimonio actual / objetivo anual",   "=MIN(20,IFERROR('PATRIMONIO NETO'!B20/5000*20,0))"),
+    ("Resultados Trading",    "20 pts", "Benef. trading / objetivo anual",      "=MIN(20,IFERROR('DASHBOARD DE TRADING'!B509/4200*20,0))"),
 ]
 
 comp_start = r
