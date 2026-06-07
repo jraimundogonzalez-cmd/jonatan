@@ -271,30 +271,51 @@ W(ws3, r, 3, f"=SUM(C{fixed_start}:C{fixed_end})", "gold_r", FMT_EUR)
 W(ws3, r, 4, f"=C{r}/$D$3", "gold_r", FMT_PCT)
 r += 1
 
-# Auto distribution
+# ── OPCION C: Importes fijos primero, caprichos sobre sobrante ──────────────
 r += 1
-merge_header(ws3, r, 1, r, 6, "DISTRIBUCION AUTOMATICA (% INGRESO)", "header")
+merge_header(ws3, r, 1, r, 6, "DISTRIBUCION AUTOMATICA - SISTEMA INVERSOR (IMPORTES FIJOS)", "header")
 r += 1
-for col, h in enumerate(["Concepto","% Aplicado","Importe","Objetivo anual","Descripcion"], 1):
+for col, h in enumerate(["Concepto","Importe fijo/mes","Importe","Objetivo anual","Descripcion"], 1):
     W(ws3, r, col, h, "col_hdr")
 r += 1
 
-auto_dist = [
-    ("Bankroll", 0.10, "10% para capital de trading"),
-    ("Ahorro",   0.10, "10% para fondo de ahorro"),
-    ("Caprichos",0.05, "5% para gastos personales"),
-]
+# Ingreso disponible (base real despues de fijos)
+disponible_base_row = r
+W(ws3, r, 1, "Ingreso disponible (tras fijos)", "balt_l")
+W(ws3, r, 3, f"=$D$3-C{total_fixed_row}", "alt_r", FMT_EUR)
+W(ws3, r, 5, "Base real = Ingreso - Gastos fijos", "alt_l")
+r += 1
+
+# Bankroll — importe fijo editable (celda dorada)
 row_bankroll = r
-row_ahorro   = r + 1
-row_caprichos= r + 2
-for i, (name, pct, desc) in enumerate(auto_dist):
-    pfx = "alt_" if i % 2 == 0 else "data_"
-    W(ws3, r, 1, name, "b" + pfx + "l")
-    W(ws3, r, 2, pct,  pfx + "c", FMT_PCT)
-    W(ws3, r, 3, f"=$D$3*B{r}", pfx + "r", FMT_EUR)
-    W(ws3, r, 4, f"=$D$3*B{r}*12", pfx + "r", FMT_EUR)
-    W(ws3, r, 5, desc, pfx + "l")
-    r += 1
+W(ws3, r, 1, "Bankroll (inversion trading)", "bdata_l")
+bk_input = W(ws3, r, 2, 100.00, "input", FMT_EUR)
+bk_input.comment = Comment("Importe fijo minimo para bankroll. Aumentalo en meses buenos.", "Sistema")
+W(ws3, r, 3, f"=B{r}", "data_r", FMT_EUR)
+W(ws3, r, 4, f"=B{r}*12", "data_r", FMT_EUR)
+W(ws3, r, 5, "Fijo minimo garantizado cada mes", "data_l")
+r += 1
+
+# Ahorro — importe fijo editable (celda dorada)
+row_ahorro = r
+W(ws3, r, 1, "Ahorro (fondo personal)", "balt_l")
+ah_input = W(ws3, r, 2, 100.00, "input", FMT_EUR)
+ah_input.comment = Comment("Importe fijo minimo para ahorro. Aumentalo en meses buenos.", "Sistema")
+W(ws3, r, 3, f"=B{r}", "alt_r", FMT_EUR)
+W(ws3, r, 4, f"=B{r}*12", "alt_r", FMT_EUR)
+W(ws3, r, 5, "Fijo minimo garantizado cada mes", "alt_l")
+r += 1
+
+# Caprichos — porcentaje sobre sobrante real
+row_caprichos = r
+W(ws3, r, 1, "Caprichos y ocio (% del sobrante)", "bdata_l")
+cap_input = W(ws3, r, 2, 0.20, "input", FMT_PCT)
+cap_input.comment = Comment("Porcentaje del sobrante real (despues de fijos + bankroll + ahorro).", "Sistema")
+# Sobrante = D3 - fijos - bankroll - ahorro
+W(ws3, r, 3, f"=MAX(0,($D$3-C{total_fixed_row}-B{row_bankroll}-B{row_ahorro})*B{r})", "data_r", FMT_EUR)
+W(ws3, r, 4, f"=C{r}*12", "data_r", FMT_EUR)
+W(ws3, r, 5, "20% del sobrante real del mes", "data_l")
+r += 1
 
 # Summary
 r += 1
@@ -305,11 +326,11 @@ W(ws3, r, 3, "Importe",  "col_hdr")
 r += 1
 
 summary_data = [
-    ("Ingreso neto mensual",     "=$D$3"),
-    ("(-) Total gastos fijos",   f"=-C{total_fixed_row}"),
-    ("(-) Bankroll (10%)",       f"=-C{row_bankroll}"),
-    ("(-) Ahorro (10%)",         f"=-C{row_ahorro}"),
-    ("(-) Caprichos (5%)",       f"=-C{row_caprichos}"),
+    ("Ingreso neto mensual",          "=$D$3"),
+    ("(-) Total gastos fijos",        f"=-C{total_fixed_row}"),
+    ("(-) Bankroll (fijo)",           f"=-C{row_bankroll}"),
+    ("(-) Ahorro (fijo)",             f"=-C{row_ahorro}"),
+    ("(-) Caprichos (% sobrante)",    f"=-C{row_caprichos}"),
 ]
 sum_start = r
 for i, (label, formula) in enumerate(summary_data):
@@ -320,32 +341,64 @@ for i, (label, formula) in enumerate(summary_data):
 
 # DISPONIBLE
 disponible_row = r
-W(ws3, r, 1, "DISPONIBLE RESTANTE", "gold_l")
+W(ws3, r, 1, "DISPONIBLE RESTANTE (reserva flexible)", "gold_l")
 W(ws3, r, 3, f"=SUM(C{sum_start}:C{r-1})", "gold_r", FMT_EUR)
 r += 1
 pct_gastado_row = r
-W(ws3, r, 1, "% Gastado (fijos/ingreso)", "gold_l")
+W(ws3, r, 1, "% Gastado fijos / ingreso", "gold_l")
 W(ws3, r, 3, f"=C{total_fixed_row}/$D$3", "gold_r", FMT_PCT)
 r += 1
-W(ws3, r, 1, "Desviacion vs presupuesto", "gold_l")
-W(ws3, r, 3, f"=$D$3-C{total_fixed_row}", "gold_r", FMT_EUR)
+W(ws3, r, 1, "Total comprometido (fijos+BK+ahorro+cap)", "gold_l")
+W(ws3, r, 3, f"=C{total_fixed_row}+C{row_bankroll}+C{row_ahorro}+C{row_caprichos}", "gold_r", FMT_EUR)
 r += 1
 
-# Progress as percentage text (NO Unicode block chars)
+# Alerta de umbral minimo
 r += 1
 merge_header(ws3, r, 1, r, 6, "ESTADO DEL PRESUPUESTO", "header")
 r += 1
-W(ws3, r, 1, "Progreso gastos fijos:", "balt_l")
+
+# Umbral minimo = fijos + bankroll_min + ahorro_min
+W(ws3, r, 1, "Umbral minimo de ingreso:", "balt_l")
 ws3.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
-c = ws3.cell(row=r, column=2, value=f'=TEXT(C{pct_gastado_row},"0.0%")&" del ingreso en gastos fijos"')
+c = ws3.cell(row=r, column=2,
+    value=f'=TEXT(C{total_fixed_row}+B{row_bankroll}+B{row_ahorro},"#,##0.00")&" EUR (fijos + BK + ahorro)"')
 c.style = "alt_l"
 r += 1
+
+W(ws3, r, 1, "Alerta de ingreso:", "balt_l")
+ws3.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
+c = ws3.cell(row=r, column=2,
+    value=f'=IF($D$3>=(C{total_fixed_row}+B{row_bankroll}+B{row_ahorro}),'
+          f'"OK - Ingresos suficientes para cubrir todos los compromisos",'
+          f'"ATENCION: Ingreso por debajo del umbral minimo - reduce BK o ahorro este mes")')
+c.style = "alt_l"
+r += 1
+
 W(ws3, r, 1, "Disponible restante:", "balt_l")
 ws3.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
-c = ws3.cell(row=r, column=2, value=f'=TEXT(C{disponible_row},"#,##0.00")&" EUR disponibles este mes"')
+c = ws3.cell(row=r, column=2,
+    value=f'=TEXT(C{disponible_row},"#,##0.00")&" EUR de reserva flexible este mes"')
+c.style = "alt_l"
+r += 1
+
+W(ws3, r, 1, "Progreso gastos fijos:", "balt_l")
+ws3.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
+c = ws3.cell(row=r, column=2,
+    value=f'=TEXT(C{pct_gastado_row},"0.0%")&" del ingreso en gastos fijos"')
 c.style = "alt_l"
 
-# Conditional formatting
+# Conditional formatting on disponible_row (verde si >0, rojo si <0)
+ws3.conditional_formatting.add(
+    f"C{disponible_row}",
+    CellIsRule(operator="greaterThan", formula=["0"],
+               fill=PatternFill("solid", fgColor="C6EFCE"))
+)
+ws3.conditional_formatting.add(
+    f"C{disponible_row}",
+    CellIsRule(operator="lessThanOrEqual", formula=["0"],
+               fill=PatternFill("solid", fgColor="FFC7CE"))
+)
+# Conditional formatting on pct_gastado_row
 ws3.conditional_formatting.add(
     f"C{pct_gastado_row}",
     CellIsRule(operator="greaterThan", formula=["1"],
@@ -963,11 +1016,11 @@ merge_header(ws14, r, 1, r, 6, "PARAMETROS DE ENTRADA (edita las celdas doradas)
 r += 1
 
 inputs14 = [
-    ("Ingreso medio mensual neto",        2000.00, FMT_EUR),
-    ("Tasa de ahorro mensual %",          0.10,    FMT_PCT),
-    ("Beneficio medio mensual trading",   0.00,    FMT_EUR),
-    ("Rentabilidad anual inversion %",    0.05,    FMT_PCT),
-    ("Aportacion bankroll mensual",       200.00,  FMT_EUR),
+    ("Ingreso medio mensual neto",         2000.00, FMT_EUR),
+    ("Ahorro fijo mensual (editar)",        100.00,  FMT_EUR),
+    ("Bankroll fijo mensual (editar)",      100.00,  FMT_EUR),
+    ("Beneficio medio mensual trading",     0.00,    FMT_EUR),
+    ("Rentabilidad anual inversion %",      0.05,    FMT_PCT),
 ]
 input_rows = {}
 for label, val, fmt in inputs14:
@@ -977,9 +1030,9 @@ for label, val, fmt in inputs14:
     r += 1
 
 ing_r  = input_rows["Ingreso medio mensual neto"]
-tasa_r = input_rows["Tasa de ahorro mensual %"]
+ah_r   = input_rows["Ahorro fijo mensual (editar)"]
+bk_r   = input_rows["Bankroll fijo mensual (editar)"]
 trd_r  = input_rows["Beneficio medio mensual trading"]
-bk_r   = input_rows["Aportacion bankroll mensual"]
 
 r += 1
 merge_header(ws14, r, 1, r, 6, "TABLA DE PROYECCIONES", "header")
@@ -993,11 +1046,11 @@ proj_start = r
 for yr in range(1, 6):
     pfx = "alt_" if yr % 2 == 0 else "data_"
     W(ws14, r, 1, f"Anio {yr}", "b" + pfx + "l")
-    W(ws14, r, 2, f"=$B${ing_r}*$B${tasa_r}*12*{yr}", pfx + "r", FMT_EUR)
-    W(ws14, r, 3, f"=$B${bk_r}*12*{yr}",               pfx + "r", FMT_EUR)
-    W(ws14, r, 4, f"=B{r}+C{r}",                        pfx + "r", FMT_EUR)
-    W(ws14, r, 5, f"=$B${trd_r}*12*{yr}",               pfx + "r", FMT_EUR)
-    W(ws14, r, 6, f"=IFERROR($B${trd_r}/1575,0)",       pfx + "r", FMT_PCT)
+    W(ws14, r, 2, f"=$B${ah_r}*12*{yr}",          pfx + "r", FMT_EUR)
+    W(ws14, r, 3, f"=$B${bk_r}*12*{yr}",           pfx + "r", FMT_EUR)
+    W(ws14, r, 4, f"=B{r}+C{r}",                   pfx + "r", FMT_EUR)
+    W(ws14, r, 5, f"=$B${trd_r}*12*{yr}",          pfx + "r", FMT_EUR)
+    W(ws14, r, 6, f"=IFERROR($B${trd_r}/1575,0)",  pfx + "r", FMT_PCT)
     r += 1
 
 chart14 = LineChart()
