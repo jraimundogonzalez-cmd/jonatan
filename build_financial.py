@@ -539,23 +539,24 @@ ws6.conditional_formatting.add("C3:C1000",
     CellIsRule(operator="lessThan", formula=["0"],
                fill=PatternFill("solid", fgColor="FFC7CE")))
 
-r = 5
+# Stats placed at row 502 so ranges B3:B500 / C3:C500 never overlap with summary rows
+r = 502
 merge_header(ws6, r, 1, r, 5, "ESTADISTICAS DE TRADING", "header")
 r += 1
 
 stats = [
     ("Beneficio mensual Jun 2026",
-     "=SUMPRODUCT((ISNUMBER(A3:A1000))*(MONTH(IF(ISNUMBER(A3:A1000),A3:A1000,TODAY()))=6)*(YEAR(IF(ISNUMBER(A3:A1000),A3:A1000,TODAY()))=2026)*(C3:C1000))",
+     "=SUMPRODUCT((ISNUMBER(A3:A500))*(MONTH(IF(ISNUMBER(A3:A500),A3:A500,TODAY()))=6)*(YEAR(IF(ISNUMBER(A3:A500),A3:A500,TODAY()))=2026)*(C3:C500))",
      FMT_EUR),
     ("Beneficio anual 2026",
-     "=SUMPRODUCT((ISNUMBER(A3:A1000))*(YEAR(IF(ISNUMBER(A3:A1000),A3:A1000,TODAY()))=2026)*(C3:C1000))",
+     "=SUMPRODUCT((ISNUMBER(A3:A500))*(YEAR(IF(ISNUMBER(A3:A500),A3:A500,TODAY()))=2026)*(C3:C500))",
      FMT_EUR),
-    ("Total payouts recibidos", "=SUM(D3:D1000)", FMT_EUR),
-    ("ROI (sobre bankroll inicial 200 EUR)", "=IFERROR(SUM(C3:C1000)/200,0)", FMT_PCT),
-    ("Mejor resultado individual", "=IFERROR(MAX(C3:C1000),0)", FMT_EUR),
-    ("Peor resultado individual",  "=IFERROR(MIN(C3:C1000),0)", FMT_EUR),
-    ("Beneficio acumulado total",  "=SUM(C3:C1000)", FMT_EUR),
-    ("Numero de entradas",         "=COUNTA(B3:B1000)", FMT_INT),
+    ("Total payouts recibidos", "=SUM(D3:D500)", FMT_EUR),
+    ("ROI (sobre bankroll inicial 200 EUR)", "=IFERROR(SUM(C3:C500)/200,0)", FMT_PCT),
+    ("Mejor resultado individual", "=IFERROR(MAX(C3:C500),0)", FMT_EUR),
+    ("Peor resultado individual",  "=IFERROR(MIN(C3:C500),0)", FMT_EUR),
+    ("Beneficio acumulado total",  "=SUM(C3:C500)", FMT_EUR),
+    ("Numero de entradas",         "=COUNTA(B3:B500)", FMT_INT),
 ]
 for i, (label, formula, fmt) in enumerate(stats):
     pfx = "alt_" if i % 2 == 0 else "data_"
