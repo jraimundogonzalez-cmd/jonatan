@@ -119,6 +119,37 @@ FMT_INT  = '#,##0'
 FMT_SCR  = '0.0'
 FMT_DATE = 'DD/MM/YYYY'
 
+# ── Helpers para formulas que leen REGISTRO DE MOVIMIENTOS ────────────────────
+# Columnas del REGISTRO: A=Fecha  D=Tipo  E=Categoria  H=Importe
+_RA = "'REGISTRO DE MOVIMIENTOS'!$A$3:$A$500"
+_RD = "'REGISTRO DE MOVIMIENTOS'!$D$3:$D$500"
+_RE = "'REGISTRO DE MOVIMIENTOS'!$E$3:$E$500"
+_RH = "'REGISTRO DE MOVIMIENTOS'!$H$3:$H$500"
+
+def reg_sum(tipo=None, cat=None, filtro_mes=True, anio=None):
+    """Genera SUMPRODUCT sobre REGISTRO DE MOVIMIENTOS con filtros opcionales.
+    filtro_mes=True  → filtra por MONTH/YEAR de TODAY() (mes en curso)
+    anio=2026        → filtra por ese año fijo
+    tipo="Gasto"/"Ingreso"  → filtra columna D
+    cat="Supermercado"      → filtra columna E
+    Devuelve string "=SUMPRODUCT(...)" listo para poner en celda Excel.
+    """
+    conds = [f"(ISNUMBER({_RA}))"]
+    if filtro_mes:
+        conds.append(f"(MONTH(IF(ISNUMBER({_RA}),{_RA},TODAY()))=MONTH(TODAY()))")
+        conds.append(f"(YEAR(IF(ISNUMBER({_RA}),{_RA},TODAY()))=YEAR(TODAY()))")
+    if anio:
+        conds.append(f"(YEAR(IF(ISNUMBER({_RA}),{_RA},TODAY()))={anio})")
+    if tipo:
+        conds.append(f'({_RD}="{tipo}")')
+    if cat:
+        if isinstance(cat, list):
+            sub = "+".join(f'({_RE}="{c}")' for c in cat)
+            conds.append(f"(({sub})>0)")
+        else:
+            conds.append(f'({_RE}="{cat}")')
+    return "=SUMPRODUCT(" + "*".join(conds) + f"*({_RH}))"
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SHEET 0: GUIA DE USO
 # ══════════════════════════════════════════════════════════════════════════════
@@ -418,6 +449,56 @@ c = ws3.cell(row=r, column=2,
     value=f'=TEXT(C{pct_gastado_row},"0.0%")&" del ingreso en gastos fijos"')
 c.style = "alt_l"
 
+# ─── SEGUIMIENTO REAL DEL MES ACTUAL ─────────────────────────────────────────
+r += 2
+merge_header(ws3, r, 1, r, 5,
+    "SEGUIMIENTO REAL DEL MES ACTUAL  (actualizado automaticamente desde REGISTRO DE MOVIMIENTOS)",
+    "header")
+ws3.row_dimensions[r].height = 25
+r += 1
+for col, h in enumerate(["Categoria / Concepto", "Presupuestado", "Gastado Real (mes)", "Diferencia", "Estado"], 1):
+    W(ws3, r, col, h, "col_hdr")
+r += 1
+
+seg_items_ws3 = [
+    ("Vivienda/Alquiler",       f"=C{fixed_start}",     "Gasto"),
+    ("Coche/Transporte",        f"=C{fixed_start+1}",   "Gasto"),
+    ("Gasolina",                0.00,                    "Gasto"),
+    ("Supermercado",            0.00,                    "Gasto"),
+    ("Restaurante",             0.00,                    "Gasto"),
+    ("Cafeteria/Bar",           0.00,                    "Gasto"),
+    ("Ocio/Entretenimiento",    0.00,                    "Gasto"),
+    ("Ropa/Calzado",            0.00,                    "Gasto"),
+    ("Farmacia/Salud",          0.00,                    "Gasto"),
+    ("Deporte/Gimnasio",        f"=C{fixed_start+2}",   "Gasto"),
+    ("Formacion/Suscripciones", f"=C{fixed_start+3}",   "Gasto"),
+    ("Ahorro",                  f"=B{row_ahorro}",       "Gasto"),
+    ("Bankroll",                f"=B{row_bankroll}",     "Gasto"),
+    ("Otros",                   0.00,                    "Gasto"),
+]
+for i, (cat, presup, tipo) in enumerate(seg_items_ws3):
+    pfx = "alt_" if i % 2 == 0 else "data_"
+    W(ws3, r, 1, cat,    "b" + pfx + "l")
+    W(ws3, r, 2, presup, pfx + "r", FMT_EUR)
+    W(ws3, r, 3, reg_sum(tipo=tipo, cat=cat, filtro_mes=True), pfx + "r", FMT_EUR)
+    W(ws3, r, 4, f"=B{r}-C{r}", pfx + "r", FMT_EUR)
+    c5 = ws3.cell(row=r, column=5)
+    c5.value = f'=IF(B{r}=0,"Sin limite",IF(C{r}<=B{r},"OK","EXCEDIDO"))'
+    c5.style = pfx + "c"
+    r += 1
+
+W(ws3, r, 1, "TOTAL GASTOS REALES DEL MES", "gold_l")
+W(ws3, r, 3, reg_sum(tipo="Gasto", filtro_mes=True), "gold_r", FMT_EUR)
+W(ws3, r, 4, f"=$D$3-C{r}", "gold_r", FMT_EUR)
+W(ws3, r, 5, f'=IF(C{r}<=$D$3,"Dentro del ingreso","SUPERA EL INGRESO")', "gold_l")
+total_real_row_ws3 = r
+r += 1
+W(ws3, r, 1, "TOTAL INGRESOS REGISTRADOS DEL MES", "balt_l")
+W(ws3, r, 3, reg_sum(tipo="Ingreso", filtro_mes=True), "alt_r", FMT_EUR)
+r += 1
+W(ws3, r, 1, "% del presupuesto ejecutado (gastos / ingreso)", "balt_l")
+W(ws3, r, 3, f"=IFERROR(C{total_real_row_ws3}/$D$3,0)", "alt_r", FMT_PCT)
+
 # Conditional formatting on disponible_row (verde si >0, rojo si <0)
 ws3.conditional_formatting.add(
     f"C{disponible_row}",
@@ -494,6 +575,18 @@ tot_row = r - 3
 
 W(ws4, r, 1, "% Cumplimiento", "balt_l")
 W(ws4, r, 2, f"=IFERROR(B{tot_row}/B{obj_row},0)", "alt_r", FMT_PCT)
+r += 1
+
+# ── Totales automaticos desde REGISTRO DE MOVIMIENTOS ────────────────────────
+merge_header(ws4, r, 1, r, 6, "DESDE REGISTRO DE MOVIMIENTOS (automatico)", "subheader")
+r += 1
+W(ws4, r, 1, "Ahorro registrado este mes", "balt_l")
+W(ws4, r, 2, reg_sum(tipo="Gasto", cat="Ahorro", filtro_mes=True), "alt_r", FMT_EUR)
+W(ws4, r, 3, "Suma entradas Categoria=Ahorro del mes en curso", "alt_l")
+r += 1
+W(ws4, r, 1, "Ahorro registrado en 2026", "bdata_l")
+W(ws4, r, 2, reg_sum(tipo="Gasto", cat="Ahorro", filtro_mes=False, anio=2026), "data_r", FMT_EUR)
+W(ws4, r, 3, "Acumulado anual segun REGISTRO", "data_l")
 
 # Chart
 chart4 = LineChart()
@@ -548,6 +641,18 @@ for i, (label, formula, fmt) in enumerate(bankroll_summary):
 
 W(ws5, r, 1, "% Cumplimiento", "balt_l")
 W(ws5, r, 2, f"=IFERROR(B{bk_tot_row}/B{bk_obj_row},0)", "alt_r", FMT_PCT)
+r += 1
+
+# ── Totales automaticos desde REGISTRO DE MOVIMIENTOS ────────────────────────
+merge_header(ws5, r, 1, r, 5, "DESDE REGISTRO DE MOVIMIENTOS (automatico)", "subheader")
+r += 1
+W(ws5, r, 1, "Bankroll registrado este mes", "balt_l")
+W(ws5, r, 2, reg_sum(tipo="Gasto", cat="Bankroll", filtro_mes=True), "alt_r", FMT_EUR)
+W(ws5, r, 3, "Suma entradas Categoria=Bankroll del mes en curso", "alt_l")
+r += 1
+W(ws5, r, 1, "Bankroll registrado en 2026", "bdata_l")
+W(ws5, r, 2, reg_sum(tipo="Gasto", cat="Bankroll", filtro_mes=False, anio=2026), "data_r", FMT_EUR)
+W(ws5, r, 3, "Acumulado anual segun REGISTRO", "data_l")
 
 # Chart
 chart5 = BarChart()
@@ -845,10 +950,14 @@ for i, h in enumerate(["Objetivo","Meta Anual (EUR)","Actual (EUR)","Diferencia 
     W(ws10, 2, i, h, "col_hdr")
 
 objetivos = [
-    ("Ahorro anual",       2400.00, 0.00),
-    ("Bankroll anual",     2400.00, 0.00),
-    ("Patrimonio anual",   5000.00, 0.00),
-    ("Beneficios trading", 4200.00, 0.00),
+    ("Ahorro anual",       2400.00,
+     reg_sum(tipo="Gasto", cat="Ahorro", filtro_mes=False, anio=2026)),
+    ("Bankroll anual",     2400.00,
+     reg_sum(tipo="Gasto", cat="Bankroll", filtro_mes=False, anio=2026)),
+    ("Patrimonio anual",   5000.00,
+     f"='PATRIMONIO NETO'!B{patrimonio_row}"),
+    ("Beneficios trading", 4200.00,
+     "=SUM('DASHBOARD DE TRADING'!C3:C500)"),
 ]
 
 for i, (name, meta, actual) in enumerate(objetivos, 3):
@@ -938,6 +1047,37 @@ chart11.add_data(data11)
 chart11.set_categories(labels11)
 ws11.add_chart(chart11, "G2")
 
+# ── Seccion automatica desde REGISTRO DE MOVIMIENTOS ─────────────────────────
+r_h = cat_start_row + len(cats_hormiga) + 3  # separacion limpia debajo del resumen manual
+merge_header(ws11, r_h, 1, r_h, 5,
+    "GASTOS DEL MES ACTUAL POR CATEGORIA  (automatico desde REGISTRO DE MOVIMIENTOS)",
+    "subheader")
+r_h += 1
+for col, h in enumerate(["Categoria", "Mes Actual (EUR)", "% Ingreso", "Acumulado 2026 (EUR)", "Limite 5%"], 1):
+    W(ws11, r_h, col, h, "col_hdr")
+r_h += 1
+
+reg_cats_h = [
+    "Supermercado", "Restaurante", "Cafeteria/Bar",
+    "Ocio/Entretenimiento", "Ropa/Calzado", "Electronica/Amazon",
+    "Farmacia/Salud", "Peluqueria/Estetica", "Hogar",
+    "Formacion/Suscripciones", "Software/Apps", "Otros",
+]
+for i, cat in enumerate(reg_cats_h):
+    pfx = "alt_" if i % 2 == 0 else "data_"
+    W(ws11, r_h, 1, cat, "b" + pfx + "l")
+    W(ws11, r_h, 2, reg_sum(tipo="Gasto", cat=cat, filtro_mes=True),               pfx + "r", FMT_EUR)
+    W(ws11, r_h, 3, f"=B{r_h}/'PRESUPUESTO MENSUAL'!$D$3",                         pfx + "r", FMT_PCT)
+    W(ws11, r_h, 4, reg_sum(tipo="Gasto", cat=cat, filtro_mes=False, anio=2026),   pfx + "r", FMT_EUR)
+    ws11.cell(row=r_h, column=5).value = f"=IF(B{r_h}>'PRESUPUESTO MENSUAL'!$D$3*0.05,\"EXCEDIDO\",\"OK\")"
+    ws11.cell(row=r_h, column=5).style = pfx + "c"
+    r_h += 1
+
+W(ws11, r_h, 1, "TOTAL GASTOS VARIABLES DEL MES", "gold_l")
+W(ws11, r_h, 2, reg_sum(tipo="Gasto", filtro_mes=True), "gold_r", FMT_EUR)
+W(ws11, r_h, 3, f"=B{r_h}/'PRESUPUESTO MENSUAL'!$D$3", "gold_r", FMT_PCT)
+W(ws11, r_h, 4, reg_sum(tipo="Gasto", filtro_mes=False, anio=2026), "gold_r", FMT_EUR)
+
 ws11.freeze_panes = "A3"
 for col, w in [(1,13),(2,10),(3,22),(4,28),(5,12),(6,12),(7,14)]:
     set_col_width(ws11, col, w)
@@ -992,7 +1132,9 @@ ws13.row_dimensions[1].height = 30
 r = 3
 lf_data = [
     ("Gastos mensuales fijos",                  1575.00, FMT_EUR),
-    ("Beneficio medio mensual trading (editar)", 0.00,   FMT_EUR),
+    ("Beneficio medio mensual trading (editar)",
+     "=IFERROR(SUM('DASHBOARD DE TRADING'!C3:C500)/MAX(1,COUNTA('DASHBOARD DE TRADING'!A3:A500)),0)",
+     FMT_EUR),
     ("% Cobertura actual",                       "=B4/B3", FMT_PCT),
     ("Meses con datos de trading",               0,         FMT_INT),
 ]
@@ -1206,11 +1348,11 @@ def kpi_box(ws, sr, sc, ec, title, formula, fmt, sty_title="header_sm", sty_val=
 kpis = [
     (1, 2,  "Ingreso del Mes (D3 PRESUPUESTO)",
      "='PRESUPUESTO MENSUAL'!$D$3", FMT_EUR),
-    (3, 4,  "Gastos Totales (Movimientos)",
-     '=SUMIF(\'REGISTRO DE MOVIMIENTOS\'!D3:D1000,"Gasto",\'REGISTRO DE MOVIMIENTOS\'!H3:H1000)',
+    (3, 4,  "Gastos Reales (mes actual)",
+     reg_sum(tipo="Gasto", filtro_mes=True),
      FMT_EUR),
-    (5, 6,  "Flujo de Caja",
-     "='PRESUPUESTO MENSUAL'!$D$3-SUMIF('REGISTRO DE MOVIMIENTOS'!D3:D1000,\"Gasto\",'REGISTRO DE MOVIMIENTOS'!H3:H1000)",
+    (5, 6,  "Flujo de Caja (mes actual)",
+     f"='PRESUPUESTO MENSUAL'!$D$3-({reg_sum(tipo='Gasto', filtro_mes=True)[1:]})",
      FMT_EUR),
     (7, 8,  "Ahorro Mensual",
      "='CONTROL DE AHORRO'!D3", FMT_EUR),
@@ -1224,8 +1366,9 @@ for sc, ec, title, formula, fmt in kpis:
 
 r += 3
 kpis2 = [
-    (1, 2,  "Benef. Trading Mes",
-     "=SUM('DASHBOARD DE TRADING'!C3:C1000)", FMT_EUR),
+    (1, 2,  "Benef. Trading (mes actual)",
+     "=SUMPRODUCT((ISNUMBER('DASHBOARD DE TRADING'!A3:A500))*(MONTH(IF(ISNUMBER('DASHBOARD DE TRADING'!A3:A500),'DASHBOARD DE TRADING'!A3:A500,TODAY()))=MONTH(TODAY()))*(YEAR(IF(ISNUMBER('DASHBOARD DE TRADING'!A3:A500),'DASHBOARD DE TRADING'!A3:A500,TODAY()))=YEAR(TODAY()))*('DASHBOARD DE TRADING'!C3:C500))",
+     FMT_EUR),
     (3, 4,  "Payouts Cobrados",
      '=SUMIF(\'CONTROL DE PAYOUTS\'!D3:D1000,"Cobrado",\'CONTROL DE PAYOUTS\'!C3:C1000)',
      FMT_EUR),
@@ -1267,6 +1410,36 @@ for i, (label, formula) in enumerate(budget_items):
     W(ws1, r, 3, formula, sty_r, FMT_EUR)
     W(ws1, r, 5, f"=C{r}/'PRESUPUESTO MENSUAL'!$D$3", sty_r, FMT_PCT)
     r += 1
+
+r += 1
+merge_header(ws1, r, 1, r, 12, "GASTOS POR CATEGORIA DEL MES ACTUAL (desde REGISTRO)", "subheader")
+ws1.row_dimensions[r].height = 22
+r += 1
+dash_cats = [
+    "Vivienda/Alquiler", "Coche/Transporte", "Gasolina",
+    "Supermercado", "Restaurante", "Cafeteria/Bar",
+    "Ocio/Entretenimiento", "Ropa/Calzado", "Farmacia/Salud",
+    "Formacion/Suscripciones", "Ahorro", "Bankroll",
+]
+cols_per_row = 6
+for idx, cat in enumerate(dash_cats):
+    col_pair_idx = idx % cols_per_row
+    col_start = col_pair_idx * 2 + 1
+    col_end   = col_start + 1
+    if col_pair_idx == 0 and idx > 0:
+        r += 3
+    ws1.merge_cells(start_row=r, start_column=col_start, end_row=r, end_column=col_end)
+    c_t = ws1.cell(row=r, column=col_start, value=cat)
+    c_t.style = "header_sm"
+    ws1.merge_cells(start_row=r+1, start_column=col_start, end_row=r+2, end_column=col_end)
+    c_v = ws1.cell(row=r+1, column=col_start,
+                   value=reg_sum(tipo="Gasto", cat=cat, filtro_mes=True))
+    c_v.style = "data_c"
+    c_v.number_format = FMT_EUR
+    ws1.row_dimensions[r].height   = 18
+    ws1.row_dimensions[r+1].height = 28
+    ws1.row_dimensions[r+2].height = 12
+r += 3
 
 r += 1
 merge_header(ws1, r, 1, r, 12,
