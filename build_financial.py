@@ -439,11 +439,7 @@ ws5.row_dimensions[1].height = 30
 for i, h in enumerate(["Fecha","Mes","Anio","Aporte (EUR)","Capital Acumulado (EUR)"], 1):
     W(ws5, 2, i, h, "col_hdr")
 
-W(ws5, 3, 1, date(2026,6,20), "alt_c", FMT_DATE)
-W(ws5, 3, 2, "Junio",         "alt_c")
-W(ws5, 3, 3, 2026,            "alt_c")
-W(ws5, 3, 4, 200.00,          "alt_r", FMT_EUR)
-W(ws5, 3, 5, 200.00,          "alt_r", FMT_EUR)
+# Sin datos de ejemplo — el usuario rellena
 
 r = 5
 merge_header(ws5, r, 1, r, 5, "RESUMEN", "header")
@@ -608,11 +604,11 @@ for col, h in enumerate(["Concepto","Valor Actual (EUR)","Notas"], 1):
 r += 1
 
 activos = [
-    ("Cuenta Bancaria Corriente", 500.00,  "Saldo en cuenta corriente"),
-    ("Fondo de Ahorro",           2000.00, "Ahorro acumulado"),
-    ("Bankroll Trading",          200.00,  "Capital para trading"),
-    ("Capital en Plataformas",    0.00,    "Fondos en brokers/prop firms"),
-    ("Otros Activos",             0.00,    "Otros activos"),
+    ("Cuenta Bancaria Corriente", 0.00, "Saldo en cuenta corriente"),
+    ("Fondo de Ahorro",           0.00, "Ahorro acumulado"),
+    ("Bankroll Trading",          0.00, "Capital para trading"),
+    ("Capital en Plataformas",    0.00, "Fondos en brokers/prop firms"),
+    ("Otros Activos",             0.00, "Otros activos"),
 ]
 activos_start = r
 for i, (name, val, note) in enumerate(activos):
@@ -814,13 +810,7 @@ dv_hormiga = DataValidation(type="list",
 dv_hormiga.sqref = "C3:C1000"
 ws11.add_data_validation(dv_hormiga)
 
-hormiga_data = [
-    (date(2026,6,10), "Junio", "Restaurantes",      "Restaurante familiar",    35.00),
-    (date(2026,6,12), "Junio", "Amazon",             "Compra Amazon impulsiva", 28.50),
-    (date(2026,6,14), "Junio", "Ocio",               "Cine + palomitas",        18.00),
-    (date(2026,6,18), "Junio", "Suscripciones",      "Netflix",                 13.99),
-    (date(2026,6,22), "Junio", "Compras impulsivas", "Ropa",                    45.00),
-]
+hormiga_data = []  # Sin datos de ejemplo
 
 for i, row_data in enumerate(hormiga_data, 3):
     pfx = "alt_" if i % 2 == 0 else "data_"
@@ -1040,11 +1030,11 @@ for col, h in enumerate(["Componente","Peso","Descripcion","Puntos (max 20)"], 1
 r += 1
 
 components = [
-    ("Cumplimiento Ahorro",   "20 pts", "Ahorro actual / objetivo anual",       "=MIN(20,IFERROR('CONTROL DE AHORRO'!B7/('PRESUPUESTO MENSUAL'!$D$3*0.10*12)*20,0))"),
-    ("Cumplimiento Bankroll", "20 pts", "Bankroll actual / objetivo anual",     "=MIN(20,IFERROR('CONTROL DE BANKROLL'!B7/('PRESUPUESTO MENSUAL'!$D$3*0.10*12)*20,0))"),
-    ("Control de Gastos",     "20 pts", "Gastos vs ingreso mensual",            "=IFERROR(IF('REGISTRO DE MOVIMIENTOS'!B502<='PRESUPUESTO MENSUAL'!$D$3,20,MAX(0,20-(('REGISTRO DE MOVIMIENTOS'!B502-'PRESUPUESTO MENSUAL'!$D$3)/'PRESUPUESTO MENSUAL'!$D$3)*20)),0)"),
-    ("Crecimiento Patrimonio","20 pts", "Patrimonio actual / objetivo anual",   "=MIN(20,IFERROR('PATRIMONIO NETO'!B20/5000*20,0))"),
-    ("Resultados Trading",    "20 pts", "Benef. trading / objetivo anual",      "=MIN(20,IFERROR('DASHBOARD DE TRADING'!B509/4200*20,0))"),
+    ("Cumplimiento Ahorro",   "20 pts", "Actualiza con % cumplimiento ahorro",   0),
+    ("Cumplimiento Bankroll", "20 pts", "Actualiza con % cumplimiento bankroll", 0),
+    ("Control de Gastos",     "20 pts", "Actualiza segun control de gastos",     0),
+    ("Crecimiento Patrimonio","20 pts", "Actualiza con crecimiento patrimonio",  0),
+    ("Resultados Trading",    "20 pts", "Actualiza con resultados de trading",   0),
 ]
 
 comp_start = r
