@@ -63,6 +63,28 @@ wb.remove(wb.active)
 for s in STYLES.values():
     wb.add_named_style(s)
 
+# ── Hoja oculta de listas (dropdowns con mas de 255 chars) ────────────────────
+ws_listas = wb.create_sheet(title="_LISTAS")
+ws_listas.sheet_state = "hidden"
+
+categorias = [
+    "Nomina", "Trading/Payout", "Otro ingreso",
+    "Vivienda/Alquiler", "Coche/Transporte", "Gasolina", "Parking",
+    "Supermercado", "Restaurante", "Cafeteria/Bar",
+    "Peluqueria/Estetica", "Farmacia/Salud", "Deporte/Gimnasio",
+    "Ropa/Calzado", "Electronica/Amazon", "Hogar",
+    "Ocio/Entretenimiento", "Viajes/Vacaciones",
+    "Formacion/Suscripciones", "TraderLab", "Software/Apps",
+    "Ahorro", "Bankroll", "Transferencia", "Otros",
+]
+for i, cat in enumerate(categorias, 1):
+    ws_listas.cell(row=i, column=1, value=cat)
+
+# Nombre definido que apunta al rango de categorias
+from openpyxl.workbook.defined_name import DefinedName
+cat_range = f"_LISTAS!$A$1:$A${len(categorias)}"
+wb.defined_names["ListaCategorias"] = DefinedName("ListaCategorias", attr_text=cat_range)
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def add_sheet(wb, title, tab_color="1F2D3D"):
     ws = wb.create_sheet(title=title)
@@ -210,16 +232,7 @@ dv_tipo = DataValidation(type="list", formula1='"Ingreso,Gasto"', allow_blank=Tr
 dv_tipo.sqref = "D3:D1000"
 ws2.add_data_validation(dv_tipo)
 
-# Categorias ampliadas y organizadas por tipo de gasto
-cats = ("Nomina,Trading/Payout,Otro ingreso,"
-        "Vivienda/Alquiler,Coche/Transporte,Gasolina,Parking,"
-        "Supermercado,Restaurante,Cafeteria/Bar,"
-        "Peluqueria/Estetica,Farmacia/Salud,Deporte/Gimnasio,"
-        "Ropa/Calzado,Electronica/Amazon,Hogar,"
-        "Ocio/Entretenimiento,Viajes/Vacaciones,"
-        "Formacion/Suscripciones,TraderLab,Software/Apps,"
-        "Ahorro,Bankroll,Transferencia,Otros")
-dv_cat = DataValidation(type="list", formula1=f'"{cats}"', allow_blank=True)
+dv_cat = DataValidation(type="list", formula1="ListaCategorias", allow_blank=True)
 dv_cat.sqref = "E3:E1000"
 ws2.add_data_validation(dv_cat)
 
