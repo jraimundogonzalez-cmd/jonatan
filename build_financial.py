@@ -210,12 +210,8 @@ dv_met = DataValidation(type="list", formula1=f'"{metodos}"', allow_blank=True)
 dv_met.sqref = "I3:I1000"
 ws2.add_data_validation(dv_met)
 
-# Table (no ws.auto_filter.ref — table handles it)
-table2 = Table(displayName="Movimientos", ref="A2:J2")
-ts2 = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
-                     showLastColumn=False, showRowStripes=True, showColumnStripes=False)
-table2.tableStyleInfo = ts2
-ws2.add_table(table2)
+# Autofilter directo en la fila de cabecera (sin Table — tabla vacía causa error de reparación en Excel)
+ws2.auto_filter.ref = "A2:J2"
 
 ws2.freeze_panes = "A3"
 widths2 = [13, 10, 6, 10, 18, 18, 35, 14, 18, 30]
