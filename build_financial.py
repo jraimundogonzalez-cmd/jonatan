@@ -241,28 +241,32 @@ ws2 = add_sheet(wb, "REGISTRO DE MOVIMIENTOS", "808080")
 merge_header(ws2, 1, 1, 1, 10, "REGISTRO DE MOVIMIENTOS - SISTEMA FINANCIERO 2026", "header")
 ws2.row_dimensions[1].height = 30
 
-headers2 = ["Fecha","Mes (auto)","Anio (auto)","Tipo","Categoria","Subcategoria","Descripcion","Importe","Metodo de Pago","Comentarios"]
+headers2 = ["Fecha","Mes (auto)","Anio (auto)","Tipo (auto)","Categoria","Subcategoria","Descripcion","Importe","Metodo de Pago","Comentarios"]
 for i, h in enumerate(headers2, 1):
     W(ws2, 2, i, h, "col_hdr")
 ws2.row_dimensions[2].height = 20
 
-# Pre-populate Mes y Anio con formulas auto desde Fecha (filas 3-300)
-# El usuario solo introduce Fecha — Mes y Anio se calculan solos
+# Pre-populate Mes, Anio y Tipo con formulas auto desde Fecha/Categoria (filas 3-300)
+# El usuario solo introduce: Fecha, Categoria, Descripcion, Importe, Metodo de Pago
+# Mes, Anio y Tipo (Ingreso/Gasto) se calculan solos
 for fila in range(3, 301):
+    sty = "alt_c" if fila % 2 == 0 else "data_c"
     c_mes  = ws2.cell(row=fila, column=2)
     c_anio = ws2.cell(row=fila, column=3)
+    c_tipo = ws2.cell(row=fila, column=4)
     c_mes.value  = f'=IF(A{fila}="","",TEXT(A{fila},"MMMM"))'
     c_anio.value = f'=IF(A{fila}="","",YEAR(A{fila}))'
-    c_mes.style  = "alt_c" if fila % 2 == 0 else "data_c"
-    c_anio.style = "alt_c" if fila % 2 == 0 else "data_c"
+    c_tipo.value = (
+        f'=IF(A{fila}="","",IF(OR(E{fila}="Nomina",E{fila}="Trading/Payout",'
+        f'E{fila}="Otro ingreso"),"Ingreso","Gasto"))'
+    )
+    c_mes.style  = sty
+    c_anio.style = sty
+    c_tipo.style = sty
 
 sample_movimientos = []  # Sin datos de ejemplo — el usuario rellena desde cero
 
-# Data validations
-dv_tipo = DataValidation(type="list", formula1='"Ingreso,Gasto"', allow_blank=True)
-dv_tipo.sqref = "D3:D1000"
-ws2.add_data_validation(dv_tipo)
-
+# Data validations — Tipo ya es automatico, no necesita dropdown
 dv_cat = DataValidation(type="list", formula1="ListaCategorias", allow_blank=True)
 dv_cat.sqref = "E3:E1000"
 ws2.add_data_validation(dv_cat)
@@ -456,36 +460,67 @@ merge_header(ws3, r, 1, r, 5,
     "header")
 ws3.row_dimensions[r].height = 25
 r += 1
-for col, h in enumerate(["Categoria / Concepto", "Presupuestado", "Gastado Real (mes)", "Diferencia", "Estado"], 1):
+merge_header(ws3, r, 1, r, 5,
+    ">>> Las celdas DORADAS son editables: cambia el limite mensual de cada categoria <<<",
+    "gold")
+ws3.row_dimensions[r].height = 18
+r += 1
+for col, h in enumerate(["Categoria / Concepto", "Limite Mensual (edita doradas)", "Gastado Real (mes)", "Diferencia", "Estado"], 1):
     W(ws3, r, col, h, "col_hdr")
 r += 1
 
+# (categoria, limite_mensual, editable)
+# editable=True  → celda dorada que el usuario edita a su gusto
+# editable=False → referencia automatica al presupuesto fijo
 seg_items_ws3 = [
-    ("Vivienda/Alquiler",       f"=C{fixed_start}",     "Gasto"),
-    ("Coche/Transporte",        f"=C{fixed_start+1}",   "Gasto"),
-    ("Gasolina",                0.00,                    "Gasto"),
-    ("Supermercado",            0.00,                    "Gasto"),
-    ("Restaurante",             0.00,                    "Gasto"),
-    ("Cafeteria/Bar",           0.00,                    "Gasto"),
-    ("Ocio/Entretenimiento",    0.00,                    "Gasto"),
-    ("Ropa/Calzado",            0.00,                    "Gasto"),
-    ("Farmacia/Salud",          0.00,                    "Gasto"),
-    ("Deporte/Gimnasio",        f"=C{fixed_start+2}",   "Gasto"),
-    ("Formacion/Suscripciones", f"=C{fixed_start+3}",   "Gasto"),
-    ("Ahorro",                  f"=B{row_ahorro}",       "Gasto"),
-    ("Bankroll",                f"=B{row_bankroll}",     "Gasto"),
-    ("Otros",                   0.00,                    "Gasto"),
+    ("Vivienda/Alquiler",       f"=C{fixed_start}",    False),
+    ("Coche/Transporte",        f"=C{fixed_start+1}",  False),
+    ("Gasolina",                80.00,                  True),
+    ("Supermercado",            200.00,                 True),
+    ("Restaurante",             100.00,                 True),
+    ("Cafeteria/Bar",           40.00,                  True),
+    ("Ocio/Entretenimiento",    80.00,                  True),
+    ("Ropa/Calzado",            60.00,                  True),
+    ("Farmacia/Salud",          40.00,                  True),
+    ("Deporte/Gimnasio",        f"=C{fixed_start+2}",  False),
+    ("Formacion/Suscripciones", f"=C{fixed_start+3}",  False),
+    ("Ahorro",                  f"=B{row_ahorro}",      False),
+    ("Bankroll",                f"=B{row_bankroll}",    False),
+    ("Otros",                   50.00,                  True),
 ]
-for i, (cat, presup, tipo) in enumerate(seg_items_ws3):
+
+seg_start_row = r
+for i, (cat, presup, editable) in enumerate(seg_items_ws3):
     pfx = "alt_" if i % 2 == 0 else "data_"
-    W(ws3, r, 1, cat,    "b" + pfx + "l")
-    W(ws3, r, 2, presup, pfx + "r", FMT_EUR)
-    W(ws3, r, 3, reg_sum(tipo=tipo, cat=cat, filtro_mes=True), pfx + "r", FMT_EUR)
+    W(ws3, r, 1, cat, "b" + pfx + "l")
+    # Limite: dorado si editable, referencia fija si no
+    W(ws3, r, 2, presup, "input" if editable else (pfx + "r"), FMT_EUR)
+    # Gastado real: suma por categoria (Tipo auto-rellena en REGISTRO)
+    W(ws3, r, 3, reg_sum(cat=cat, filtro_mes=True), pfx + "r", FMT_EUR)
     W(ws3, r, 4, f"=B{r}-C{r}", pfx + "r", FMT_EUR)
     c5 = ws3.cell(row=r, column=5)
-    c5.value = f'=IF(B{r}=0,"Sin limite",IF(C{r}<=B{r},"OK","EXCEDIDO"))'
+    c5.value = f'=IF(B{r}=0,"Sin limite",IF(C{r}<=B{r}*0.8,"OK",IF(C{r}<=B{r},"AVISO","EXCEDIDO")))'
     c5.style = pfx + "c"
     r += 1
+seg_end_row = r - 1
+
+# ── Semaforo de colores: verde / amarillo / rojo ──────────────────────────────
+seg_range = f"A{seg_start_row}:E{seg_end_row}"
+# Rojo: gasto supera el limite
+ws3.conditional_formatting.add(seg_range, FormulaRule(
+    formula=[f"AND($B{seg_start_row}>0,$C{seg_start_row}>$B{seg_start_row})"],
+    fill=PatternFill("solid", fgColor="FFC7CE")
+))
+# Amarillo: entre 80% y 100% del limite
+ws3.conditional_formatting.add(seg_range, FormulaRule(
+    formula=[f"AND($B{seg_start_row}>0,$C{seg_start_row}>$B{seg_start_row}*0.8,$C{seg_start_row}<=$B{seg_start_row})"],
+    fill=PatternFill("solid", fgColor="FFEB9C")
+))
+# Verde claro: gasto registrado y por debajo del 80% del limite
+ws3.conditional_formatting.add(seg_range, FormulaRule(
+    formula=[f"AND($B{seg_start_row}>0,$C{seg_start_row}>0,$C{seg_start_row}<=$B{seg_start_row}*0.8)"],
+    fill=PatternFill("solid", fgColor="C6EFCE")
+))
 
 W(ws3, r, 1, "TOTAL GASTOS REALES DEL MES", "gold_l")
 W(ws3, r, 3, reg_sum(tipo="Gasto", filtro_mes=True), "gold_r", FMT_EUR)
