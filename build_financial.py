@@ -888,8 +888,8 @@ for i, row_data in enumerate(hormiga_data, 3):
     # Fix the formula to use single quotes properly
     ws11.cell(row=i, column=7).value = f"=IF(E{i}/'PRESUPUESTO MENSUAL'!$D$3>0.05,\"ALERTA\",\"OK\")"
 
-# Category summary
-r = 10
+# Category summary — placed at row 502 so SUMIF(C3:C500) never overlaps with summary rows
+r = 502
 merge_header(ws11, r, 1, r, 7, "RESUMEN POR CATEGORIA - JUNIO 2026", "header")
 r += 1
 for col, h in enumerate(["Categoria","Total Mes (EUR)","% Ingreso","Limite 5%","Estado"], 1):
@@ -901,10 +901,9 @@ cat_start_row = r
 for i, cat in enumerate(cats_hormiga):
     pfx = "alt_" if i % 2 == 0 else "data_"
     W(ws11, r, 1, cat, "b" + pfx + "l")
-    W(ws11, r, 2, f"=SUMIF(C3:C100,A{r},E3:E100)", pfx + "r", FMT_EUR)
+    W(ws11, r, 2, f"=SUMIF($C$3:$C$500,$A{r},$E$3:$E$500)", pfx + "r", FMT_EUR)
     W(ws11, r, 3, f"=B{r}/'PRESUPUESTO MENSUAL'!$D$3", pfx + "r", FMT_PCT)
     W(ws11, r, 4, "5% limite", pfx + "c")
-    W(ws11, r, 5, f'=IF(B{r}>"PRESUPUESTO MENSUAL"!$D$3*0.05,"EXCEDIDO","OK")', pfx + "c")
     ws11.cell(row=r, column=5).value = f"=IF(B{r}>'PRESUPUESTO MENSUAL'!$D$3*0.05,\"EXCEDIDO\",\"OK\")"
     r += 1
 
