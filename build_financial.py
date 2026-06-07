@@ -336,10 +336,14 @@ r += 1
 merge_header(ws3, r, 1, r, 6, "ESTADO DEL PRESUPUESTO", "header")
 r += 1
 W(ws3, r, 1, "Progreso gastos fijos:", "balt_l")
-W(ws3, r, 2, f'=TEXT(C{pct_gastado_row},"0.0%")&" del ingreso en gastos fijos"', "alt_l")
+ws3.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
+c = ws3.cell(row=r, column=2, value=f'=TEXT(C{pct_gastado_row},"0.0%")&" del ingreso en gastos fijos"')
+c.style = "alt_l"
 r += 1
 W(ws3, r, 1, "Disponible restante:", "balt_l")
-W(ws3, r, 2, f'=TEXT(C{disponible_row},"#,##0.00")&" EUR disponibles este mes"', "alt_l")
+ws3.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
+c = ws3.cell(row=r, column=2, value=f'=TEXT(C{disponible_row},"#,##0.00")&" EUR disponibles este mes"')
+c.style = "alt_l"
 
 # Conditional formatting
 ws3.conditional_formatting.add(
