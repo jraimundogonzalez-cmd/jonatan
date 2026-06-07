@@ -188,19 +188,37 @@ ws2 = add_sheet(wb, "REGISTRO DE MOVIMIENTOS", "808080")
 merge_header(ws2, 1, 1, 1, 10, "REGISTRO DE MOVIMIENTOS - SISTEMA FINANCIERO 2026", "header")
 ws2.row_dimensions[1].height = 30
 
-headers2 = ["Fecha","Mes","Anio","Tipo","Categoria","Subcategoria","Descripcion","Importe","Metodo de Pago","Comentarios"]
+headers2 = ["Fecha","Mes (auto)","Anio (auto)","Tipo","Categoria","Subcategoria","Descripcion","Importe","Metodo de Pago","Comentarios"]
 for i, h in enumerate(headers2, 1):
     W(ws2, 2, i, h, "col_hdr")
 ws2.row_dimensions[2].height = 20
 
+# Pre-populate Mes y Anio con formulas auto desde Fecha (filas 3-300)
+# El usuario solo introduce Fecha — Mes y Anio se calculan solos
+for fila in range(3, 301):
+    c_mes  = ws2.cell(row=fila, column=2)
+    c_anio = ws2.cell(row=fila, column=3)
+    c_mes.value  = f'=IF(A{fila}="","",TEXT(A{fila},"MMMM"))'
+    c_anio.value = f'=IF(A{fila}="","",YEAR(A{fila}))'
+    c_mes.style  = "alt_c" if fila % 2 == 0 else "data_c"
+    c_anio.style = "alt_c" if fila % 2 == 0 else "data_c"
+
 sample_movimientos = []  # Sin datos de ejemplo — el usuario rellena desde cero
 
 # Data validations
-dv_tipo = DataValidation(type="list", formula1='"Ingreso,Gasto"', allow_blank=False)
+dv_tipo = DataValidation(type="list", formula1='"Ingreso,Gasto"', allow_blank=True)
 dv_tipo.sqref = "D3:D1000"
 ws2.add_data_validation(dv_tipo)
 
-cats = "Nomina,Vivienda,Transporte,Salud/Deporte,Formacion,Alimentacion,Restaurantes,Trading,Ahorro,Inversion,Ocio,Suscripciones,Amazon,Compras,Otros"
+# Categorias ampliadas y organizadas por tipo de gasto
+cats = ("Nomina,Trading/Payout,Otro ingreso,"
+        "Vivienda/Alquiler,Coche/Transporte,Gasolina,Parking,"
+        "Supermercado,Restaurante,Cafeteria/Bar,"
+        "Peluqueria/Estetica,Farmacia/Salud,Deporte/Gimnasio,"
+        "Ropa/Calzado,Electronica/Amazon,Hogar,"
+        "Ocio/Entretenimiento,Viajes/Vacaciones,"
+        "Formacion/Suscripciones,TraderLab,Software/Apps,"
+        "Ahorro,Bankroll,Transferencia,Otros")
 dv_cat = DataValidation(type="list", formula1=f'"{cats}"', allow_blank=True)
 dv_cat.sqref = "E3:E1000"
 ws2.add_data_validation(dv_cat)
@@ -1222,12 +1240,11 @@ r += 1
 
 budget_items = [
     ("Ingreso Neto (PRESUPUESTO MENSUAL D3)", "='PRESUPUESTO MENSUAL'!$D$3"),
-    ("Gastos Fijos",                          "=1575"),
-    ("Bankroll (10%)",                        "='PRESUPUESTO MENSUAL'!$D$3*0.1"),
-    ("Ahorro (10%)",                          "='PRESUPUESTO MENSUAL'!$D$3*0.1"),
-    ("Caprichos (5%)",                        "='PRESUPUESTO MENSUAL'!$D$3*0.05"),
-    ("DISPONIBLE",
-     "='PRESUPUESTO MENSUAL'!$D$3-1575-'PRESUPUESTO MENSUAL'!$D$3*0.25"),
+    ("Gastos Fijos",                          f"='PRESUPUESTO MENSUAL'!$C${total_fixed_row}"),
+    ("Bankroll (fijo)",                       f"='PRESUPUESTO MENSUAL'!$C${row_bankroll}"),
+    ("Ahorro (fijo)",                         f"='PRESUPUESTO MENSUAL'!$C${row_ahorro}"),
+    ("Caprichos",                             f"='PRESUPUESTO MENSUAL'!$C${row_caprichos}"),
+    ("DISPONIBLE",                            f"='PRESUPUESTO MENSUAL'!$C${disponible_row}"),
 ]
 for i, (label, formula) in enumerate(budget_items):
     pfx = "alt_" if i % 2 == 0 else "data_"
