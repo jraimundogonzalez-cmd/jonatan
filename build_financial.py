@@ -128,16 +128,18 @@ _RH = "'REGISTRO DE MOVIMIENTOS'!$H$3:$H$500"
 
 def reg_sum(tipo=None, cat=None, filtro_mes=True, anio=None):
     """Genera SUMPRODUCT sobre REGISTRO DE MOVIMIENTOS con filtros opcionales.
-    filtro_mes=True  → filtra por MONTH/YEAR de TODAY() (mes en curso)
-    anio=2026        → filtra por ese año fijo
-    tipo="Gasto"/"Ingreso"  → filtra columna D
-    cat="Supermercado"      → filtra columna E
+    filtro_mes=True  → filtra por el MES/AÑO del selector en PRESUPUESTO MENSUAL (B5/E5)
+    anio=2026        → filtra por ese año fijo (para totales anuales)
+    tipo="Gasto"/"Ingreso"  → filtra columna D (Tipo auto)
+    cat="Supermercado"      → filtra columna E (Categoria)
     Devuelve string "=SUMPRODUCT(...)" listo para poner en celda Excel.
     """
     conds = [f"(ISNUMBER({_RA}))"]
     if filtro_mes:
-        conds.append(f"(MONTH(IF(ISNUMBER({_RA}),{_RA},TODAY()))=MONTH(TODAY()))")
-        conds.append(f"(YEAR(IF(ISNUMBER({_RA}),{_RA},TODAY()))=YEAR(TODAY()))")
+        # Usa las celdas selector de PRESUPUESTO MENSUAL en vez de TODAY()
+        # — permite cambiar el mes/año analizado sin tocar las formulas
+        conds.append(f"(MONTH(IF(ISNUMBER({_RA}),{_RA},TODAY()))='PRESUPUESTO MENSUAL'!$B$5)")
+        conds.append(f"(YEAR(IF(ISNUMBER({_RA}),{_RA},TODAY()))='PRESUPUESTO MENSUAL'!$E$5)")
     if anio:
         conds.append(f"(YEAR(IF(ISNUMBER({_RA}),{_RA},TODAY()))={anio})")
     if tipo:
@@ -249,7 +251,7 @@ ws2.row_dimensions[2].height = 20
 # Pre-populate Mes, Anio y Tipo con formulas auto desde Fecha/Categoria (filas 3-300)
 # El usuario solo introduce: Fecha, Categoria, Descripcion, Importe, Metodo de Pago
 # Mes, Anio y Tipo (Ingreso/Gasto) se calculan solos
-for fila in range(3, 301):
+for fila in range(3, 501):
     sty = "alt_c" if fila % 2 == 0 else "data_c"
     c_mes  = ws2.cell(row=fila, column=2)
     c_anio = ws2.cell(row=fila, column=3)
@@ -305,6 +307,33 @@ merge_header(ws3, 4, 1, 4, 6,
     ">>> ESTA ES LA CELDA CLAVE: cambia D3 cada mes y todo el sistema se actualiza <<<",
     "gold")
 ws3.row_dimensions[4].height = 22
+
+# ── SELECTOR DE PERIODO (fila 5) — controla que mes/año muestra todo el sistema ──
+# A5: etiqueta | B5: mes(1-12) input | C5: nombre mes+año | D5: etiqueta año | E5: año input
+W(ws3, 5, 1, "PERIODO A ANALIZAR:", "bdata_l")
+mes_input = W(ws3, 5, 2, 6, "input")         # B5 → numero de mes (1-12)
+mes_input.number_format = "0"
+c_sel_vis = ws3.cell(row=5, column=3,
+    value='=TEXT(DATE($E$5,$B$5,1),"MMMM YYYY")')
+c_sel_vis.style = "gold"
+W(ws3, 5, 4, "Ano:", "bdata_l")
+anio_input = W(ws3, 5, 5, 2026, "input")     # E5 → año
+anio_input.number_format = "0"
+cmt_sel = Comment(
+    "Cambia B5 (mes 1-12) y E5 (anio) para ver los datos de cualquier mes.\n"
+    "Ejemplo: B5=7, E5=2026 muestra julio 2026.\n"
+    "Todo el seguimiento y dashboard se actualizan solos.",
+    "Sistema")
+mes_input.comment = cmt_sel
+ws3.row_dimensions[5].height = 22
+
+# DataValidation: mes solo acepta 1-12
+dv_mes = DataValidation(type="whole", operator="between",
+                        formula1="1", formula2="12", allow_blank=False)
+dv_mes.error = "Introduce un numero entre 1 y 12"
+dv_mes.errorTitle = "Mes invalido"
+dv_mes.sqref = "B5"
+ws3.add_data_validation(dv_mes)
 
 # Fixed expenses
 merge_header(ws3, 6, 1, 6, 6, "GASTOS FIJOS MENSUALES", "header")
