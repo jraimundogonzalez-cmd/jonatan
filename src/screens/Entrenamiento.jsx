@@ -1224,6 +1224,13 @@ const EX_PHOTO = {
   abductor_maquina:           ["hip abductor machine gym seated man", "abductor machine inner thigh"],
   aductor_maquina:            ["hip adductor machine gym seated", "inner thigh adductor machine gym"],
   sentadilla_jump:            ["jump squat plyometric gym", "squat jump explosive legs"],
+  // Pierna - missing from EX_PHOTO dict
+  box_jump:                   ["box jump plyometric athletic training", "plyo box jump explosive gym"],
+  sentadilla_frontal:         ["front squat barbell clean grip gym man", "front squat barbell rack gym"],
+  sentadilla_bulgara:         ["bulgarian split squat dumbbell rear foot elevated bench gym", "split squat rear foot elevated dumbbell gym man"],
+  sentadilla_smith:           ["smith machine squat gym man legs barbell", "smith machine legs squat gym"],
+  prensa_inclinada:           ["leg press machine 45 degree gym man", "incline leg press machine exercise gym"],
+  sentadilla_goblet:          ["goblet squat dumbbell legs gym man", "goblet squat kettlebell deep"],
   // Core
   plancha:                    ["plank exercise core abs floor man", "plank hold abs"],
   crunch:                     ["crunch abs exercise floor mat gym", "abdominal crunch"],
@@ -1266,7 +1273,7 @@ function getExercisePhotoTerm(ex) {
   if (n.includes("fondos"))          return ["dips parallel bars gym", null];
   if (n.includes("elevación lateral"))return ["lateral raise dumbbell gym", null];
   const m = (ex.m?.[0] || "").toLowerCase();
-  if (m.includes("cuádr"))   return ["leg extension machine gym", null];
+  if (m.includes("cuádr"))   return ["squat barbell legs gym workout man", null];
   if (m.includes("pecho"))   return ["bench press chest gym", null];
   if (m.includes("espalda")) return ["lat pulldown back gym", null];
   if (m.includes("hombro"))  return ["shoulder press gym", null];

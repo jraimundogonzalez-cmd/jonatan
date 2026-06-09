@@ -152,10 +152,14 @@ function Shell() {
     () => !state.setupDone && !state.profile?.enabled && !state.nutrition?.planData
   );
 
-  // Detect ?kcal=X injected by iOS Shortcut after workout ends.
-  // Runs on mount AND on visibilitychange (PWA resume) so iOS doesn't miss it.
+  // Apple Watch kcal sync — three complementary mechanisms:
+  // 1) inline script in index.html writes localStorage instantly when URL has ?kcal=X
+  // 2) checkStorageKcal() reads localStorage on mount/resume (handles cross-tab scenario)
+  // 3) tryClipboardImport() reads clipboard on resume (handles locked-screen scenario where
+  //    iOS blocks "Open URL" but allows Shortcut to write to clipboard)
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
+
     const readWatchParams = () => {
       const params = new URLSearchParams(window.location.search);
       const kcal = parseInt(params.get("kcal"), 10);
@@ -167,9 +171,7 @@ function Shell() {
         setWatchBanner({ kcal, type, min });
       }
     };
-    // Check localStorage for kcal written by another tab (Safari opened by iOS Shortcut).
-    // The standalone PWA never receives the URL params when already running, so the
-    // Safari instance writes to localStorage and the PWA picks it up here.
+
     const checkStorageKcal = () => {
       try {
         const saved = JSON.parse(localStorage.getItem("fitpro-v1") || "{}");
@@ -178,16 +180,44 @@ function Shell() {
         const savedMin  = saved?.daily?.[today]?.watchMin  || 0;
         const currentKcal = state.daily?.[today]?.watchKcal || 0;
         if (savedKcal > 0 && savedKcal !== currentKcal) {
+          setTodayLog({ watchKcal: savedKcal, watchType: savedType, watchMin: savedMin, trained: true });
           setWatchBanner({ kcal: savedKcal, type: savedType, min: savedMin });
         }
       } catch {}
     };
+
+    // Clipboard-based import: works even when iOS blocks URL-open on locked screen.
+    // Shortcut writes the number (e.g. "524") to clipboard; app reads it on resume.
+    // iOS asks "Allow paste?" once; after that it reads silently on every app open.
+    const tryClipboardImport = async () => {
+      try {
+        if (!navigator?.clipboard?.readText) return;
+        const text = (await navigator.clipboard.readText()).trim();
+        if (!text) return;
+        // Accept plain number "524" or "kcal: 524" or "524 kcal" formats
+        const m = text.match(/^(?:k?cal[:\s]*)?(\d{2,4})(?:\s*k?cal)?$/i);
+        if (!m) return;
+        const kcal = parseInt(m[1], 10);
+        if (kcal < 50 || kcal > 3000) return; // sanity range
+        const saved = JSON.parse(localStorage.getItem("fitpro-v1") || "{}");
+        const currentKcal = saved?.daily?.[today]?.watchKcal || 0;
+        if (kcal !== currentKcal) {
+          setTodayLog({ watchKcal: kcal, watchType: "Apple Watch", watchMin: 0, trained: true });
+          setWatchBanner({ kcal, type: "Apple Watch", min: 0 });
+          navigator.clipboard.writeText("").catch(() => {}); // clear to avoid re-import
+        }
+      } catch {}
+    };
+
     readWatchParams();
     checkStorageKcal();
+    tryClipboardImport();
+
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         readWatchParams();
         checkStorageKcal();
+        tryClipboardImport();
       }
     };
     document.addEventListener("visibilitychange", onVisible);
