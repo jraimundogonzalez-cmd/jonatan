@@ -45,9 +45,13 @@ export function recommendSubstitutes(exerciseId, opts = {}) {
   const { availableEq, location, maxResults = 6, excludeIds = [] } = opts;
   const pm = (ex.muscles_primary || [])[0];
 
+  const explicitEquivs = new Set(ex.equivalents || []);
+
   const candidates = EX.filter(c => {
     if (c.id === ex.id) return false;
     if (excludeIds.includes(c.id)) return false;
+    // Explicit equivalents always pass — they are hand-designated substitutes
+    if (explicitEquivs.has(c.id)) return true;
     if (availableEq && !canDo(c, availableEq)) return false;
     if (location === "casa" && c.loc === "gym" && !c.home_friendly) return false;
     // Must target same primary muscle (legacy m[0] or muscles_primary[0])
