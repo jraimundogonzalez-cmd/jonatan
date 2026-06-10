@@ -1162,6 +1162,7 @@ const EX_PHOTO = {
   peck_deck:                  ["pec deck machine chest fly gym man", "pec deck butterfly machine chest"],
   fondos_paralelas:           ["parallel bar dips exercise gym man", "dips tricep chest gym"],
   fondos_bancos:              ["tricep bench dips bodyweight man", "bench dips exercise"],
+  fondos_maquina:             ["seated dip machine gym chest tricep", "dip machine seated technogym chest"],
   flexiones:                  ["push ups exercise floor man", "pushup bodyweight chest"],
   flexiones_diamante:         ["diamond pushup close grip floor man", "tricep pushup diamond hands"],
   // Espalda
