@@ -1196,18 +1196,18 @@ const EX_PHOTO = {
   curl_polea:                 ["cable bicep curl standing gym man", "cable curl machine bicep standing"],
   // Tríceps
   extension_triceps_polea:    ["tricep pushdown cable rope gym man", "cable tricep extension pulldown"],
-  extension_triceps_overhead: ["overhead cable tricep extension gym man", "cable overhead tricep extension"],
+  extension_triceps_overhead: ["overhead dumbbell tricep extension seated gym man", "dumbbell tricep extension behind head overhead gym"],
   press_frances:              ["skull crusher EZ bar lying gym man", "lying tricep extension barbell"],
   patada_triceps:             ["tricep kickback dumbbell gym man", "dumbbell tricep kickback"],
   press_cerrado:              ["close grip bench press barbell gym man", "close grip bench tricep"],
   // Pierna
   sentadilla_barra:           ["barbell back squat gym rack man", "squat barbell legs"],
-  sentadilla_frontal:         ["front squat barbell rack gym man", "front squat clean grip barbell"],
-  sentadilla_goblet:          ["goblet squat dumbbell gym man legs", "kettlebell goblet squat"],
-  sentadilla_bulgara:         ["bulgarian split squat dumbbell gym", "rear foot elevated split squat"],
-  sentadilla_smith:           ["smith machine squat gym legs man", "smith machine squat lower body"],
+  sentadilla_frontal:         ["front squat barbell clean grip gym man", "front squat barbell rack gym"],
+  sentadilla_goblet:          ["goblet squat dumbbell legs gym man", "goblet squat kettlebell deep"],
+  sentadilla_bulgara:         ["bulgarian split squat dumbbell rear foot elevated bench gym", "split squat rear foot elevated dumbbell gym man"],
+  sentadilla_smith:           ["smith machine squat gym man legs barbell", "smith machine legs squat gym"],
   hack_squat:                 ["hack squat machine gym legs", "hack squat sled machine exercise"],
-  prensa_inclinada:           ["leg press machine gym man", "incline leg press exercise"],
+  prensa_inclinada:           ["leg press machine 45 degree gym man", "incline leg press machine exercise gym"],
   extension_cuadriceps:       ["leg extension machine seated gym", "quad extension machine exercise"],
   step_up:                    ["step up box dumbbell gym legs man", "box step up exercise dumbbell"],
   curl_femoral_maquina:       ["lying leg curl machine gym", "hamstring curl machine exercise"],
@@ -1225,13 +1225,8 @@ const EX_PHOTO = {
   abductor_maquina:           ["hip abductor machine gym seated man", "abductor machine inner thigh"],
   aductor_maquina:            ["hip adductor machine gym seated", "inner thigh adductor machine gym"],
   sentadilla_jump:            ["jump squat plyometric gym", "squat jump explosive legs"],
-  // Pierna - missing from EX_PHOTO dict
+  // Pierna extras
   box_jump:                   ["box jump plyometric athletic training", "plyo box jump explosive gym"],
-  sentadilla_frontal:         ["front squat barbell clean grip gym man", "front squat barbell rack gym"],
-  sentadilla_bulgara:         ["bulgarian split squat dumbbell rear foot elevated bench gym", "split squat rear foot elevated dumbbell gym man"],
-  sentadilla_smith:           ["smith machine squat gym man legs barbell", "smith machine legs squat gym"],
-  prensa_inclinada:           ["leg press machine 45 degree gym man", "incline leg press machine exercise gym"],
-  sentadilla_goblet:          ["goblet squat dumbbell legs gym man", "goblet squat kettlebell deep"],
   // Core
   plancha:                    ["plank exercise core abs floor man", "plank hold abs"],
   crunch:                     ["crunch abs exercise floor mat gym", "abdominal crunch"],
@@ -2969,13 +2964,32 @@ export default function Entrenamiento({ onNavigate }) {
               )}
 
               {/* kcal update */}
-              <button onClick={() => { setShowPostKcal(v => !v); setPostKcalInput(kcalToday > 0 ? String(kcalToday) : ""); }}
-                style={{ fontSize: 11, color: "#f59e0b", background: "none", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 9, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
-                ⌚ {kcalToday > 0 ? `${kcalToday} kcal Apple Watch ✏️` : "Registrar kcal Apple Watch"}
-              </button>
-              {showPostKcal && (
+              {kcalToday > 0 ? (
+                <button onClick={() => { setShowPostKcal(v => !v); setPostKcalInput(String(kcalToday)); }}
+                  style={{ fontSize: 11, color: "#f59e0b", background: "none", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 9, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                  ⌚ {kcalToday} kcal Apple Watch ✏️
+                </button>
+              ) : (
+                <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 10, padding: "10px 12px", marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, marginBottom: 6 }}>⌚ KCal APPLE WATCH · Regístralas ahora</div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>Si el atajo no se ejecutó (modo nocturno activo), anota las kcal del resumen del reloj:</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type="number" value={postKcalInput} onChange={e => setPostKcalInput(e.target.value)} placeholder="kcal quemadas" inputMode="numeric"
+                      style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "10px 12px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 16, outline: "none" }} />
+                    <button onClick={() => {
+                      const v = +postKcalInput || 0;
+                      if (!v) return;
+                      setTodayLog({ watchKcal: v });
+                      const todayStr = new Date().toISOString().slice(0, 10);
+                      setState(s => ({ ...s, daily: { ...s.daily, [todayStr]: { ...(s.daily[todayStr] || {}), watchKcal: v, training: { ...(s.daily[todayStr]?.training || {}), kcal: v } } } }));
+                      setPostKcalInput("");
+                    }} style={{ padding: "10px 14px", background: "#f59e0b", border: "none", borderRadius: 10, color: "#000", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
+                  </div>
+                </div>
+              )}
+              {showPostKcal && kcalToday > 0 && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
-                  <input type="number" value={postKcalInput} onChange={e => setPostKcalInput(e.target.value)} placeholder="kcal quemadas"
+                  <input type="number" value={postKcalInput} onChange={e => setPostKcalInput(e.target.value)} placeholder="kcal quemadas" inputMode="numeric"
                     style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "10px 12px", color: "#e2e8f0", fontFamily: "'DM Mono',monospace", fontSize: 16, outline: "none" }} />
                   <button onClick={() => {
                     const v = +postKcalInput || 0;
