@@ -203,6 +203,7 @@ sheets_info = [
     ("FONDO DE EMERGENCIA",     "Controla el progreso hacia tu fondo de emergencia."),
     ("OBJETIVOS",               "Define y sigue el progreso de tus objetivos financieros anuales."),
     ("GASTOS HORMIGA",          "Registra gastos pequenos recurrentes. Detecta fugas de dinero."),
+    ("COMPARATIVA MENSUAL",     "Tabla automatica mes a mes: ingresos, gastos y ahorro real enero-diciembre."),
     ("RANKING MEJORES MESES",   "Ranking de mejores meses. Actualiza con tus datos."),
     ("LIBERTAD FINANCIERA",     "Mide el porcentaje de cobertura de gastos con ingresos de trading."),
     ("PROYECCIONES FUTURAS",    "Proyecciones a 1, 3 y 5 anos basadas en parametros actuales."),
@@ -1146,6 +1147,227 @@ ws11.freeze_panes = "A3"
 for col, w in [(1,13),(2,10),(3,22),(4,28),(5,12),(6,12),(7,14)]:
     set_col_width(ws11, col, w)
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SHEET: COMPARATIVA MENSUAL
+# Resumen automatico mes a mes — sin tocar nada, se actualiza con el REGISTRO
+# ══════════════════════════════════════════════════════════════════════════════
+ws_comp = add_sheet(wb, "COMPARATIVA MENSUAL", "007BFF")
+
+merge_header(ws_comp, 1, 1, 1, 15,
+    "COMPARATIVA MENSUAL 2026 - EVOLUCION MES A MES (automatico desde REGISTRO DE MOVIMIENTOS)",
+    "header")
+ws_comp.row_dimensions[1].height = 30
+
+merge_header(ws_comp, 2, 1, 2, 15,
+    "Cada columna es un mes. Los datos se rellenan solos cuando introduces registros con la fecha correcta.",
+    "gold")
+ws_comp.row_dimensions[2].height = 18
+
+MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+ANIO_COMP = 2026
+
+# ── Cabecera de columnas ──────────────────────────────────────────────────────
+W(ws_comp, 4, 1, "Categoria / Concepto", "col_hdr")
+for m, mes in enumerate(MESES, 1):
+    W(ws_comp, 4, m + 1, mes, "col_hdr")
+W(ws_comp, 4, 14, "TOTAL 2026", "col_hdr")
+W(ws_comp, 4, 15, "MEDIA/mes",  "col_hdr")
+ws_comp.row_dimensions[4].height = 20
+
+def sp_mes_cat(m, cat=None, tipo=None):
+    """SUMPRODUCT filtrado por mes fijo y año ANIO_COMP."""
+    conds = [f"(ISNUMBER({_RA}))"]
+    conds.append(f"(MONTH(IF(ISNUMBER({_RA}),{_RA},TODAY()))={m})")
+    conds.append(f"(YEAR(IF(ISNUMBER({_RA}),{_RA},TODAY()))={ANIO_COMP})")
+    if tipo:
+        conds.append(f'({_RD}="{tipo}")')
+    if cat:
+        conds.append(f'({_RE}="{cat}")')
+    return "=SUMPRODUCT(" + "*".join(conds) + f"*({_RH}))"
+
+# ── Sección 1: INGRESOS ───────────────────────────────────────────────────────
+r = 5
+merge_header(ws_comp, r, 1, r, 15, "INGRESOS", "green")
+r += 1
+
+ingreso_cats = ["Nomina", "Trading/Payout", "Otro ingreso"]
+for cat in ingreso_cats:
+    W(ws_comp, r, 1, cat, "data_l")
+    for m in range(1, 13):
+        W(ws_comp, r, m + 1, sp_mes_cat(m, cat=cat, tipo="Ingreso"), "data_r", FMT_EUR)
+    W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "bold_r", FMT_EUR)
+    W(ws_comp, r, 15, f"=IFERROR(N{r}/COUNTIF(B{r}:M{r},\">0\"),0)", "bold_r", FMT_EUR)
+    r += 1
+
+total_ing_row = r
+W(ws_comp, r, 1, "TOTAL INGRESOS", "gold_l")
+for m in range(1, 13):
+    W(ws_comp, r, m + 1, sp_mes_cat(m, tipo="Ingreso"), "gold_r", FMT_EUR)
+W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "gold_r", FMT_EUR)
+W(ws_comp, r, 15, f"=IFERROR(N{r}/12,0)", "gold_r", FMT_EUR)
+r += 2
+
+# ── Sección 2: GASTOS FIJOS ───────────────────────────────────────────────────
+merge_header(ws_comp, r, 1, r, 15, "GASTOS FIJOS (mensuales constantes)", "header")
+r += 1
+
+gastos_fijos_cats = [
+    "Vivienda/Alquiler", "Coche/Transporte", "Gasolina",
+    "Deporte/Gimnasio", "Formacion/Suscripciones",
+]
+for cat in gastos_fijos_cats:
+    pfx = "alt_" if r % 2 == 0 else "data_"
+    W(ws_comp, r, 1, cat, pfx + "l")
+    for m in range(1, 13):
+        W(ws_comp, r, m + 1, sp_mes_cat(m, cat=cat), pfx + "r", FMT_EUR)
+    W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "b" + pfx + "r", FMT_EUR)
+    W(ws_comp, r, 15, f"=IFERROR(N{r}/COUNTIF(B{r}:M{r},\">0\"),0)", "b" + pfx + "r", FMT_EUR)
+    r += 1
+
+total_fijos_row = r
+W(ws_comp, r, 1, "TOTAL GASTOS FIJOS", "gold_l")
+for m in range(1, 13):
+    col_letter = chr(ord('B') + m - 1)
+    W(ws_comp, r, m + 1,
+      f"=SUM({col_letter}{total_fijos_row-len(gastos_fijos_cats)}:{col_letter}{total_fijos_row-1})",
+      "gold_r", FMT_EUR)
+W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "gold_r", FMT_EUR)
+W(ws_comp, r, 15, f"=IFERROR(N{r}/12,0)", "gold_r", FMT_EUR)
+r += 2
+
+# ── Sección 3: GASTOS VARIABLES ───────────────────────────────────────────────
+merge_header(ws_comp, r, 1, r, 15, "GASTOS VARIABLES (lo que gastas de mas)", "header")
+r += 1
+
+gastos_var_cats = [
+    "Supermercado", "Restaurante", "Cafeteria/Bar",
+    "Ocio/Entretenimiento", "Ropa/Calzado", "Farmacia/Salud",
+    "Peluqueria/Estetica", "Electronica/Amazon", "Hogar",
+    "Software/Apps", "Viajes/Vacaciones", "Otros",
+]
+for cat in gastos_var_cats:
+    pfx = "alt_" if r % 2 == 0 else "data_"
+    W(ws_comp, r, 1, cat, pfx + "l")
+    for m in range(1, 13):
+        W(ws_comp, r, m + 1, sp_mes_cat(m, cat=cat), pfx + "r", FMT_EUR)
+    W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "b" + pfx + "r", FMT_EUR)
+    W(ws_comp, r, 15, f"=IFERROR(N{r}/COUNTIF(B{r}:M{r},\">0\"),0)", "b" + pfx + "r", FMT_EUR)
+    r += 1
+
+total_var_row = r
+W(ws_comp, r, 1, "TOTAL GASTOS VARIABLES", "gold_l")
+for m in range(1, 13):
+    col_letter = chr(ord('B') + m - 1)
+    W(ws_comp, r, m + 1,
+      f"=SUM({col_letter}{total_var_row-len(gastos_var_cats)}:{col_letter}{total_var_row-1})",
+      "gold_r", FMT_EUR)
+W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "gold_r", FMT_EUR)
+W(ws_comp, r, 15, f"=IFERROR(N{r}/12,0)", "gold_r", FMT_EUR)
+r += 2
+
+# ── Sección 4: INVERSION (Ahorro + Bankroll) ──────────────────────────────────
+merge_header(ws_comp, r, 1, r, 15, "INVERSION Y AHORRO", "subheader")
+r += 1
+
+for cat in ["Ahorro", "Bankroll", "TraderLab"]:
+    pfx = "alt_" if r % 2 == 0 else "data_"
+    W(ws_comp, r, 1, cat, pfx + "l")
+    for m in range(1, 13):
+        W(ws_comp, r, m + 1, sp_mes_cat(m, cat=cat), pfx + "r", FMT_EUR)
+    W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "b" + pfx + "r", FMT_EUR)
+    W(ws_comp, r, 15, f"=IFERROR(N{r}/COUNTIF(B{r}:M{r},\">0\"),0)", "b" + pfx + "r", FMT_EUR)
+    r += 1
+
+r += 1
+
+# ── Fila resumen: TOTAL GASTOS y AHORRO REAL ──────────────────────────────────
+merge_header(ws_comp, r, 1, r, 15, "RESUMEN FINAL POR MES", "subheader")
+r += 1
+
+W(ws_comp, r, 1, "TOTAL GASTOS DEL MES", "bdata_l")
+for m in range(1, 13):
+    W(ws_comp, r, m + 1, sp_mes_cat(m, tipo="Gasto"), "data_r", FMT_EUR)
+W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "bold_r", FMT_EUR)
+W(ws_comp, r, 15, f"=IFERROR(N{r}/12,0)", "bold_r", FMT_EUR)
+total_gastos_comp_row = r
+r += 1
+
+W(ws_comp, r, 1, "TOTAL INGRESOS DEL MES", "balt_l")
+for m in range(1, 13):
+    W(ws_comp, r, m + 1, sp_mes_cat(m, tipo="Ingreso"), "alt_r", FMT_EUR)
+W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "balt_r", FMT_EUR)
+W(ws_comp, r, 15, f"=IFERROR(N{r}/12,0)", "balt_r", FMT_EUR)
+total_ing_comp_row = r
+r += 1
+
+W(ws_comp, r, 1, "AHORRO REAL (Ingresos - Gastos)", "gold_l")
+for m in range(1, 13):
+    col_letter = chr(ord('B') + m - 1)
+    W(ws_comp, r, m + 1, f"={col_letter}{total_ing_comp_row}-{col_letter}{total_gastos_comp_row}", "gold_r", FMT_EUR)
+W(ws_comp, r, 14, f"=SUM(B{r}:M{r})", "gold_r", FMT_EUR)
+W(ws_comp, r, 15, f"=IFERROR(N{r}/12,0)", "gold_r", FMT_EUR)
+ahorro_real_row = r
+r += 1
+
+W(ws_comp, r, 1, "% Ahorro real / Ingresos", "balt_l")
+for m in range(1, 13):
+    col_letter = chr(ord('B') + m - 1)
+    W(ws_comp, r, m + 1,
+      f"=IFERROR({col_letter}{ahorro_real_row}/{col_letter}{total_ing_comp_row},0)",
+      "alt_r", FMT_PCT)
+W(ws_comp, r, 14, f"=IFERROR(N{ahorro_real_row}/N{total_ing_comp_row},0)", "alt_r", FMT_PCT)
+W(ws_comp, r, 15, f"=IFERROR(AVERAGE(B{r}:M{r}),0)", "alt_r", FMT_PCT)
+pct_ahorro_row = r
+
+# ── Formato condicional: verde si ahorro>0, rojo si <0 ───────────────────────
+ws_comp.conditional_formatting.add(
+    f"B{ahorro_real_row}:M{ahorro_real_row}",
+    CellIsRule(operator="greaterThan", formula=["0"],
+               fill=PatternFill("solid", fgColor="C6EFCE"))
+)
+ws_comp.conditional_formatting.add(
+    f"B{ahorro_real_row}:M{ahorro_real_row}",
+    CellIsRule(operator="lessThanOrEqual", formula=["0"],
+               fill=PatternFill("solid", fgColor="FFC7CE"))
+)
+
+# ── Grafico de barras apiladas: ingresos vs gastos vs ahorro ──────────────────
+chart_comp = BarChart()
+chart_comp.type = "col"
+chart_comp.grouping = "clustered"
+chart_comp.style = 10
+chart_comp.title = "Ingresos vs Gastos por Mes 2026"
+chart_comp.y_axis.title = "EUR"
+chart_comp.width = 28
+chart_comp.height = 14
+
+ref_ingresos = Reference(ws_comp, min_col=2, max_col=13,
+                         min_row=total_ing_comp_row, max_row=total_ing_comp_row)
+ref_gastos   = Reference(ws_comp, min_col=2, max_col=13,
+                         min_row=total_gastos_comp_row, max_row=total_gastos_comp_row)
+ref_ahorro   = Reference(ws_comp, min_col=2, max_col=13,
+                         min_row=ahorro_real_row, max_row=ahorro_real_row)
+ref_meses    = Reference(ws_comp, min_col=2, max_col=13, min_row=4, max_row=4)
+
+chart_comp.add_data(ref_ingresos)
+chart_comp.add_data(ref_gastos)
+chart_comp.add_data(ref_ahorro)
+chart_comp.set_categories(ref_meses)
+from openpyxl.chart.series import SeriesLabel
+chart_comp.series[0].title = SeriesLabel(v="Ingresos")
+chart_comp.series[1].title = SeriesLabel(v="Gastos")
+chart_comp.series[2].title = SeriesLabel(v="Ahorro Real")
+chart_comp.series[0].graphicalProperties.solidFill = "28A745"
+chart_comp.series[1].graphicalProperties.solidFill = "DC3545"
+chart_comp.series[2].graphicalProperties.solidFill = "007BFF"
+ws_comp.add_chart(chart_comp, f"A{r + 3}")
+
+ws_comp.freeze_panes = "B5"
+for col, w in [(1, 26)] + [(i, 10) for i in range(2, 14)] + [(14, 12), (15, 11)]:
+    set_col_width(ws_comp, col, w)
+ws_comp.sheet_view.showGridLines = False
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SHEET 12: RANKING MEJORES MESES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1532,6 +1754,7 @@ sheet_order = [
     "FONDO DE EMERGENCIA",
     "OBJETIVOS",
     "GASTOS HORMIGA",
+    "COMPARATIVA MENSUAL",
     "RANKING MEJORES MESES",
     "LIBERTAD FINANCIERA",
     "PROYECCIONES FUTURAS",
