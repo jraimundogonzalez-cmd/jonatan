@@ -267,7 +267,36 @@ for fila in range(3, 501):
     c_anio.style = sty
     c_tipo.style = sty
 
-sample_movimientos = []  # Sin datos de ejemplo — el usuario rellena desde cero
+# Registros de junio 2026 — (fecha, categoria, subcategoria, descripcion, importe, metodo_pago)
+junio_movimientos = [
+    (date(2026, 6,  1), "Vivienda/Alquiler",   "",         "Casa",            1000.00, "Transferencia"),
+    (date(2026, 6,  2), "Deporte/Gimnasio",    "",         "Fitness Park",      25.00, "Domiciliacion"),
+    (date(2026, 6,  3), "Software/Apps",       "",         "Revolut",          250.00, "Tarjeta"),
+    (date(2026, 6,  4), "Peluqueria/Estetica", "",         "Corte Pelo",        20.00, "Tarjeta"),
+    (date(2026, 6,  5), "Coche/Transporte",    "Prestamo", "Coche",            420.00, "Domiciliacion"),
+    (date(2026, 6,  6), "Software/Apps",       "",         "Cuenta Topstep",    50.00, "Transferencia"),
+    (date(2026, 6,  7), "Otros",               "",         "Cajero",            60.00, "Efectivo"),
+    (date(2026, 6,  8), "Gasolina",            "",         "BMW",               74.00, "Tarjeta"),
+    (date(2026, 6, 10), "Cafeteria/Bar",       "Piscina",  "Coche y Piscina",  156.00, "Domiciliacion"),
+    (date(2026, 6, 11), "Deporte/Gimnasio",    "",         "Gimnasio",          25.00, "Domiciliacion"),
+]
+
+for i, (fecha, cat, subcat, desc, importe, metodo) in enumerate(junio_movimientos, 3):
+    sty_l = "alt_l" if i % 2 == 0 else "data_l"
+    sty_c = "alt_c" if i % 2 == 0 else "data_c"
+    sty_r = "alt_r" if i % 2 == 0 else "data_r"
+    # Fecha en col A (cols B/C/D son formulas auto ya escritas arriba)
+    c_fecha = ws2.cell(row=i, column=1, value=fecha)
+    c_fecha.style = sty_c
+    c_fecha.number_format = FMT_DATE
+    # Categoria, Subcategoria, Descripcion, Importe, Metodo
+    ws2.cell(row=i, column=5, value=cat).style    = sty_l
+    ws2.cell(row=i, column=6, value=subcat).style = sty_l
+    ws2.cell(row=i, column=7, value=desc).style   = sty_l
+    c_imp = ws2.cell(row=i, column=8, value=importe)
+    c_imp.style = sty_r
+    c_imp.number_format = FMT_EUR
+    ws2.cell(row=i, column=9, value=metodo).style = sty_c
 
 # Data validations — Tipo ya es automatico, no necesita dropdown
 dv_cat = DataValidation(type="list", formula1="ListaCategorias", allow_blank=True)
