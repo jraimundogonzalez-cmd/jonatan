@@ -10,7 +10,7 @@ TradePilot R usa IA para **dos problemas separados**, con dos tecnologías disti
 |---|---|---|---|
 | Optimizar parciales / calcular esperanza | Optimización combinatoria sobre datos determinista | Grid search + estadística bayesiana (02 §5-6) | Red neuronal / LLM |
 | Explicar una recomendación en lenguaje natural | Generación de lenguaje | LLM (OpenAI) | — |
-| Leer entrada/stop/TP de una captura | Visión por computador | Modelo de visión (OpenAI) | Cálculo de RR final (eso lo hace `r-engine`, no el modelo de visión) |
+| Leer entrada/stop/TP de una captura | Visión por computador | Modelo de visión (OpenAI) | Cálculo de RR final (eso lo hace `quant-engine`, no el modelo de visión) |
 
 **Por qué esto es una decisión de arquitectura y no solo de implementación**: un LLM optimizando parciales sería más lento, más caro por operación, no determinista (dos ejecuciones podrían dar resultados distintos ante el mismo input) y no auditable — inaceptable para una herramienta que informa decisiones de riesgo real. El optimizador debe ser reproducible bit a bit: mismos datos de entrada → misma recomendación, siempre. Solo un algoritmo determinista lo garantiza.
 
@@ -23,7 +23,7 @@ Proceso: grid search sobre (n, RR_i, p_i) → Score(c) = E[R_final|c] − λ·σ
 Output: top-3 configuraciones + explicación estructurada
 ```
 
-Corre como Edge Function (no en el navegador, porque necesita leer el historial completo del usuario desde Postgres), pero es **puramente determinista y sin llamada a ningún modelo de lenguaje** — es el mismo módulo `r-engine/optimizer.ts` compartido con el cliente (05 §2), solo que ejecutado con el dataset completo en servidor por motivos de payload (no se descarga todo el historial al cliente para esto).
+Corre como Edge Function (no en el navegador, porque necesita leer el historial completo del usuario desde Postgres), pero es **puramente determinista y sin llamada a ningún modelo de lenguaje** — es el mismo módulo `quant-engine/optimizer.ts` compartido con el cliente (05 §2), solo que ejecutado con el dataset completo en servidor por motivos de payload (no se descarga todo el historial al cliente para esto).
 
 ## 3. Generación de explicaciones en lenguaje natural
 

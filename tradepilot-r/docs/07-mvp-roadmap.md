@@ -33,7 +33,7 @@ Todo lo que no sirva directamente a probar esa hipótesis se pospone, aunque est
 - Auth passwordless (magic link + OAuth), onboarding en <2 min.
 - CRUD de empresas de fondeo y cuentas.
 - Registro de operación (flujo de 30s, 03 §3) con parciales planificados y ejecutados, incluyendo "duplicar última operación" (10-ux-registro-rapido.md §6.1).
-- Calculadora reactiva completa (02, `r-engine`).
+- Calculadora reactiva completa (02, `quant-engine`).
 - Dashboard por cuenta / empresa / global con métricas de 02 §3-4.
 - Optimizador determinista (sin personalización bayesiana todavía — usa el modelo genérico de 02 §5 con datos agregados del propio usuario sin diferenciar buckets pequeños).
 - Explicaciones LLM básicas.

@@ -18,7 +18,7 @@
 Toda la matemática de 02-modelo-matematico.md (calculadora de parciales, esperanza, % conservado) se implementa como **un módulo TypeScript puro, sin efectos secundarios, que corre en el cliente**:
 
 ```
-packages/r-engine/
+packages/quant-engine/
   ├─ calculate.ts     → R_final, beneficio_max, beneficio_sacrificado, %_conservado
   ├─ expectancy.ts     → E[R], E[€], profit factor, drawdown
   ├─ optimizer.ts      → grid search + score media-varianza (02 §5)
@@ -27,7 +27,7 @@ packages/r-engine/
 
 **Por qué esto no es un detalle de implementación sino una decisión de arquitectura**: si la calculadora dependiera de una llamada a Supabase o a una Edge Function por cada cambio de input, (a) la latencia de red (100-300ms típico) rompe la promesa de "tiempo real sin botones" del brief, y (b) a escala de miles de usuarios recalculando en cada tecla, el coste de invocaciones de backend sería significativo sin ninguna necesidad — es matemática determinista, no requiere estado de servidor.
 
-`r-engine` se publica como paquete compartido (monorepo, ver §5) para poder reutilizarse literalmente igual en un futuro cliente nativo (iOS/Android) sin reescribir la lógica de negocio más crítica del producto.
+`quant-engine` se publica como paquete compartido (monorepo, ver §5) para poder reutilizarse literalmente igual en un futuro cliente nativo (iOS/Android) sin reescribir la lógica de negocio más crítica del producto.
 
 ## 3. Qué sí toca backend/red
 
@@ -55,13 +55,13 @@ tradepilot-r/
   apps/
     web/                 → Next.js app (PWA, mobile-first)
   packages/
-    r-engine/             → motor de cálculo puro (§2), testeado exhaustivamente (property-based testing)
+    quant-engine/             → motor de cálculo puro (§2), testeado exhaustivamente (property-based testing)
     ui/                    → design system (03), componentes compartidos
     supabase/              → migraciones SQL (04), policies RLS, funciones
   docs/                    → este blueprint
 ```
 
-Monorepo (Turborepo/pnpm workspaces) porque `r-engine` debe ser importado tanto por la web como, en el futuro, por Edge Functions que necesiten validar cálculos server-side (p.ej. verificación de integridad antes de guardar) sin duplicar lógica — una sola fuente de verdad matemática, coherente con 02.
+Monorepo (Turborepo/pnpm workspaces) porque `quant-engine` debe ser importado tanto por la web como, en el futuro, por Edge Functions que necesiten validar cálculos server-side (p.ej. verificación de integridad antes de guardar) sin duplicar lógica — una sola fuente de verdad matemática, coherente con 02.
 
 ## 6. PWA, no app nativa, en el MVP
 

@@ -14,7 +14,7 @@
 
 1. **Core Service** — un único servicio desplegado (monolito modular), que contiene Identity, Funding Management, Management Plans, Operations, y el núcleo numérico síncrono de Risk Engine. Internamente dividido en los mismos límites de módulo de 22.5 (paquetes/esquemas separados, contratos internos estrictos), pero desplegado como una unidad.
 2. **Async Workers** — servicios desplegados por separado, cada uno con su propio ciclo de vida y escalado: Rule Engine Worker, AI Worker, Analytics Worker, Notification Worker, Reporting Worker, Media Worker.
-3. **Librerías compartidas** — código sin identidad de servicio propia, usado en proceso por quien lo necesite: el motor de cálculo (`r-engine`), la utilidad de Snapshot.
+3. **Librerías compartidas** — código sin identidad de servicio propia, usado en proceso por quien lo necesite: el motor de cálculo (`quant-engine`), la utilidad de Snapshot.
 
 Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a nivel de base de datos** (triggers) para Audit Engine y para el núcleo numérico de Risk Engine (recomputo de `current_capital`/`peak_capital`, 15 §3.1) — no son servicios, son comportamiento transaccional de la propia base de datos.
 
@@ -27,7 +27,7 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ CLIENTE (PWA — 05 §6)                                          │
-│   r-engine (librería compartida, ejecución local para           │
+│   quant-engine (librería compartida, ejecución local para           │
 │   recálculo instantáneo de la calculadora, 05 §2)               │
 └───────────────────────────┬──────────────────────────────────┘
                              │ HTTP (PostgREST + Edge Functions)
@@ -46,8 +46,8 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 │   - Recompute capital/peak_capital (15 §3.1)                    │
 │   - Audit Engine (append-only, 15 §3.4)                         │
 │                                                                  │
-│  Usa la librería compartida r-engine (contrato completo en       │
-│  26-r-engine-motor-matematico.md) y la utilidad Snapshot         │
+│  Usa la librería compartida quant-engine (contrato completo en       │
+│  26-quant-engine-nucleo-matematico.md) y la utilidad Snapshot         │
 │  en proceso (sin llamada de red)                                │
 └───────────────────────────┬──────────────────────────────────┘
                              │ eventos de dominio (21.5 §7), cola asíncrona
@@ -62,7 +62,7 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 
 ## 3. Respuestas a las 13 preguntas
 
-**1. ¿Cuáles son todos los servicios internos del sistema?** Core Service (uno) + 6 Async Workers (Rule Engine, AI, Analytics, Notification, Reporting, Media) = 7 unidades de despliegue. Más 2 librerías compartidas sin identidad de servicio (r-engine, Snapshot) y los mecanismos de trigger de base de datos.
+**1. ¿Cuáles son todos los servicios internos del sistema?** Core Service (uno) + 6 Async Workers (Rule Engine, AI, Analytics, Notification, Reporting, Media) = 7 unidades de despliegue. Más 2 librerías compartidas sin identidad de servicio (quant-engine, Snapshot) y los mecanismos de trigger de base de datos.
 
 **2. ¿Cómo se comunican entre ellos?** Cliente → Core Service: HTTP síncrono (PostgREST para CRUD simple bajo RLS, Edge Functions para lógica con secretos). Core Service → Async Workers: publicación de eventos de dominio (21.5 §7) en una cola (05 §3). Workers → Core Service: escritura de vuelta a través de su propio rol de servicio con alcance mínimo (11 §5), nunca acceso directo a tablas fuera de su contrato (22.5 §4).
 
@@ -72,7 +72,7 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 
 **6. ¿Qué partes deberán poder escalar independientemente?** AI Worker (limitado por la tasa de OpenAI, 06 §7, necesita su propio control de concurrencia), Analytics Worker (lectura pesada, candidato a réplicas de lectura antes que nadie, 11 §6), Media Worker (almacenamiento/CDN es un perfil de escalado completamente distinto al resto). Core Service escala como unidad (vertical primero, réplicas de lectura después, 11 §6) — no se subdivide todavía, coherente con §0.
 
-**7. ¿Qué componentes son stateless?** `r-engine` (función pura), los arquetipos de evaluador de Rule Engine (22 §4, funciones puras sobre datos recibidos), la utilidad Snapshot (sin estado propio entre invocaciones), la llamada de generación de explicaciones (06 §3).
+**7. ¿Qué componentes son stateless?** `quant-engine` (función pura), los arquetipos de evaluador de Rule Engine (22 §4, funciones puras sobre datos recibidos), la utilidad Snapshot (sin estado propio entre invocaciones), la llamada de generación de explicaciones (06 §3).
 
 **8. ¿Qué componentes necesitan persistencia?** Core Service (toda la base de datos operativa), el perfil de aprendizaje bayesiano (13, proceso con estado incremental, técnicamente parte de la persistencia de Core Service aunque el Worker de IA lo lea), `audit_log`, `account_capital_events`, las vistas materializadas de Analytics, el almacenamiento de capturas (Media).
 
@@ -102,9 +102,9 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 | Componente | Clasificación | Justificación |
 |---|---|---|
 | Core Service | **MISSION CRITICAL** | Si cae, el bucle de valor central (registrar, calcular, guardar) se detiene por completo; todo lo demás depende de él |
-| `r-engine` (librería) | **MISSION CRITICAL** | Un error aquí corrompe silenciosamente todos los números derivados, en cliente y servidor a la vez — prioridad #1 del producto |
+| `quant-engine` (librería) | **MISSION CRITICAL** | Un error aquí corrompe silenciosamente todos los números derivados, en cliente y servidor a la vez — prioridad #1 del producto |
 | Utilidad Snapshot | **MISSION CRITICAL, pese a ser pequeña** | Su fallo no se nota inmediatamente (no rompe una pantalla), pero rompe en silencio el invariante I3/I8 (integridad histórica) — la criticidad no es proporcional al tamaño del componente, es proporcional a qué invariante protege |
-| Mecanismo de trigger de capital (15 §3.1) | **MISSION CRITICAL** | Mismo motivo que `r-engine` — es precisión matemática en estado puro |
+| Mecanismo de trigger de capital (15 §3.1) | **MISSION CRITICAL** | Mismo motivo que `quant-engine` — es precisión matemática en estado puro |
 | Rule Engine Worker | **HIGH** | Diferenciador central del producto (multi-empresa, 17), pero su indisponibilidad temporal no impide registrar ni calcular — por diseño (I14) |
 | AI Worker | **HIGH** | El "AI Coach" es un pilar de la propuesta de valor (24 §1), pero el producto es 100% funcional sin él (06 §1, 11 §12) |
 | Analytics Worker | **MEDIUM** | Un dashboard con datos ligeramente obsoletos es una molestia, no un fallo de integridad — la fuente de verdad (Core Service) permanece correcta |
@@ -116,7 +116,7 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 
 1. **La cola de eventos como punto de contención único** para todo el abanico de Workers — un pico de cierres de operaciones simultáneo (apertura de mercado) podría generar una cola de eventos más rápido de lo que los Workers procesan. Mitigación: cada tipo de evento con su propia partición/canal lógico, para que un atasco en AI Worker (limitado por OpenAI) no retrase a Analytics Worker.
 2. **Disciplina de frontera interna en Core Service**: al ser un monolito modular, nada impide técnicamente que un desarrollador bajo presión llame directamente a una función interna de otro módulo saltándose su contrato — el riesgo ya identificado en 22.5 (Riesgo #3, regresión por conveniencia) se traslada aquí sin resolverse por arquitectura sola; requiere disciplina de revisión de código.
-3. **Doble ejecución de `r-engine` (cliente y servidor) como fuente de descoordinación**: si la versión desplegada en el cliente y en el servidor diverge (un despliegue a medias), el usuario podría ver un número en la calculadora y otro distinto al guardar — mitigación: versionado estricto y sincronizado del paquete `r-engine` entre cliente y Core Service, nunca desplegados de forma independiente.
+3. **Doble ejecución de `quant-engine` (cliente y servidor) como fuente de descoordinación**: si la versión desplegada en el cliente y en el servidor diverge (un despliegue a medias), el usuario podría ver un número en la calculadora y otro distinto al guardar — mitigación: versionado estricto y sincronizado del paquete `quant-engine` entre cliente y Core Service, nunca desplegados de forma independiente.
 
 ## 6. Posibles cuellos de botella
 

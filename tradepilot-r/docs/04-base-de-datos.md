@@ -265,6 +265,6 @@ Los nombres de tabla en el DDL (§3) están en inglés (`accounts`, `trades`...)
 - *¿Es realmente necesaria?* No: la relación entre una Operación y su Resultado es siempre **1:1** — nunca hay múltiples resultados por operación, ni una operación sin (potencial) resultado. Una tabla 1:1 separada de su tabla dueña no añade capacidad de modelado, solo un `JOIN` obligatorio en cada lectura.
 - *¿Puede hacerse más simple?* Sí — como columnas derivadas dentro de `trades` (ya así en §3): `r_max`, `r_final`, `pnl_amount`. Se calculan y persisten (no se recalculan en cada lectura) en el momento de cerrar la operación o de actualizar sus parciales ejecutados.
 - *¿Escala a 100.000 usuarios?* Mejor que la alternativa: sin tabla separada, leer una operación con su resultado es una sola fila, sin `JOIN` — más rápido y más barato en I/O a cualquier escala.
-- *¿Puede automatizarse?* Sí — estas columnas se recalculan automáticamente mediante el motor de cálculo (`r-engine`, 05 §2) cada vez que cambian los parciales ejecutados o se cierra la operación, nunca a mano.
+- *¿Puede automatizarse?* Sí — estas columnas se recalculan automáticamente mediante el motor de cálculo (`quant-engine`, 05 §2) cada vez que cambian los parciales ejecutados o se cierra la operación, nunca a mano.
 
 Conclusión: **no se crea tabla `results`.** Es la aplicación literal del filtro de producto a una decisión de esquema — la respuesta correcta a "¿es necesaria?" es no, y crearla igualmente sería normalización injustificada que solo añadiría coste de lectura sin ningún beneficio de modelado.

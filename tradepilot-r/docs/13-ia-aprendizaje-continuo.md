@@ -37,7 +37,7 @@ Esto es estrictamente más honesto que el corte anterior (una recomendación de 
 ```
 Evento: se cierra una operación (o se resuelve su último parcial)
    ↓
-1. r-engine calcula R_final, r_max, etc. (05 §2) — síncrono, cliente
+1. quant-engine calcula R_final, r_max, etc. (05 §2) — síncrono, cliente
    ↓
 2. Se persiste la operación (Postgres, RLS)
    ↓
