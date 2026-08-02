@@ -25,6 +25,8 @@ Este directorio contiene el **blueprint completo** del producto, diseñado antes
 | [10 · UX de registro rápido](./docs/10-ux-registro-rapido.md) | Flujo de registro ≤3 pulsaciones / una mano / <30s: mapa de pulsaciones, zona de pulgar, auditoría de botones, vías más rápidas |
 | [11 · Arquitectura a escala](./docs/11-arquitectura-a-escala.md) | Visión a 10 años (Principal Architect): jerarquía de dominio, frontend, backend/API, Supabase, BD a escala, costes, seguridad, autenticación, permisos, logs, backups |
 | [12 · Demostración matemática](./docs/12-demostracion-matematica.md) | El "cerebro": R final, €, beneficio sacrificado/conservado, esperanza matemática, impacto de cada parcial y prueba numérica de dominancia del optimizador — solo datos |
+| [13 · IA de aprendizaje continuo](./docs/13-ia-aprendizaje-continuo.md) | Aprendizaje 100% personal y continuo: cold start honesto, decaimiento temporal, pipeline de actualización incremental, guardarraíles de que la IA nunca sustituye al trader |
+| [14 · Pantallas, wireframes y navegación](./docs/14-pantallas-wireframes.md) | Inventario completo de pantallas con wireframes (móvil) y reglas de transformación a tablet/desktop, flujos principales y mapa de navegación |
 
 ## Nota sobre este repositorio
 

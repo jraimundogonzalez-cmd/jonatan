@@ -157,6 +157,8 @@ P(R_max ≥ RR_i | bucket) ~ Beta(α₀ + aciertos, β₀ + fallos)
 
 La UI siempre muestra el intervalo de credibilidad (ej. "72% [IC 95%: 58%–83%], basado en 34 operaciones"), nunca un número seco — refuerza la confianza y evita sobreinterpretar patrones con poca muestra.
 
-### 6.3 Cuándo el sistema deja de mostrar recomendaciones personalizadas
+### 6.3 Confianza de la recomendación a bajo N (revisado)
 
-Por debajo de un umbral mínimo de muestra por bucket (`N < 8`, configurable), el optimizador usa únicamente el modelo genérico de §5 sin condicionar por patrón personal, y lo indica explícitamente ("aún no hay suficiente historial en este rango de RR para personalizar esta recomendación — se necesitan al menos 8 operaciones"). Nunca se rellena ese vacío con datos de otros usuarios.
+**Corrección de rigor (ver 13-ia-aprendizaje-continuo.md §2)**: una versión anterior de esta sección definía un umbral duro (`N < 8` → "sin personalizar") que resultaba inconsistente con el propio modelo de §6.2, el cual ya produce una estimación válida en cualquier `N`, incluido `N = 0` (posterior uniforme `Beta(1,1)`). Un interruptor duro crea un salto de experiencia injustificado entre 7 y 8 operaciones que no refleja cómo cambia realmente la incertidumbre (de forma gradual, no discreta).
+
+El sistema **siempre** muestra su mejor estimación con su intervalo de credibilidad — nunca la oculta — y deriva una etiqueta cualitativa continua a partir del ancho del intervalo (`Confianza alta/media/baja`, fórmula exacta en 13 §2). Nunca se rellena el vacío de muestra con datos de otros usuarios, en ningún nivel de confianza.
