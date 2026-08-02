@@ -111,6 +111,14 @@ Ningún módulo que calcule una magnitud (R_final, drawdown, esperanza — Risk 
 
 Ninguna Entity que registre un hecho histórico (Operación, y cualquier futura entidad equivalente) puede referenciar en vivo a otra Entity editable (Plan de Gestión, Perfil de Reglas, o cualquier configuración reutilizable futura). Debe capturar una **instantánea inmutable** de esa configuración en el momento en que el hecho ocurre. Editar la plantilla original nunca reescribe, ni parcial ni totalmente, un hecho ya registrado. Se aplica por defecto a cualquier relación nueva de este tipo que aparezca en capítulos futuros, sin necesidad de repetir el análisis cada vez.
 
+## 8.2 I16 — Zero Friction, permanente (aprobada por el fundador en SPEC-003, specs/003-funding-management.md)
+
+TradePilot debe minimizar permanentemente la fricción del usuario. Toda funcionalidad frecuente deberá poder ejecutarse en el menor número posible de interacciones. Si una tarea habitual requiere más de 30 segundos o más de 10-12 acciones, deberá justificarse mediante una auditoría de valor o rediseñarse. Es la generalización, elevada a invariante permanente, de lo que 10 §2/§4 ya exigía solo para el registro de una Operación (<30s, ≤3 pulsaciones para lo recurrente) — a partir de esta regla, el mismo estándar rige cualquier tarea frecuente de cualquier módulo, no solo el registro.
+
+**Aplicación**: este principio se revisa explícitamente en toda especificación técnica futura (Fase 1 en adelante), con una sección propia que confirme que ninguna interfaz nueva introduce una tarea frecuente por encima del umbral, o que documente por qué una tarea concreta queda exenta (p.ej. una tarea infrecuente de configuración de equipo, no del bucle diario del trader — ver specs/004-rule-engine.md §15 para el primer precedente de esta distinción).
+
+**Relación con las reglas ya existentes**: no sustituye ni contradice la regla 8 (§6, prioridades del producto) — Rapidez de uso (prioridad #2) ya apuntaba en esta dirección; I16 la convierte en un umbral verificable y obligatorio en vez de un criterio cualitativo de desempate.
+
 ## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
