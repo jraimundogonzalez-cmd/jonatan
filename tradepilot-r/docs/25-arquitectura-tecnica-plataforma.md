@@ -46,7 +46,8 @@ Más un cuarto grupo que ni siquiera es "código de aplicación": **mecanismos a
 │   - Recompute capital/peak_capital (15 §3.1)                    │
 │   - Audit Engine (append-only, 15 §3.4)                         │
 │                                                                  │
-│  Usa la librería compartida r-engine y la utilidad Snapshot      │
+│  Usa la librería compartida r-engine (contrato completo en       │
+│  26-r-engine-motor-matematico.md) y la utilidad Snapshot         │
 │  en proceso (sin llamada de red)                                │
 └───────────────────────────┬──────────────────────────────────┘
                              │ eventos de dominio (21.5 §7), cola asíncrona
