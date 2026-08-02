@@ -103,6 +103,10 @@ Miles de usuarios · millones de operaciones · cientos de empresas · miles de 
 
 El CORE oficial (21 §2.2) y el mapa de módulos internos (21 §2.4) son la referencia vigente — cualquier concepto nuevo se admite al CORE solo pasando las tres condiciones de la regla 12, nunca por conveniencia de desarrollo.
 
+## 8.1 Regla 13 — Patrón Snapshot, permanente (21.5-domain-model-ddd.md §2, aprobada por el fundador)
+
+Ninguna Entity que registre un hecho histórico (Operación, y cualquier futura entidad equivalente) puede referenciar en vivo a otra Entity editable (Plan de Gestión, Perfil de Reglas, o cualquier configuración reutilizable futura). Debe capturar una **instantánea inmutable** de esa configuración en el momento en que el hecho ocurre. Editar la plantilla original nunca reescribe, ni parcial ni totalmente, un hecho ya registrado. Se aplica por defecto a cualquier relación nueva de este tipo que aparezca en capítulos futuros, sin necesidad de repetir el análisis cada vez.
+
 ## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
