@@ -93,6 +93,16 @@ Cuando dos decisiones de diseño compitan sin un ganador obvio, se resuelve subi
 
 Miles de usuarios · millones de operaciones · cientos de empresas · miles de cuentas por usuario — sin rediseñar la arquitectura. Todo documento nuevo se audita contra esta lista antes de darse por cerrado.
 
-## 8. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
+## 8. Core First (reglas 10-12, adoptadas en 21-arquitectura-core-vs-modulos.md)
+
+**Regla 10**: el producto debe poder crecer durante los próximos diez años sin rediseñar el núcleo.
+
+**Regla 11**: toda funcionalidad nueva se implementa como módulo desacoplado siempre que sea posible.
+
+**Regla 12**: el CORE permanece pequeño, estable y extremadamente robusto — un concepto entra al CORE solo si cumple las tres condiciones de 21 §2.1 a la vez (el producto pierde su propuesta de valor sin él, ningún módulo externo puede sustituirlo, cambia con muy baja frecuencia). Todo lo demás es módulo por defecto, no por descarte.
+
+El CORE oficial (21 §2.2) y el mapa de módulos internos (21 §2.4) son la referencia vigente — cualquier concepto nuevo se admite al CORE solo pasando las tres condiciones de la regla 12, nunca por conveniencia de desarrollo.
+
+## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
