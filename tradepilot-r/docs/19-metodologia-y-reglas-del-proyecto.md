@@ -119,6 +119,12 @@ TradePilot debe minimizar permanentemente la fricción del usuario. Toda funcion
 
 **Relación con las reglas ya existentes**: no sustituye ni contradice la regla 8 (§6, prioridades del producto) — Rapidez de uso (prioridad #2) ya apuntaba en esta dirección; I16 la convierte en un umbral verificable y obligatorio en vez de un criterio cualitativo de desempate.
 
+## 8.3 I17 — Evaluate ≠ Execute, permanente (aprobada por el fundador en specs/004-rule-engine.md §14.4)
+
+TradePilot nunca modificará automáticamente el estado crítico de un usuario únicamente porque una regla lo indique. Rule Engine produce evaluaciones, nunca ejecuta acciones — toda acción pertenece siempre a otro componente responsable, o al propio usuario de forma explícita. Es la extensión de la regla 14 (Calcular ≠ Juzgar, §8.0) un nivel más allá: donde la regla 14 separa quién calcula de quién juzga, I17 separa quién juzga de quién actúa. Nace del intento explícito de "romper el modelo" de Rule Engine con una regla hipotética de tipo *scaling* (una cuenta que crece automáticamente al cumplir un criterio, specs/004-rule-engine.md §14.4) — ninguna regla, sin importar lo claro que parezca su criterio de cumplimiento, dispara una acción por sí sola.
+
+**Aplicación**: se extiende explícitamente a cualquier componente que produzca un veredicto o una recomendación, no solo a Rule Engine — TradePilot Optimizer (specs/005-tradepilot-optimizer.md) es el primer precedente aplicado: ninguna recomendación de una configuración mejor se aplica sola, el trader la adopta de forma explícita (mismo principio que 13 §6.3 ya exigía para el optimizador, ahora generalizado y elevado a invariante permanente del producto).
+
 ## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
