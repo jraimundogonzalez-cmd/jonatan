@@ -137,6 +137,12 @@ TradePilot siempre intentará capturar, interpretar y completar automáticamente
 
 **Aplicación**: se revisa explícitamente en toda especificación futura que involucre entrada de datos del usuario, con el mismo estándar que I16 ya exige para la fricción — un campo que podría capturarse o inferirse automáticamente y no lo hace debe justificarse explícitamente, no asumirse.
 
+## 8.5 I19 — Attention Is the Most Valuable Currency, permanente (aprobada por el fundador en specs/010-ai-decision-center.md §2)
+
+Ninguna funcionalidad podrá competir por la atención del trader sin demostrar un beneficio esperado superior al coste cognitivo que introduce. No es un eslogan — se operacionaliza reutilizando el `Beneficio` ya definido en 30 §2.2 (impacto × confianza × frecuencia) frente a un coste cognitivo calibrado sobre el mismo eje que I16 (número de elementos mostrados × tiempo de lectura estimado). Es la escalada de "coste psicológico", el factor que 30 §2.3 ya reconocía como el más débil de su propio modelo, a un gate arquitectónico de primera clase que rige a **cualquier** módulo futuro que aspire a reclamar espacio de atención del trader, no solo al sistema de mejora conductual de 30.
+
+**Aplicación**: se revisa explícitamente en toda especificación futura que introduzca cualquier superficie de atención (tarjetas, notificaciones, insights, alertas) — ninguna se admite sin declarar su beneficio esperado y su coste cognitivo estimado. Primera aplicación completa en specs/010-ai-decision-center.md, que además añade la salvaguarda de que el arbitraje de atención nunca puede calibrarse contra señales de engagement (cuántas veces se tocó algo) — sería el mecanismo exacto que convertiría esta regla en papel mojado.
+
 ## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
