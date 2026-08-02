@@ -27,6 +27,7 @@ Este directorio contiene el **blueprint completo** del producto, diseñado antes
 | [12 · Demostración matemática](./docs/12-demostracion-matematica.md) | El "cerebro": R final, €, beneficio sacrificado/conservado, esperanza matemática, impacto de cada parcial y prueba numérica de dominancia del optimizador — solo datos |
 | [13 · IA de aprendizaje continuo](./docs/13-ia-aprendizaje-continuo.md) | Aprendizaje 100% personal y continuo: cold start honesto, decaimiento temporal, pipeline de actualización incremental, guardarraíles de que la IA nunca sustituye al trader |
 | [14 · Pantallas, wireframes y navegación](./docs/14-pantallas-wireframes.md) | Inventario completo de pantallas con wireframes (móvil) y reglas de transformación a tablet/desktop, flujos principales y mapa de navegación |
+| [15 · Base de datos completa](./docs/15-base-de-datos-completa.md) | Normalización (1FN/2FN/3FN) explicada tabla a tabla, versionado (esquema/capital/IA), logs de auditoría append-only, configuración y feature flags — extiende 04 |
 
 ## Nota sobre este repositorio
 

@@ -71,7 +71,8 @@ create table public.accounts (
   prop_firm_id uuid not null references public.prop_firms(id) on delete cascade,
   name text not null,                               -- "Cuenta 100k #2"
   initial_capital numeric(18,4) not null,
-  current_capital numeric(18,4) not null,
+  current_capital numeric(18,4) not null,           -- cache derivado, ver 15 §3.1: mantenido por trigger
+                                                      -- desde account_capital_events + trades, no editable a mano
   currency char(3) not null default 'USD',
   is_active boolean not null default true,
   created_at timestamptz not null default now()
