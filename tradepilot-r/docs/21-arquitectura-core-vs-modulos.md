@@ -106,6 +106,8 @@ Operación
   └─ plan_id (siempre presente, nunca null — toda Operación ejecuta exactamente un Plan)
 ```
 
+> **Corrección posterior (21.5-domain-model-ddd.md §2)**: `Operación → plan_id` tal como se dibuja aquí es una referencia viva a un Plan editable — análisis de dominio (DDD) posterior encontró que eso corrompe silenciosamente el histórico si el Plan se edita después. La relación correcta es una **instantánea inmutable (`PlanSnapshot`)** capturada al crear la Operación, no una referencia directa. Mismo ajuste aplica a Cuenta ↔ Perfil de Reglas. Ver 21.5 §2 para el análisis completo — el capítulo 22 diseña el esquema ya con esta corrección incorporada.
+
 No se diseña el DDL completo en este capítulo — corresponde al capítulo 22 (Rule Engine), que de todas formas va a tocar `accounts`/`account_rules`, junto con una revisión específica de 04/15 para migrar `trades.rr_objective` + `trade_partials_planned` hacia esta entidad. Se deja la lista exacta de qué hay que revisar en §5, para que no se pierda entre capítulos.
 
 ## 4. Los tres principios — adoptados formalmente en 19-metodologia-y-reglas-del-proyecto.md
