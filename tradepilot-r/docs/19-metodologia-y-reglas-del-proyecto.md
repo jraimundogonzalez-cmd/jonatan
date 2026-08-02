@@ -125,6 +125,18 @@ TradePilot nunca modificará automáticamente el estado crítico de un usuario �
 
 **Aplicación**: se extiende explícitamente a cualquier componente que produzca un veredicto o una recomendación, no solo a Rule Engine — TradePilot Optimizer (specs/005-tradepilot-optimizer.md) es el primer precedente aplicado: ninguna recomendación de una configuración mejor se aplica sola, el trader la adopta de forma explícita (mismo principio que 13 §6.3 ya exigía para el optimizador, ahora generalizado y elevado a invariante permanente del producto).
 
+## 8.4 I18 — Automation Before Interaction, permanente (aprobada por el fundador en specs/007-analytics-engine.md, aplicada por primera vez en specs/008-trade-capture-engine.md)
+
+TradePilot siempre intentará capturar, interpretar y completar automáticamente toda la información posible antes de solicitar cualquier dato al usuario. Orden obligatorio, sin excepción:
+
+1. Captura automática.
+2. Inferencia segura (derivación determinista a partir de datos ya capturados — nunca una suposición estadística de un valor no observado).
+3. Interacción manual únicamente cuando sea imprescindible.
+
+**Distinción central que gobierna la regla**: "inferencia segura" nunca significa "predicción" — es derivación aritmética/determinista de un hecho a partir de otros hechos ya conocidos (p.ej. calcular `risk_pct` a partir del precio de entrada, el stop y el tamaño de posición), nunca una conjetura sobre un dato que jamás se observó (p.ej. adivinar qué RR objetivo tenía en mente un trader que nunca fijó un take-profit). Cuando la inferencia segura no es posible, la regla exige caer directamente al paso 3 — nunca rellenar con una aproximación no marcada como tal (specs/008-trade-capture-engine.md §5.3).
+
+**Aplicación**: se revisa explícitamente en toda especificación futura que involucre entrada de datos del usuario, con el mismo estándar que I16 ya exige para la fricción — un campo que podría capturarse o inferirse automáticamente y no lo hace debe justificarse explícitamente, no asumirse.
+
 ## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
