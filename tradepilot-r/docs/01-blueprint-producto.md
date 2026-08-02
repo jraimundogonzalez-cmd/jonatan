@@ -25,6 +25,7 @@ Ya usa Edgewonk/Tradervue/una hoja de Excel. Sabe lo que es el profit factor per
 4. **Todo cálculo es reactivo, no hay botón "calcular".** Ver sección de arquitectura: esto es una decisión de motor de cálculo, no solo de UI.
 5. **El dato del usuario nunca se usa para entrenar modelos compartidos entre usuarios** (ver 06-sistema-ia.md). Es un compromiso de producto y de negocio: el foso de TradePilot es que el aprendizaje es 100% privado y personal.
 6. **Nunca evaluamos la calidad de la entrada.** Ni "esta operación tenía buena pinta", ni scoring de setups. Es la línea que separa TradePilot de TradingView y de los cientos de "trade journals con IA" genéricos que sí cruzan esa línea y confunden al usuario sobre qué está midiendo el producto.
+7. **Cada clic debe generar valor; cada dato introducido debe convertirse en una decisión mejor** (19 §5.2). Es el criterio de corte por defecto para "¿qué funcionalidades sobran?" en la auditoría obligatoria de cada capítulo (19 §5.1).
 
 ## 3. Decisiones donde cambiamos el brief original (y por qué)
 

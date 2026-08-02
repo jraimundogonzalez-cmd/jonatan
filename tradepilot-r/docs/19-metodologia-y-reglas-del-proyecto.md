@@ -52,6 +52,32 @@ Todo capítulo del blueprint, a partir de ahora, termina con dos bloques de cont
 
 **Relación entre "Riesgos Detectados" y "Riesgos pendientes"** (aclarada aquí para no dejar ambigüedad): la primera es la lista completa de riesgos identificados en el cuerpo del capítulo. La segunda, en el checklist final, es cuáles de esos riesgos siguen abiertos — normalmente todos, salvo que el propio capítulo ya incluya la mitigación.
 
+## 5.1 Auditoría del capítulo (bloque obligatorio, se inserta justo antes del "Cierre de capítulo" de §5)
+
+Además de los dos bloques de contenido de §5, todo capítulo pasa por esta auditoría fija antes de cerrarse:
+
+```
+¿Qué problemas reales del trader resuelve este capítulo?
+¿Qué funcionalidades sobran?
+¿Qué funcionalidades faltan?
+¿Qué haría Apple para simplificar este capítulo?
+¿Qué haría Linear para hacerlo más rápido?
+¿Qué haría TradingView para hacerlo más intuitivo?
+¿Qué haría un hedge fund profesional para hacerlo más robusto?
+Puntuación del capítulo (0-100)
+¿Qué tendría que ocurrir para convertir este capítulo en un 100/100?
+```
+
+**Puntuación (0-100) vs. Nivel de madurez (0-100%) — no son la misma medida, y confundirlas anularía el valor de tener las dos**: la madurez mide *si el capítulo está terminado* (¿quedan decisiones abiertas o riesgos sin resolver?). La puntuación mide *si el diseño resultante es excelente*, aplicando las cuatro lentes (Apple/Linear/TradingView/hedge fund) aunque el capítulo esté 100% completo. Un capítulo puede tener madurez alta y puntuación mediocre — eso es precisamente la señal de que "terminado" y "excelente" son cosas distintas, y de que la auditoría existe para no confundir una cosa con la otra.
+
+Cuando la auditoría detecta huecos accionables (funcionalidad que falta, simplificación evidente), Challenge Mode (§1.1) exige aplicarlos en el propio capítulo antes de cerrarlo, no solo anotarlos — la puntuación final que se reporta es la de después de aplicar esas correcciones, no la de antes.
+
+## 5.2 Principio rector del proyecto
+
+> **"Cada clic debe generar valor. Cada dato introducido debe convertirse en una decisión mejor."**
+
+Se une a "Every R Matters" (00) y a "TradingView analiza, TradePilot gestiona" (01 §3) como los tres principios que gobiernan cualquier decisión de producto de aquí en adelante. En la práctica es el criterio de corte para "¿qué funcionalidades sobran?" de la auditoría de §5.1: cualquier pantalla, campo o clic que no acorte el camino hacia una decisión de gestión mejor es, por definición, candidato a eliminarse.
+
 ## 6. Prioridades del producto (regla 8), en orden, para resolver empates de diseño
 
 1. Precisión matemática

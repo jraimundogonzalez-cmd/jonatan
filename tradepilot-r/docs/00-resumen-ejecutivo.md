@@ -30,6 +30,10 @@ Tres pilares diferenciales:
 
 Esto no es una frase de marketing, es una restricción de arquitectura: TradePilot **nunca** evalúa si una entrada es buena o mala, nunca sugiere activos, nunca da señales. Todo el dominio del producto empieza en el momento en que el trader ya decidió su entrada, su stop y su take profit. A partir de ahí, todo es matemática de gestión.
 
+> **Cada clic debe generar valor. Cada dato introducido debe convertirse en una decisión mejor.**
+
+Segundo principio rector (19 §5.2), y el criterio de corte para cualquier funcionalidad nueva: si un campo, una pantalla o un toque no acorta el camino hacia una decisión de gestión mejor, no se construye.
+
 ## Por qué esto puede ser el software de referencia
 
 - **Mercado desatendido**: existe una categoría completa (position management) sin un líder claro. Los journals actuales son "post-mortem" (registran lo que pasó); TradePilot es "in-the-moment" (ayuda a decidir mientras la operación está viva) + "post-mortem" combinados.
