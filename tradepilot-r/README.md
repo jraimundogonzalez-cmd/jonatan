@@ -28,6 +28,7 @@ Este directorio contiene el **blueprint completo** del producto, diseñado antes
 | [13 · IA de aprendizaje continuo](./docs/13-ia-aprendizaje-continuo.md) | Aprendizaje 100% personal y continuo: cold start honesto, decaimiento temporal, pipeline de actualización incremental, guardarraíles de que la IA nunca sustituye al trader |
 | [14 · Pantallas, wireframes y navegación](./docs/14-pantallas-wireframes.md) | Inventario completo de pantallas con wireframes (móvil) y reglas de transformación a tablet/desktop, flujos principales y mapa de navegación |
 | [15 · Base de datos completa](./docs/15-base-de-datos-completa.md) | Normalización (1FN/2FN/3FN) explicada tabla a tabla, versionado (esquema/capital/IA), logs de auditoría append-only, configuración y feature flags — extiende 04 |
+| [16 · Modelo SaaS (fundador)](./docs/16-modelo-saas-fundador.md) | Tiers Gratis/PRO/Elite/Team, costes y margen, canal B2B2C con prop firms, roadmap de negocio, retención basada en valor (sin dark patterns) y la IA contada como historia de negocio |
 
 ## Nota sobre este repositorio
 

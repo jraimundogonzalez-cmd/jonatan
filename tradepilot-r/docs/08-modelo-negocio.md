@@ -2,7 +2,9 @@
 
 *Voz: CTO + Senior Product Manager*
 
-## 1. Modelo de precios (propuesta)
+> **Nota de evolución**: la estructura de tiers de este documento (§1) queda refinada y sustituida por 16-modelo-saas-fundador.md, que introduce un tier gratuito genuino junto a PRO/Elite/Team — con la justificación explícita de por qué eso no contradice el rechazo al "freemium puro" de §2. El resto de este documento (unit economics, competencia, growth loops, riesgos) se mantiene vigente.
+
+## 1. Modelo de precios (versión original — ver 16 para el modelo vigente)
 
 Suscripción mensual (con descuento anual), tiers por **número de cuentas activas gestionadas**, no por features — porque el valor percibido escala directamente con cuántas cuentas de fondeo gestiona el trader (persona P1, 01 §1), y es una métrica que el propio usuario entiende sin esfuerzo:
 
@@ -48,6 +50,7 @@ El diseño técnico (05, 06) está deliberadamente optimizado para mantener el c
 1. **Loop de hábito de producto**: cada operación registrada mejora la precisión del optimizador personal (02 §6) → mejor recomendación → más confianza en el producto → más registro consistente → mejor dato. Es un loop de valor compuesto, no un growth loop viral clásico, pero es el más defendible a largo plazo.
 2. **Loop de comunidad de prop trading** (fase avanzada, opt-in): comparables agregados y anonimizados entre usuarios de una misma prop firm ("traders de FTMO con objetivos >3R llegan a TP el X% de media") pueden ofrecerse como benchmark opcional sin romper el principio de privacidad de datos (01 §2.5) — se anonimiza y agrega, nunca se expone ni se entrena el modelo personal de nadie con datos de otro usuario.
 3. **Contenido educativo basado en datos agregados anonimizados** (blog/redes: "el coste real de cerrar parciales pronto, con datos de miles de operaciones") como canal de adquisición orgánica coherente con el propio producto — el gancho de marketing es literalmente la métrica estrella del producto (`%_beneficio_conservado`, 02 §3).
+4. **Canal B2B2C con empresas de fondeo** (desarrollado en 16 §5): las prop firms tienen interés propio en que sus traders gestionen mejor el riesgo — menos blow-ups significa menos challenges fallidos que gestionar y traders fondeados más rentables para la firma. Es un canal de adquisición alineado por incentivos, no un acuerdo de distribución genérico.
 
 ## 6. Riesgo de negocio explícito a vigilar
 
