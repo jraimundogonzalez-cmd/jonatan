@@ -23,6 +23,7 @@ Este directorio contiene el **blueprint completo** del producto, diseñado antes
 | [08 · Modelo de negocio](./docs/08-modelo-negocio.md) | Pricing, unit economics, competencia, growth loops |
 | [09 · Product Blueprint](./docs/09-product-blueprint.md) | Documento canónico: visión, misión, filosofía, problemas, público, competidores, casos de uso, roadmap, MVP, versiones futuras |
 | [10 · UX de registro rápido](./docs/10-ux-registro-rapido.md) | Flujo de registro ≤3 pulsaciones / una mano / <30s: mapa de pulsaciones, zona de pulgar, auditoría de botones, vías más rápidas |
+| [11 · Arquitectura a escala](./docs/11-arquitectura-a-escala.md) | Visión a 10 años (Principal Architect): jerarquía de dominio, frontend, backend/API, Supabase, BD a escala, costes, seguridad, autenticación, permisos, logs, backups |
 
 ## Nota sobre este repositorio
 
