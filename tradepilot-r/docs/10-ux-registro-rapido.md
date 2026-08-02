@@ -50,6 +50,8 @@ Reglas derivadas:
 
 ## 4. Mapa de pulsaciones y presupuesto de tiempo del flujo estándar
 
+> **Mejora tras la reorientación a cuenta (17-tradepilot-os.md §4)**: la tabla siguiente asumía el mejor caso con 0 pulsaciones de cuenta solo si la cuenta activa global ya coincidía con la deseada. Desde que el home es Cuentas y el FAB vive también dentro del Dashboard de cada cuenta (14 §3, pantalla 6), entrar a registrar **desde el contexto de una cuenta concreta** precarga esa cuenta con 0 pulsaciones siempre, no solo cuando coincide con la última usada — el caso común de abajo es ahora el caso típico, no el optimista.
+
 Caso más común: misma cuenta y símbolo que la operación anterior (el patrón real de un trader que opera pocos activos de forma recurrente).
 
 | Paso | Acción | Pulsaciones | Tiempo estimado |

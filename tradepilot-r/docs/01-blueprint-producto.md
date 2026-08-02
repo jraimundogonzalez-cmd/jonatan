@@ -76,3 +76,9 @@ Nota de orden: el **modelo matemático (02)** no aparece como una fase separada 
 **Operaciones gestionadas con recomendación de la IA revisada por el usuario, por semana activa.**
 
 No elegimos "operaciones registradas" (vanity metric, no mide si el producto cambia comportamiento) ni "ingresos" (metric de negocio, no de producto). Elegimos una métrica que solo sube si (a) el usuario registra operaciones con frecuencia real y (b) usa el optimizador como herramienta de decisión, que es exactamente la promesa de valor del producto.
+
+**Nota de reconciliación (tras 17-tradepilot-os.md §4)**: la reorientación de la navegación a "cuenta como centro de gravedad" no cambia esta métrica, y es importante explicar por qué no. La cuenta es el objeto que el usuario **navega y vigila** (dónde entra, qué mira primero); la operación gestionada con recomendación de IA sigue siendo el evento que **crea valor real** (mueve la esperanza matemática del trader). Confundir ambas llevaría a optimizar la métrica equivocada — por ejemplo, "cuentas visitadas por semana" subiría con solo abrir la app, sin que el trader mejorara nada. La cuenta organiza la experiencia; la operación sigue siendo la unidad que se mide.
+
+## 7. Empresas/Cuentas como eje de navegación (ver desarrollo completo en 17 §4)
+
+El §1 de este documento ya apuntaba que "el onboarding y el dashboard global deben estar organizados por empresa de fondeo/cuenta como eje principal" por ser el contexto en el que vive la persona P1. 17-tradepilot-os.md §4 completa esa idea hasta la navegación misma: **Cuentas pasa a ser la pantalla de entrada de la aplicación** (antes lo era "Hoy", un log plano de operaciones del día), con el estado de salud de cada cuenta visible de un vistazo. Cambios de pantalla y flujo aplicados en 03-ux-ui.md §2 y 14-pantallas-wireframes.md §1-3.

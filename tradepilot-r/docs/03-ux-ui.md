@@ -10,19 +10,24 @@ Todo el diseño se subordina a ese principio. No es un dashboard "bonito" que ad
 
 ## 2. Arquitectura de la información
 
+> **Revisión (17-tradepilot-os.md §4)**: la cuenta, no la operación, es el centro de gravedad del producto. "Hoy" deja de ser la pantalla de entrada — se fusiona como una tarjeta-resumen dentro de la nueva pantalla de entrada, **Cuentas**. Es la continuación, ahora en la navegación, de una decisión que este mismo documento ya defendía más abajo ("Empresas de fondeo y Cuentas son ciudadanos de primer nivel") sin llevarla hasta ser el home.
+
 ```
-├── Hoy (Home)                    → único objetivo: repasar el día + disparar el registro rápido (FAB)
-├── Registrar operación           → flujo de <30s (modal / full screen en móvil)
-├── Operaciones                   → tabla/lista filtrable (activo, cuenta, empresa, fecha, resultado)
-│   └── Detalle de operación      → gestión, parciales, capturas, notas, R_max, breakdown de €
-├── Calculadora / Optimizador     → simulador de parciales + recomendaciones IA explicadas (pantalla propia, no vive en Hoy — ver §4 y 10-ux-registro-rapido.md §1)
-├── Cuentas                       → lista de cuentas agrupadas por empresa de fondeo
-│   └── Dashboard de cuenta       → capital, drawdown, reglas de la prop firm, estadísticas propias
-├── Dashboard global              → agregado de todas las cuentas/empresas
-└── Ajustes                       → perfil, empresas de fondeo, preferencias del optimizador (λ, buckets)
+├── Cuentas (Home)                 → único objetivo: ver la salud de cada cuenta de un vistazo
+│   │                                 (tarjeta-resumen "Hoy, todas las cuentas" arriba + una
+│   │                                 tarjeta por cuenta: capital, drawdown vs. límite, semáforo)
+│   └── Dashboard de cuenta        → capital, drawdown, reglas de la prop firm, estadísticas propias,
+│                                     operaciones de ESA cuenta, FAB con la cuenta ya precargada (0
+│                                     pulsaciones de selección — mejora 10-ux-registro-rapido.md §4)
+│        └── Detalle de operación  → gestión, parciales, capturas, notas, R_max, breakdown de €
+├── Registrar operación            → flujo de <30s (modal / full screen en móvil), 10
+├── Operaciones (todas)            → vista secundaria: buscar/filtrar histórico entre todas las cuentas
+├── Calculadora / Optimizador      → simulador de parciales + recomendaciones IA explicadas (pantalla propia, §4)
+├── Dashboard global               → agregado de todas las cuentas/empresas, accesible desde Cuentas
+└── Ajustes                        → perfil, empresas de fondeo, preferencias del optimizador (λ, buckets), TradeVault (17 §3.4)
 ```
 
-**Decisión clave**: "Empresas de fondeo" y "Cuentas" son ciudadanos de primer nivel en la navegación (no un filtro escondido en ajustes), porque la persona P1 (01 §1) vive en ese contexto — necesita cambiar de cuenta tan rápido como cambia de pestaña en el bróker.
+**Decisión clave**: "Empresas de fondeo" y "Cuentas" no son solo ciudadanos de primer nivel, son la puerta de entrada — porque la persona P1 (01 §1) no piensa primero "¿cómo fue mi última operación?", piensa "¿está alguna de mis cuentas cerca de romper una regla?". "Operaciones" sigue existiendo como vista global para buscar y filtrar histórico entre cuentas, pero pasa a ser una herramienta de búsqueda, no el punto de partida.
 
 ## 3. El flujo de registro en 30 segundos
 
