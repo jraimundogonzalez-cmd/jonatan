@@ -11,11 +11,11 @@ Todo el diseño se subordina a ese principio. No es un dashboard "bonito" que ad
 ## 2. Arquitectura de la información
 
 ```
-├── Hoy (Home)                    → calculadora rápida + últimas operaciones + alerta IA del día
+├── Hoy (Home)                    → único objetivo: repasar el día + disparar el registro rápido (FAB)
 ├── Registrar operación           → flujo de <30s (modal / full screen en móvil)
 ├── Operaciones                   → tabla/lista filtrable (activo, cuenta, empresa, fecha, resultado)
 │   └── Detalle de operación      → gestión, parciales, capturas, notas, R_max, breakdown de €
-├── Optimizador                   → simulador de parciales + recomendaciones IA explicadas
+├── Calculadora / Optimizador     → simulador de parciales + recomendaciones IA explicadas (pantalla propia, no vive en Hoy — ver §4 y 10-ux-registro-rapido.md §1)
 ├── Cuentas                       → lista de cuentas agrupadas por empresa de fondeo
 │   └── Dashboard de cuenta       → capital, drawdown, reglas de la prop firm, estadísticas propias
 ├── Dashboard global              → agregado de todas las cuentas/empresas
@@ -41,7 +41,11 @@ Este es el flujo más importante de todo el producto. Diseño paso a paso:
 
 Objetivo de producto medible: **mediana de tiempo de registro < 30s**, instrumentado desde el día 1 (ver 07-mvp-roadmap.md, métricas del MVP).
 
-## 4. Calculadora (pantalla "Hoy")
+> Desglose pulsación a pulsación, presupuesto de tiempo por paso, auditoría de cada botón y propuestas de vías aún más rápidas (duplicar última operación, Siri Shortcut, Apple Watch): ver [10-ux-registro-rapido.md](./10-ux-registro-rapido.md).
+
+## 4. Calculadora / Optimizador (pantalla propia)
+
+> **Corrección respecto a la versión anterior de este documento**: aquí describíamos la calculadora como parte de la pantalla "Hoy", junto a la lista de operaciones del día y la tarjeta de IA. Auditado bajo el principio *"cada pantalla debe tener un único objetivo"* (contexto permanente del proyecto), eso era un error: "Hoy" mezclaba tres objetivos distintos — **repasar** (lista del día), **explorar** (calculadora, que es simulación hipotética, no registro) e **interpretar** (insight de IA). Se separan en pantallas independientes. "Hoy" pasa a tener un único objetivo: repasar el día y disparar el registro rápido (ver 10-ux-registro-rapido.md). La calculadora vive en su propia pantalla, accesible en ≤1 pulsación desde la navegación principal, y es donde el usuario simula *antes* o *después* de operar, sin la presión ni el contexto de "estoy registrando algo real".
 
 Layout de dos columnas en desktop / apilado en móvil:
 
