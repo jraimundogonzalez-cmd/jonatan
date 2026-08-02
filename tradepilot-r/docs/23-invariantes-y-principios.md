@@ -62,6 +62,7 @@ Una constitución, no una lista de buenas prácticas. La diferencia importa: una
 - *Justificación*: es lo que separa la categoría de producto que TradePilot lidera (09 §6) de la que ya está ocupada por TradingView.
 - *Riesgo de incumplimiento*: una función futura de "scoring de setup" se cuela dentro de una feature de IA aparentemente inocua (p.ej., un "insight" que en el fondo evalúa si la entrada fue buena).
 - *Caso de excepción razonable*: ninguno — es la línea que 17 §3.1 ya protegió explícitamente al redefinir "Replay" para no cruzarla.
+- **Ampliación permanente (27 §1, aprobada por el fundador)**: se extiende explícitamente a cualquier capacidad de "predicción" del Quant Engine. TradePilot nunca realizará predicciones sobre el mercado — ninguna capacidad, bajo ningún nombre de categoría (incluida "Predicción"), estima la probabilidad de que una operación concreta gane, ni el comportamiento futuro del precio. El Quant Engine únicamente puede **proyectar matemáticamente el comportamiento histórico del propio trader** (su propia distribución de `R_max`/`R_final`, nunca datos de mercado) hacia adelante. Cualquier capacidad futura propuesta bajo el nombre "Predicción" se audita primero contra esta frase exacta antes de aceptarse.
 
 ### Grupo D — Arquitectura y módulos
 
