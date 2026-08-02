@@ -241,3 +241,27 @@ create policy "stat_buckets_owner_rw" on public.user_stat_buckets
 ## 5. Vistas materializadas para el dashboard (rendimiento)
 
 Los agregados del dashboard global (por cuenta, por empresa, totales) **no se calculan on-the-fly sobre `trades` en cada carga** a escala — se mantienen vistas materializadas refrescadas por trigger o cron ligero (Supabase `pg_cron`), p.ej. `mv_account_stats`, `mv_prop_firm_stats`. Con cientos de cuentas y miles de operaciones por usuario, agregar en cada carga de dashboard sería el primer cuello de botella de rendimiento del producto — se documenta el patrón aquí para que no se improvise más adelante.
+
+## 6. Correspondencia con la nomenclatura funcional (Usuarios / Empresas / Cuentas / Operaciones / Parciales / Resultados / Estadísticas)
+
+Los nombres de tabla en el DDL (§3) están en inglés (`accounts`, `trades`...) porque es la convención estándar de la industria y evita mezclar idiomas dentro del propio código SQL — mezclar términos en español e inglés en identificadores técnicos es una fuente de errores tipográficos y de inconsistencia a largo plazo (11 §4, disciplina de migraciones). La correspondencia conceptual con la nomenclatura funcional del negocio es exacta:
+
+| Concepto funcional | Tabla(s) en el esquema | Nota |
+|---|---|---|
+| Usuarios | `auth.users` (Supabase) + `profiles` | Supabase gestiona la identidad; `profiles` extiende con datos de producto |
+| Empresas | `prop_firms` | Incluye "capital propio" como empresa con `is_personal = true` (§1.3) |
+| Cuentas | `accounts` + `account_rules` | Reglas de la prop firm separadas en tabla propia (1:1) por claridad de dominio, no por necesidad de normalización — son datos de naturaleza distinta (límites vs. estado de capital) |
+| Operaciones | `trades` | — |
+| Parciales | `trade_partials_planned` + `trade_partials_executed` | Dos tablas, no una — la distinción planificado/ejecutado es la que permite que el optimizador (02 §6) aprenda comparando intención vs. realidad |
+| Resultados | Columnas `r_max`, `r_final`, `pnl_amount` dentro de `trades` | Ver justificación de no crear tabla propia, abajo |
+| Estadísticas | `user_stat_buckets` | Cache de los parámetros bayesianos por usuario y bucket de RR (02 §6) |
+
+**¿Por qué "Resultados" no es una tabla propia, aplicando el filtro de las 5 preguntas del proyecto?**
+
+- *¿Qué problema resolvería?* Separar el resultado de la operación de la operación misma.
+- *¿Es realmente necesaria?* No: la relación entre una Operación y su Resultado es siempre **1:1** — nunca hay múltiples resultados por operación, ni una operación sin (potencial) resultado. Una tabla 1:1 separada de su tabla dueña no añade capacidad de modelado, solo un `JOIN` obligatorio en cada lectura.
+- *¿Puede hacerse más simple?* Sí — como columnas derivadas dentro de `trades` (ya así en §3): `r_max`, `r_final`, `pnl_amount`. Se calculan y persisten (no se recalculan en cada lectura) en el momento de cerrar la operación o de actualizar sus parciales ejecutados.
+- *¿Escala a 100.000 usuarios?* Mejor que la alternativa: sin tabla separada, leer una operación con su resultado es una sola fila, sin `JOIN` — más rápido y más barato en I/O a cualquier escala.
+- *¿Puede automatizarse?* Sí — estas columnas se recalculan automáticamente mediante el motor de cálculo (`r-engine`, 05 §2) cada vez que cambian los parciales ejecutados o se cierra la operación, nunca a mano.
+
+Conclusión: **no se crea tabla `results`.** Es la aplicación literal del filtro de producto a una decisión de esquema — la respuesta correcta a "¿es necesaria?" es no, y crearla igualmente sería normalización injustificada que solo añadiría coste de lectura sin ningún beneficio de modelado.

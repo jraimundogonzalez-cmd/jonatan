@@ -31,20 +31,22 @@ triggered_i = 1  si R_max ≥ RR_i
             = 0  en caso contrario
 ```
 
-El **R final ponderado** de la operación es:
+**Corrección de rigor (revisión matemática, ver 12-demostracion-matematica.md)**: una versión anterior de esta fórmula sumaba `p_r · R_cierre_remanente` como si solo el remanente originalmente sin asignar compartiera el desenlace final. Es incorrecto: si un parcial intermedio `i` **no** se dispara (`triggered_i = 0`), su porcentaje `p_i` no desaparece ni contribuye 0 — permanece abierto y comparte el mismo desenlace final que el remanente, porque los parciales se ejecutan en orden creciente de `RR_i` a medida que el precio avanza. La fórmula correcta agrupa todos los tramos no disparados (parciales intermedios + remanente) en un único "resto":
 
 ```
-R_final = Σ_{i=1..n} triggered_i · p_i · RR_i
-        + p_r · R_cierre_remanente
+k = máx{ i : triggered_i = 1 }         (índice del último parcial realmente disparado; k = 0 si ninguno se disparó)
+
+R_final = Σ_{i=1..k} p_i · RR_i
+        + (100% − Σ_{i=1..k} p_i) · R_cierre_resto
 ```
 
-donde `R_cierre_remanente` depende del estado del stop en el momento en que se resuelve el remanente:
+donde `R_cierre_resto` (el desenlace del tramo no cerrado en parciales, incluidos los parciales intermedios nunca disparados) depende del estado del stop en el momento en que se resuelve:
 
-- Si `R_max ≥ RR_obj` → el remanente cierra en `RR_obj` (o donde el usuario indique que cerró manualmente, campo libre).
-- Si no se alcanzó `RR_obj` pero sí se movió el stop a breakeven tras algún parcial → `R_cierre_remanente = 0`.
-- Si no se alcanzó ningún parcial y no hubo BE → `R_cierre_remanente = -1` (stop original).
+- Si `R_max ≥ RR_obj` → el resto cierra en `RR_obj` (o donde el usuario indique que cerró manualmente, campo libre).
+- Si no se alcanzó `RR_obj` pero `k ≥ 1` (se movió el stop a breakeven tras el último parcial disparado) → `R_cierre_resto = 0`.
+- Si `k = 0` (no se disparó ningún parcial, el precio nunca alcanzó ni el primer nivel) → `R_cierre_resto = -1` (stop original, pérdida total del riesgo asumido).
 
-Este modelo es genérico: **no asume ratios fijos** ni un número fijo de parciales — con `n = 0` se reduce al caso "todo o nada" clásico (`R_final = R_max ≥ RR_obj ? RR_obj : -1`), con `n = 5` cubre el caso más granular soportado por el producto.
+Este modelo es genérico: **no asume ratios fijos** ni un número fijo de parciales — con `n = 0` se reduce al caso "todo o nada" clásico (`R_final = R_max ≥ RR_obj ? RR_obj : -1`), con `n = 5` cubre el caso más granular soportado por el producto. La demostración numérica completa, incluyendo el caso que expuso el error de la fórmula original (un parcial intermedio no disparado), está en 12-demostracion-matematica.md §2.
 
 ## 3. Métricas derivadas por operación
 
