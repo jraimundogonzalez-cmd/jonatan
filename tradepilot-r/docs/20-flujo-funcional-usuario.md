@@ -38,12 +38,17 @@ Este es el paso más delicado de todo el flujo, y el que expone la pregunta que 
 1. ¿Es una empresa de fondeo o capital propio? (ya resuelto conceptualmente, `prop_firms.is_personal`, 04 §1.3)
 2. Si es fondeo: ¿de qué conjunto de reglas parte?
 
-Sobre el punto 2, dos caminos posibles — **decisión abierta, no resuelta unilateralmente aquí** (se traslada al checklist de cierre):
+Sobre el punto 2, dos caminos posibles:
 
 - **Camino A — plantilla compartida**: TradePilot mantiene un catálogo de perfiles de reglas ya configurados por la comunidad o por el propio equipo (datos, no código — coherente con la regla 4: "sin modificar el código"), el usuario elige la que corresponde a su firma y fase, y la personaliza si algo no coincide.
 - **Camino B — configuración manual pura**: el usuario introduce sus propias reglas desde cero, sin ninguna plantilla, cada vez.
 
-**Por qué esto no es un detalle menor**: Camino B es el más "puro" respecto al principio de no-hardcoding, pero introduce fricción severa (una prop firm real puede tener 10-15 reglas configurables, 04-b del prompt) justo en el momento de onboarding, donde 03 §6 y 10 exigen fricción mínima. Camino A resuelve la fricción pero reintroduce, por la puerta de atrás, una forma de "conocer" a FTMO — con la diferencia crítica de que sería **conocimiento en datos mantenidos por la comunidad/equipo, nunca en código**, lo cual sí respeta la letra y el espíritu de la regla 4 (el código nunca tiene un `if firm == 'FTMO'`; los datos, sí pueden incluir una fila llamada "FTMO Challenge Fase 1" sin que eso sea hardcoding). Se recomienda Camino A con esa salvedad, pero se deja como decisión abierta explícita porque cambia el alcance del catálogo de datos que hay que mantener desde el V1.
+**Decisión (bajo Challenge Mode, 19 §1.1 — se decide y se documenta en vez de dejarla abierta indefinidamente)**: **Camino A, con edición libre siempre visible.**
+
+- *Problema detectado*: Camino B, el más "puro" frente al principio de no-hardcoding, introduce fricción severa (una prop firm real puede tener 10-15 reglas configurables) justo en el momento de onboarding, donde 03 §6 y 10 exigen fricción mínima — un usuario que abandona el registro en el minuto 3 de configurar reglas manualmente nunca llega a ver el valor del producto.
+- *Solución propuesta*: catálogo de plantillas mantenido como datos (tabla, no código), con cada campo editable desde el primer toque — nunca una plantilla "de solo lectura" que obligue a un paso de desbloqueo aparte.
+- *Por qué es mejor que la alternativa*: resuelve la fricción de Camino B sin reintroducir hardcoding real — la diferencia entre "conocer FTMO" (prohibido) y "tener una fila de datos llamada FTMO Challenge Fase 1" (permitido) es exactamente si esa información vive en código desplegable o en una tabla editable sin deploy. Una plantilla incorrecta o desactualizada es un problema de calidad de datos, corregible por cualquiera con acceso a esa tabla, no un problema de arquitectura.
+- *Impacto futuro sobre el producto*: el capítulo de Rule Engine (21) debe diseñar, desde el primer día, tanto el esquema de reglas como el mecanismo de mantenimiento del catálogo de plantillas (quién puede añadir/corregir una plantilla, con qué validación) — no es un añadido posterior, es parte del alcance de ese capítulo.
 
 **Sistema**: crea `prop_firms` (o reutiliza si ya existe para ese usuario) + el perfil de reglas asociado (esquema pendiente del capítulo 21).
 
@@ -103,7 +108,7 @@ Conversión Free→PRO (16 §2), previsiblemente disparada por volumen de operac
 
 ## Riesgos Detectados
 
-1. **El Camino A/B de la Fase 2 no está resuelto** y bloquea el diseño de onboarding real hasta que se decida — es el riesgo más urgente de este capítulo.
+1. ~~El Camino A/B de la Fase 2 no está resuelto~~ — **resuelto bajo Challenge Mode**: Camino A con edición libre (ver Fase 2). Riesgo residual: la calidad del catálogo de plantillas depende de mantenimiento activo — se traslada como requisito de alcance al capítulo 21, no queda abierto aquí.
 2. **La Fase 8 (cambio de estado de cuenta) depende de que el usuario recuerde actualizarlo manualmente** — sin integración con la prop firm (fuera de alcance del MVP, 07), un usuario que no actualiza el estado tras pasar de Challenge a Funded generará estadísticas agregadas (18 §6) incorrectas hasta que lo corrija. No se resuelve en este documento; se deja anotado para el capítulo de IA/notificaciones (posible recordatorio pasivo, no bloqueante).
 3. **El bucle de la Fase 4 asume que el trader siempre registra después de cerrar** — no modela el caso de una operación que se registra con retraso de días, lo cual podría sesgar el `opened_at` usado para el decaimiento temporal (13 §4) si no se distingue con cuidado entre "cuándo ocurrió la operación" y "cuándo se registró".
 
@@ -116,13 +121,12 @@ Conversión Free→PRO (16 §2), previsiblemente disparada por volumen de operac
 
 ## Cierre de capítulo
 
-**Nivel de madurez del capítulo**: 70%. El flujo está completo en su lógica y secuencia, pero depende de una decisión abierta (Fase 2) que condiciona el diseño real de un tramo entero del recorrido.
+**Nivel de madurez del capítulo**: 90% (subido de 70% tras resolver la Fase 2 bajo Challenge Mode). El flujo está completo en su lógica y secuencia; lo que queda son riesgos operativos menores (§ Riesgos Detectados #2-3), no decisiones estructurales.
 
-**Riesgos pendientes**: los 3 listados arriba, ninguno mitigado todavía — los tres requieren una decisión antes de poder darse por cerrados, no son riesgos residuales aceptados.
+**Riesgos pendientes**: #2 y #3 de "Riesgos Detectados" — ninguno bloquea el avance, ambos se trasladan como requisitos a capítulos futuros (notificaciones/IA para #2, modelo de datos de `opened_at` vs. `created_at` para #3, a resolver en el capítulo de Rule Engine o en una revisión de 04/15).
 
 **Decisiones abiertas**:
-1. Camino A (plantillas compartidas) vs. Camino B (configuración manual pura) para el perfil de reglas en el onboarding — recomendación: Camino A con edición libre, pero pendiente de aprobación explícita.
-2. Si el capítulo 21 (Rule Engine) se diseña inmediatamente después de este, o si hay otro capítulo intermedio que el fundador prefiera revisar antes.
-3. Si se retrofita el pie de capítulo (19 §5) a los documentos 00-18, según quedó anotado en 19 §8.
+1. Si el capítulo 21 (Rule Engine) se diseña inmediatamente después de este, o si hay otro capítulo intermedio que el fundador prefiera revisar antes.
+2. Si se retrofita el pie de capítulo (19 §5) a los documentos 00-18, según quedó anotado en 19 §8.
 
-**Recomendación profesional**: aprobar el flujo en su estructura general, pero resolver la Decisión abierta #1 antes de avanzar a cualquier diseño de base de datos — es la única pieza de este documento que cambiaría el resto del flujo si se decide distinto.
+**Recomendación profesional**: el flujo está listo para aprobarse tal cual. Recomiendo continuar directamente con el capítulo 21 (Rule Engine) — es la pieza que ya sabemos, desde §0, que invalida el diseño actual de `account_rules`, y ahora además carga con el requisito nuevo del catálogo de plantillas (Fase 2). Cuanto más tarde se rediseñe, más código/documentación downstream habría que tocar dos veces.

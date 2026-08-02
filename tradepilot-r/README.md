@@ -32,7 +32,7 @@ Este directorio contiene el **blueprint completo** del producto, diseñado antes
 | [17 · TradePilot OS](./docs/17-tradepilot-os.md) | Visión de plataforma: 6 de 9 módulos ya existen (mapeados a los bounded contexts de 11), los 4 nuevos (Replay, Psychology, Tax Report, TradeVault) acotados con el filtro de producto, y la reorientación de TradePilot R a cuenta como centro de gravedad |
 | [18 · Cuentas completas y Dashboard Maestro](./docs/18-cuentas-completas-dashboard-maestro.md) | Estado (Challenge/Funded/Live/Pausada/Terminada), drawdown estático vs. trailing, Profit Split separado del modelo matemático puro, y el Dashboard Maestro con prioridad "cuentas en riesgo" |
 | [19 · Metodología y reglas del proyecto](./docs/19-metodologia-y-reglas-del-proyecto.md) | Capítulo de proceso: formato obligatorio de decisiones, principio anti-hardcoding (Rule Engine), pie de capítulo obligatorio (riesgos, mejoras futuras, madurez, decisiones abiertas) |
-| [20 · Flujo funcional del usuario](./docs/20-flujo-funcional-usuario.md) | Recorrido completo desde la instalación hasta cientos de operaciones y consulta de estadísticas — sin pantallas, solo funcional. **Pendiente de aprobación** (madurez 70%, 1 decisión abierta bloqueante) |
+| [20 · Flujo funcional del usuario](./docs/20-flujo-funcional-usuario.md) | Recorrido completo desde la instalación hasta cientos de operaciones y consulta de estadísticas — sin pantallas, solo funcional. Madurez 90%, listo para aprobar; recomienda continuar con el Rule Engine (cap. 21) |
 
 ## Nota sobre este repositorio
 
