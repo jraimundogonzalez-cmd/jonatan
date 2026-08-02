@@ -30,7 +30,7 @@ Diseñar cada pantalla tres veces de forma independiente para móvil, tablet y d
 | 4 | Detalle de operación | Ver y completar la gestión de una operación concreta | Tap en una fila de Operaciones/Dashboard de cuenta |
 | 5 | Calculadora / Optimizador | Simular parciales, ver recomendación de IA | Tab bar |
 | 6 | Dashboard de cuenta | Estadísticas, reglas y operaciones de una cuenta concreta | Tap en una tarjeta de cuenta (pantalla 1) |
-| 7 | Dashboard global | Panorama agregado de todo el usuario | Tab bar / CTA desde Cuentas |
+| 7 | Dashboard Maestro (antes "Dashboard global") | Panorama agregado de todo el usuario + prioridad de atención (18 §6) | Tab bar / CTA desde Cuentas |
 | 8 | Ajustes (incl. TradeVault, 17 §3.4) | Perfil, empresas, preferencias, suscripción, exportación de datos | Tab bar |
 
 ## 3. Wireframes (móvil)
@@ -196,8 +196,8 @@ Detalle completo pulsación a pulsación y presupuesto de tiempo en 10-ux-regist
 └─────────────────────────┘  0 pulsaciones de selección (17 §4)
 ```
 
-### 7 · Dashboard global
-Misma estructura que 6, con un selector superior "Todas las cuentas / Por empresa" y un desglose adicional por empresa de fondeo (tabla, no gráfico, para comparar cifras exactas entre firmas).
+### 7 · Dashboard Maestro (antes "Dashboard global")
+Wireframe completo y tabla de desglose (con estado, drawdown restante, profit split) especificados en 18-cuentas-completas-dashboard-maestro.md §6 — incluye, además de la estructura de 6, un selector superior "Todas las cuentas / Por empresa", una sección de prioridad "Cuentas en riesgo" y un desglose por empresa de fondeo (tabla, no gráfico, para comparar cifras exactas entre firmas).
 
 ### 8 · Ajustes
 ```
@@ -233,7 +233,7 @@ Regla general aplicada a todas las pantallas del §3, salvo excepciones explíci
 | Operaciones (3) + Detalle (4) | Dos pantallas separadas, navegación con "←" | **Vista maestro-detalle**: lista a la izquierda, detalle a la derecha, sin navegar — seleccionar una fila actualiza el panel derecho in situ |
 | Calculadora (5) | 1 columna, inputs arriba / resultados abajo con scroll | **2 columnas** lado a lado, tal como se especifica en 03 §4 — a este ancho no hace falta elegir entre ver inputs o resultados |
 | Cuentas/Home (1) | Tarjetas de cuenta apiladas, una por fila | Grid de tarjetas (2-3 columnas) — más cuentas visibles sin scroll, relevante para P1 con muchas cuentas (01 §1) |
-| Dashboard global (7) | Tarjetas apiladas + tabla de desglose con scroll horizontal | Tarjetas en grid + tabla de desglose completa visible sin scroll |
+| Dashboard Maestro (7) | Tarjetas apiladas + tabla de desglose con scroll horizontal | Tarjetas en grid + tabla de desglose completa visible sin scroll |
 | Registrar operación (2) | Bottom sheet, ancho completo | Modal centrado, ancho fijo (~480px), fondo con overlay — el formulario no necesita ancho completo cuando no compite con el pulgar |
 
 Todo lo que no está en esta tabla es **reflow puro**: mismo contenido, mismo orden lógico, más aire y columnas de soporte (ej. una barra lateral de filtros en Operaciones a partir de tablet) — no una redefinición del propósito de la pantalla.

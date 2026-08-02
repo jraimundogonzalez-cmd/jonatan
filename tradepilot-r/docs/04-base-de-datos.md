@@ -74,7 +74,8 @@ create table public.accounts (
   current_capital numeric(18,4) not null,           -- cache derivado, ver 15 §3.1: mantenido por trigger
                                                       -- desde account_capital_events + trades, no editable a mano
   currency char(3) not null default 'USD',
-  is_active boolean not null default true,
+  is_active boolean not null default true,           -- superseded por accounts.status, ver 18 §4
+                                                      -- (Challenge/Funded/Live/Pausada/Terminada)
   created_at timestamptz not null default now()
 );
 
@@ -92,9 +93,10 @@ create index accounts_prop_firm_idx on public.accounts(prop_firm_id);
 create table public.account_rules (
   account_id uuid primary key references public.accounts(id) on delete cascade,
   max_daily_drawdown_pct numeric(5,2),
-  max_total_drawdown_pct numeric(5,2),
+  max_total_drawdown_pct numeric(5,2),               -- ver 18 §2: se interpreta según drawdown_type
   profit_target_pct numeric(5,2),
   max_position_risk_pct numeric(5,2)
+  -- drawdown_type y accounts.peak_capital: ver 18 §2 (estático vs. trailing)
 );
 
 alter table public.account_rules enable row level security;

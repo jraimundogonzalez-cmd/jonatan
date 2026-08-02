@@ -23,7 +23,8 @@ Todo el diseño se subordina a ese principio. No es un dashboard "bonito" que ad
 ├── Registrar operación            → flujo de <30s (modal / full screen en móvil), 10
 ├── Operaciones (todas)            → vista secundaria: buscar/filtrar histórico entre todas las cuentas
 ├── Calculadora / Optimizador      → simulador de parciales + recomendaciones IA explicadas (pantalla propia, §4)
-├── Dashboard global               → agregado de todas las cuentas/empresas, accesible desde Cuentas
+├── Dashboard Maestro (antes "Dashboard global") → agregado de todas las cuentas/empresas, con
+│                                    prioridad de atención "cuentas en riesgo" (18 §6)
 └── Ajustes                        → perfil, empresas de fondeo, preferencias del optimizador (λ, buckets), TradeVault (17 §3.4)
 ```
 

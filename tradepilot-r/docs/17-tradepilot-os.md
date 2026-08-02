@@ -17,7 +17,7 @@ Cuando 11 §3 trazó los límites de dominio (Identidad, Cartera, Trading, IA, A
 | **Journal** | Trading (`trades`, parciales) | **Ya existe** — es como se llama informalmente el registro de operaciones que ya diseñamos (02, 04, 10) |
 | **Analytics** | Analítica (vistas materializadas, dashboards) | **Ya existe** — es el Dashboard de cuenta/global (03, 14) |
 | **AI Coach** | IA (optimizador, recomendaciones) | **Ya existe** — es el optimizador + explicaciones (02 §5, 06, 12, 13) |
-| **Portfolio** | Analítica, vista agregada | **Ya existe** — es el Dashboard global (03 §2), con margen de crecimiento futuro hacia correlación entre activos |
+| **Portfolio** | Analítica, vista agregada | **Ya existe** — es el Dashboard Maestro (03 §2, 18 §6), con margen de crecimiento futuro hacia correlación entre activos |
 | **Funding Manager** | Cartera (`prop_firms`, `accounts`, `account_rules`) | **Ya existe** — es, literalmente, el corazón de TradePilot R (01 §1) reforzado por la reorientación a cuenta (§4 de este documento) |
 | **TradeVault** | Ninguno nuevo — es el compromiso de exportabilidad y backup ya diseñado (11 §12, 16 §7) | **Ya existe como principio** — falta solo darle una pantalla propia con ese nombre (§3.4) |
 | **Replay** | Ninguno — dominio nuevo | Nuevo, requiere redefinición (§3.1) |
