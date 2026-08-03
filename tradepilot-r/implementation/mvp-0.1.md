@@ -307,8 +307,11 @@ type FundingError =
   | { code: "PROP_FIRM_NOT_FOUND" }
   | { code: "ACCOUNT_NOT_FOUND" }
   | { code: "INVALID_INITIAL_CAPITAL"; detail: string }        // ≤ 0, o no numérico
+  | { code: "INVALID_AMOUNT"; detail: string }                  // registrarEventoCapital: no numérico (sí admite negativo)
   | { code: "PERSONAL_ACCOUNT_CANNOT_USE_PROFIT_SPLIT" }        // reexporta el error de la función SQL (§7.2)
+  | { code: "VALIDATION_ERROR"; field: string; detail: string } // nombre vacío, event_type='initial' fuera de crearCuenta — §14.7
   | { code: "UNAUTHORIZED" }                                     // RLS rechazó la operación
+  | { code: "UNKNOWN"; detail: string }                          // catch-all honesto para un error de Postgres no catalogado — §14.7
 ```
 
 **Regla de borde de API, nueva en este documento**: `initial_capital`/`amount` viajan como `string` en la API pública, nunca como `number` — un `number` de JS en el borde de red ya es un `float` antes de que el kernel decimal (§6.4) pueda intervenir; forzar `string` en el contrato de API es la única forma de garantizar que ningún dato monetario pase por una representación de coma flotante en ningún punto del recorrido cliente→servidor→BD.
@@ -363,7 +366,7 @@ Caso concreto, uno por rama de `R_cierre_resto` (02 §2), con valores exactos ve
 | Stop Loss puro | 100.0000 | 3.0000 | ninguno | 0.4000 | STOP_LOSS | −1.0000 |
 | Break Even tras 1 parcial | 100.0000 | 3.0000 | 1 parcial: 50% @ 1.0000R | 1.8000 | BREAK_EVEN | 0.5000 *(=0.5×1.0000 + 0.5×0)* |
 | Take Profit completo, sin parciales | 100.0000 | 3.0000 | ninguno | 3.2000 | TAKE_PROFIT_FULL | 3.0000 |
-| Cierre manual con 2 parciales | 100.0000 | 5.0000 | 30% @ 1.0000R, 30% @ 2.0000R | 2.5000 | MANUAL_CLOSE (resto en 2.2000R) | 1.6600 *(=0.3×1+0.3×2+0.4×2.2)* |
+| Cierre manual con 2 parciales | 100.0000 | 5.0000 | 30% @ 1.0000R, 30% @ 2.0000R | 2.5000 | MANUAL_CLOSE (resto en 2.2000R) | 1.7800 *(=0.3×1+0.3×2+0.4×2.2)* |
 
 Cada fila es un test en `test/golden/r-final.test.ts` — comparación exacta (`toBe`, no `toBeCloseTo`) contra el `FixedDecimal` esperado, porque la aritmética es exacta por diseño (SPEC-001 §4.3) y una tolerancia de comparación escondería justo el tipo de error que este catálogo existe para prevenir.
 
@@ -429,7 +432,22 @@ Ninguna encontrada — `initial_capital`/`current_capital`/`peak_capital` son tr
 - Sin idempotencia en creación de Cuenta/Empresa (§11.5) — deuda aceptada, bajo impacto.
 - Sin manejo de `Terminated`/`Merged` (§10.1) — no es deuda, es alcance correctamente diferido (ambos dependen de módulos que no existen).
 
-### 14.5 Verificación I1-I21
+### 14.6 Correcciones encontradas al escribir el código (post-aprobación de este documento)
+
+Dos hallazgos reales durante la implementación de `packages/quant-engine`, siguiendo la regla del propio proyecto ("si aparece un problema de arquitectura: detener, explicar, proponer, corregir la documentación, continuar"):
+
+1. **Error aritmético en el golden dataset (§11.1, caso "Cierre manual con 2 parciales")**: el valor esperado estaba escrito como `1.6600`, pero la propia fórmula mostrada junto a él (`0.3×1+0.3×2+0.4×2.2`) da `1.7800` (`0.3+0.6+0.88=1.78`). Es un error de transcripción del documento aprobado, no de la fórmula — corregido aquí a `1.7800`, y es el valor contra el que `test/golden/r-final.test.ts` verifica.
+2. **Alcance de `cierre_manual_rr` demasiado estrecho en SPEC-001 §3.4**: el campo estaba anotado como válido "solo si el usuario cerró manualmente con R_max ≥ rr_objetivo" — pero el propio caso 4 de este golden dataset (`r_max=2.5000 < rr_objetivo=5.0000`, cierre manual en `2.2000R`) es exactamente el caso que esa restricción excluye. Se generaliza `cierre_manual_rr` a "el valor de R en el que el usuario cerró manualmente el tramo no cubierto por parciales", sin relación obligatoria con `rr_objetivo` — sigue siendo un dato observado (nunca inferido), así que no compromete ninguna regla de Quant Engine. Corregido en SPEC-001 §3.4 y documentado en `packages/quant-engine/src/core/types.ts`.
+
+### 14.7 Hallazgos al implementar la capa RPC de Funding Management (`supabase/functions/sql/funding.sql`)
+
+1. **Hallazgo de seguridad real, el más importante de esta entrega**: una `FOREIGN KEY` en Postgres valida existencia contra la tabla completa — **no aplica RLS**. `accounts.prop_firm_id references prop_firms(id)` por sí sola no impide que un usuario cree una Cuenta apuntando al `prop_firm_id` de **otro** usuario; la FK solo comprueba que la fila exista en algún sitio, no que le pertenezca a quien hace la petición. Esto es un bypass real de aislamiento multi-tenant que ninguna prueba de RLS de lectura (§11.2) detectaría, porque el problema está en un INSERT, no en un SELECT. **Corrección**: `crear_cuenta` verifica explícitamente `exists(select 1 from prop_firms where id = p_prop_firm_id and user_id = auth.uid())` antes de insertar, y trata "existe pero no es tuya" igual que "no existe" (`PROP_FIRM_NOT_FOUND`) — nunca revela que la Empresa de otro usuario existe.
+2. **`event_type = 'initial'` no estaba protegido en `registrar_evento_capital`**: el `CHECK` de la tabla permite `'initial'` porque `crear_cuenta` lo necesita para el evento fundacional — pero sin una restricción adicional, cualquier usuario podría llamar a `registrar_evento_capital` directamente con `event_type='initial'` y duplicar ese evento fuera del flujo atómico de creación de Cuenta. Corregido: `registrar_evento_capital` rechaza explícitamente `'initial'` con `VALIDATION_ERROR`.
+3. **`amount` en `registrar_evento_capital` valida solo que sea numérico, nunca su signo** — a diferencia de `initial_capital` en `crear_cuenta` (que exige `> 0`), un evento de capital admite legítimamente valores negativos (`withdrawal`, un `adjustment` a la baja); confundir ambas validaciones habría rechazado retiradas válidas.
+4. **El catálogo `FundingError` de §8 estaba incompleto**: no tenía forma de representar un nombre vacío (cubierto solo por un `CHECK` de esquema, no por una regla de negocio con código propio) ni un error de Postgres no catalogado. Se añaden `VALIDATION_ERROR` (validaciones de forma con campo explícito) y `UNKNOWN` (catch-all honesto — Trust Layer, SPEC-014: nunca ocultar un error propio bajo una etiqueta que no le corresponde) — ver §8 arriba, ya actualizado.
+5. **`SECURITY DEFINER` sin `search_path` fijado** (`handle_new_user`) es una vulnerabilidad conocida de Postgres/Supabase (secuestro de `search_path`) si no se fija explícitamente — se añade `set search_path = public` a toda función `SECURITY DEFINER`/`SECURITY INVOKER` de este documento, no solo a la que ya lo requería por diseño.
+
+### 14.5 Verificación I1-I21 (continuación de §14.1-14.4, numeración conservada del documento aprobado)
 
 - **I15 (precisión decimal)**: verificado — ningún campo monetario/R es `float`; el borde de API usa `string` (§8, hallazgo nuevo de esta entrega).
 - **I16 (Zero Friction)**: verificado — el flujo de "capital propio" reduce Empresa+Cuenta a una decisión más un formulario (§5, paso 4), no dos pasos secuenciales completos.

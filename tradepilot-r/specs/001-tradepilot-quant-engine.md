@@ -170,7 +170,10 @@ interface RFinalInput {
   parciales_ejecutados: ParcialEjecutado[]        // 0..5
   r_max: RValue
   be_trigger: BETrigger
-  cierre_manual_rr?: RValue                        // solo si el usuario cerró manualmente con R_max ≥ rr_objetivo
+  cierre_manual_rr?: RValue                        // valor de R en el que el usuario cerró manualmente el tramo no
+                                                    // cubierto por parciales — dato observado, sin restricción sobre
+                                                    // su relación con rr_objetivo; ver corrección de implementación
+                                                    // en packages/quant-engine/src/core/types.ts
 }
 ```
 - **Determinismo**: total — mismo input, mismo `R_final`, en cualquier runtime (§4.4).
