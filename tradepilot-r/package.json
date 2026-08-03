@@ -7,8 +7,9 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspace=@tradepilot/quant-engine && npm run build --workspace=@tradepilot/web",
+    "typecheck": "npm run build --workspace=@tradepilot/quant-engine && tsc -p apps/web/tsconfig.json --noEmit",
+    "test": "npm run test --workspace=@tradepilot/quant-engine && npm run test --workspace=@tradepilot/web",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .ts,.tsx"
   },
   "devDependencies": {

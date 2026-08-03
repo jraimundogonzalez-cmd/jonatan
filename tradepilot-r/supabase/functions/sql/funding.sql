@@ -123,6 +123,27 @@ end;
 $$;
 
 -- ============================================================
+-- listar_empresas
+--
+-- Hallazgo de implementación: mvp-0.1.md §8 no incluía ninguna función de
+-- lectura de Empresas — sin ella, el enrutado de onboarding (¿el usuario ya
+-- tiene una Empresa?) y el formulario de Nueva Cuenta (¿a qué Empresa la
+-- asocio?) no tenían forma de leerlas sin una consulta directa desde el
+-- componente, justo lo que §6.3 prohíbe. Se añade siguiendo la misma
+-- convención que el resto del catálogo.
+-- ============================================================
+create or replace function public.listar_empresas()
+returns setof public.prop_firms
+language sql
+security invoker
+set search_path = public
+as $$
+  select * from public.prop_firms
+  where user_id = auth.uid()
+  order by created_at asc;
+$$;
+
+-- ============================================================
 -- listar_cuentas
 -- ============================================================
 create or replace function public.listar_cuentas()
@@ -196,4 +217,26 @@ begin
   insert into public.account_capital_events (account_id, event_type, amount, note)
   values (p_account_id, p_event_type, v_amount, p_note);
 end;
+$$;
+
+-- ============================================================
+-- listar_eventos_capital
+--
+-- Hallazgo de implementación: mvp-0.1.md §8 no incluía ninguna función de
+-- lectura del ledger — sin ella, la pantalla de Detalle de Cuenta (que
+-- necesita mostrar el historial de eventos) no tenía forma de leerlo sin
+-- una consulta directa desde el componente, justo lo que §6.3 prohíbe.
+-- Se añade siguiendo la misma convención que el resto del catálogo (RPC,
+-- nunca `.from()` directo desde el cliente).
+-- ============================================================
+create or replace function public.listar_eventos_capital(p_account_id uuid)
+returns setof public.account_capital_events
+language sql
+security invoker
+set search_path = public
+as $$
+  select e.* from public.account_capital_events e
+  join public.accounts a on a.id = e.account_id
+  where e.account_id = p_account_id and a.user_id = auth.uid()
+  order by e.occurred_at desc;
 $$;

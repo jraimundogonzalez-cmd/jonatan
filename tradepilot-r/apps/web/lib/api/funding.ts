@@ -2,68 +2,17 @@
 // Cada función envuelve una llamada RPC a Postgres (supabase/functions/sql/funding.sql) —
 // nunca una llamada SQL directa desde un componente (mvp-0.1.md §6.3).
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-export type AccountStatus = "challenge" | "funded" | "live" | "paused" | "terminated" | "merged";
-export type CapitalEventType = "initial" | "deposit" | "withdrawal" | "payout" | "reset" | "adjustment";
-
-export interface PropFirm {
-  id: string;
-  user_id: string;
-  name: string;
-  is_personal: boolean;
-  color: string | null;
-  status: "active" | "archived";
-  created_at: string;
-}
-
-export interface Account {
-  id: string;
-  user_id: string;
-  prop_firm_id: string;
-  name: string;
-  currency: string;
-  initial_capital: string;
-  current_capital: string;
-  peak_capital: string;
-  status: AccountStatus;
-  profit_split_pct: string | null;
-  rule_profile_snapshot_id: string | null;
-  created_at: string;
-}
-
-export interface CrearEmpresaInput {
-  name: string;
-  is_personal: boolean;
-}
-
-export interface CrearCuentaInput {
-  prop_firm_id: string;
-  name: string;
-  /** String, nunca number — evita que el cliente introduzca un float por el borde de la API (§8, §14.6 de mvp-0.1.md). */
-  initial_capital: string;
-  currency: string; // ISO 4217, 3 letras
-  profit_split_pct?: string;
-}
-
-/**
- * Catálogo de errores tipados de la API de Funding Management.
- *
- * `VALIDATION_ERROR`/`INVALID_AMOUNT`/`UNKNOWN` son ampliaciones sobre el
- * catálogo original de mvp-0.1.md §8, encontradas al implementar la capa RPC
- * real (§14.7) — un nombre vacío o un error de Postgres no catalogado no
- * tenían representación honesta en el union original.
- */
-export type FundingError =
-  | { code: "PROP_FIRM_NOT_FOUND" }
-  | { code: "ACCOUNT_NOT_FOUND" }
-  | { code: "INVALID_INITIAL_CAPITAL"; detail: string }
-  | { code: "INVALID_AMOUNT"; detail: string }
-  | { code: "PERSONAL_ACCOUNT_CANNOT_USE_PROFIT_SPLIT" }
-  | { code: "VALIDATION_ERROR"; field: string; detail: string }
-  | { code: "UNAUTHORIZED" }
-  | { code: "UNKNOWN"; detail: string };
-
-export type FundingResult<T> = { ok: true; value: T } | { ok: false; error: FundingError };
+import {
+  KNOWN_FUNDING_ERROR_CODES,
+  type Account,
+  type CapitalEvent,
+  type CapitalEventType,
+  type CrearCuentaInput,
+  type CrearEmpresaInput,
+  type FundingError,
+  type FundingResult,
+  type PropFirm,
+} from "@/types/funding";
 
 function ok<T>(value: T): FundingResult<T> {
   return { ok: true, value };
@@ -72,17 +21,6 @@ function ok<T>(value: T): FundingResult<T> {
 function err(error: FundingError): FundingResult<never> {
   return { ok: false, error };
 }
-
-const KNOWN_FUNDING_ERROR_CODES = new Set<FundingError["code"]>([
-  "PROP_FIRM_NOT_FOUND",
-  "ACCOUNT_NOT_FOUND",
-  "INVALID_INITIAL_CAPITAL",
-  "INVALID_AMOUNT",
-  "PERSONAL_ACCOUNT_CANNOT_USE_PROFIT_SPLIT",
-  "VALIDATION_ERROR",
-  "UNAUTHORIZED",
-  "UNKNOWN",
-]);
 
 /**
  * Traduce un error crudo de Postgres/PostgREST al catálogo tipado.
@@ -153,6 +91,18 @@ export async function crearCuenta(
   return ok(data as Account);
 }
 
+/**
+ * Lista las Empresas del usuario actual. Añadida durante la implementación
+ * del onboarding y de Nueva Cuenta — el catálogo de mvp-0.1.md §8 no incluía
+ * ninguna función de lectura de `prop_firms` (ver hallazgo junto a
+ * `listar_empresas` en funding.sql).
+ */
+export async function listarEmpresas(client: SupabaseClient): Promise<FundingResult<PropFirm[]>> {
+  const { data, error } = await client.rpc("listar_empresas");
+  if (error) return err(parsePostgresError(error.message));
+  return ok((data ?? []) as PropFirm[]);
+}
+
 export async function listarCuentas(client: SupabaseClient): Promise<FundingResult<Account[]>> {
   const { data, error } = await client.rpc("listar_cuentas");
   if (error) return err(parsePostgresError(error.message));
@@ -181,4 +131,19 @@ export async function registrarEventoCapital(
   });
   if (error) return err(parsePostgresError(error.message));
   return ok(undefined);
+}
+
+/**
+ * Historial de eventos de capital de una Cuenta, orden cronológico descendente.
+ * Añadida durante la implementación de la pantalla de Detalle de Cuenta — el
+ * catálogo de mvp-0.1.md §8 no tenía ninguna función de lectura del ledger
+ * (ver hallazgo documentado junto a `listar_eventos_capital` en funding.sql).
+ */
+export async function listarEventosCapital(
+  client: SupabaseClient,
+  accountId: string,
+): Promise<FundingResult<CapitalEvent[]>> {
+  const { data, error } = await client.rpc("listar_eventos_capital", { p_account_id: accountId });
+  if (error) return err(parsePostgresError(error.message));
+  return ok((data ?? []) as CapitalEvent[]);
 }
