@@ -151,6 +151,14 @@ TradePilot debe reducir el estrés del trader, nunca aumentarlo. Ninguna pantall
 
 **Aplicación**: se revisa explícitamente en toda pantalla futura, mismo estándar que I16 ya exige para fricción. Primera aplicación completa en specs/012-tradepilot-design-system.md, que además identifica el caso de mayor riesgo de violarla (la tarjeta de "Logro" de SPEC-010, por su cercanía natural a mecánicas de celebración tipo videojuego) y lo resuelve explícitamente.
 
+## 8.7 I21 — One Thought Rule, permanente (aprobada por el fundador en specs/013-experience-architecture.md §2)
+
+En cualquier pantalla de TradePilot, el usuario solo debe tener que pensar en una cosa importante a la vez. Ninguna pantalla podrá exigir dos decisiones cognitivas importantes simultáneas — si una pantalla obliga a pensar en más de una cosa, debe dividirse.
+
+**Distinción que hace esta regla verificable, no solo aspiracional**: protege contra decisiones que exigen deliberación (sopesar datos, evaluar un trade-off, analizar evidencia) — no contra confirmaciones de reacción inmediata (una sugerencia ya pre-rellenada que solo se confirma con un toque, una reacción emocional sin análisis). Verificada explícitamente contra la tarjeta de cierre en un toque de SPEC-009 (dos preguntas en la misma pantalla) para confirmar que no la viola — ambas preguntas pertenecen al mismo marco cognitivo de baja deliberación. Formaliza, como regla permanente, lo que 03 §4 ya hizo una vez de forma ad-hoc al separar la pantalla "Hoy" en tres pantallas de un único objetivo cada una.
+
+**Aplicación**: se revisa explícitamente en toda pantalla futura. Primera aplicación completa en specs/013-experience-architecture.md, que además la usa para exigir que "adoptar una simulación como Plan real" (SPEC-011) tenga siempre su propio momento dedicado, nunca compartido con otra decisión.
+
 ## 9. Decisión abierta que esta metodología deja pendiente (no se resuelve unilateralmente)
 
 ¿Se retrofitan los 18 capítulos ya escritos (00-18) con el pie de capítulo de §5, o el formato nuevo aplica solo hacia adelante? Es un trabajo real (18 documentos), no una formalidad — se deja como decisión explícita del fundador, no se asume. Ver también 20-flujo-funcional-usuario.md, cuyo cierre de capítulo señala además una segunda decisión abierta más urgente (el impacto retroactivo del Rule Engine sobre 04/15/18).
