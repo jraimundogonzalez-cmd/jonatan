@@ -90,7 +90,7 @@ validation.checkPortfolioInput(muestra)
   → stats.calcularRachaMaxima(muestra)
   → stats.calcularTiempoMedioEnMercado(muestra)
   → stats.calcularDistribucionR(muestra)
-  → curves.calcularCurvaEquity(muestra, unidad)
+  → curves.calcularCurvaEquity(muestra)                [genérica sobre brand Money|RValue — §8.6]
   → curves.calcularDrawdownHistorico(curva_equity)
   → stats.calcularRecoveryFactor(beneficio_neto, max_drawdown)
   → explain.wrap(cada resultado, formula_id, inputs)
@@ -116,6 +116,10 @@ type FixedDecimal<Scale extends number>  // ver §4.3 — nunca un `number` nati
 type Money   = FixedDecimal<4>   // numeric(18,4) — 04 §1.2
 type RValue  = FixedDecimal<4>   // numeric(8,4)
 type Percent = FixedDecimal<2>   // numeric(5,2)
+type Seconds = FixedDecimal<0>   // duración en segundos enteros — brand añadido en §8.6 (Grupo C)
+
+interface TimeSeriesPoint<T> { timestamp: Timestamp; value: T }
+type TimeSeries<T> = readonly TimeSeriesPoint<T>[]   // usado por Grupo D, §3.6 — formalizado en §8.6
 
 enum BETrigger {
   NONE,
@@ -152,7 +156,7 @@ type QuantError =
   | { code: "INVALID_PARTIAL_SEQUENCE";  detail: string }   // RR_i no estrictamente creciente, o sequence duplicada
   | { code: "PARTIALS_EXCEED_100_PCT";   detail: string }   // Σ p_i > 100
   | { code: "EMPTY_SAMPLE";              detail: string }   // N = 0 en una función de agregado que lo requiere
-  | { code: "UNDEFINED_RATIO";           detail: string; reason: "ZERO_R_MAX" | "ZERO_LOSSES" | "ZERO_DRAWDOWN" | "ZERO_VARIANCE" }
+  | { code: "UNDEFINED_RATIO";           detail: string; reason: "ZERO_R_MAX" | "ZERO_LOSSES" | "ZERO_DRAWDOWN" | "ZERO_VARIANCE" | "ZERO_CAPITAL" }  // "ZERO_CAPITAL" añadido en §8.6 (Grupo E, Drawdown_restante_%)
   | { code: "OUT_OF_RANGE";              field: string; detail: string }  // p.ej. Riesgo% ≤ 0
   | { code: "INCONSISTENT_TRIGGER_STATE"; detail: string }  // R_max no es compatible con los parciales marcados como ejecutados
 ```
@@ -194,7 +198,9 @@ calcularProfitFactor(muestra: Money[]): Result<QuantResult<RValue>, QuantError>
 calcularWinRate(muestra: RValue[]): Result<QuantResult<Percent>, QuantError>
 calcularRecoveryFactor(beneficio_neto: Money, max_drawdown: Money): Result<QuantResult<RValue>, QuantError>
 calcularRachaMaxima(muestra: RValue[]): Result<QuantResult<{longitud: number; signo: "positiva"|"negativa"}>, QuantError>
-calcularTiempoMedioEnMercado(muestra_segundos: number[]): Result<QuantResult<number>, QuantError>
+calcularTiempoMedioEnMercado(muestra_segundos: Seconds[]): Result<QuantResult<Seconds>, QuantError>
+// Seconds = FixedDecimal de un 4º brand del kernel decimal, escala 0 — corregido en §8.6:
+// la firma original usaba number[]/number nativos, violando §1.2 punto 2 en su propia definición.
 calcularDistribucionR(muestra: RValue[], bucket_width: RValue): Result<QuantResult<Histogram>, QuantError>
 ```
 
@@ -203,8 +209,11 @@ Todas retornan `EMPTY_SAMPLE` si `N = 0`. `calcularRatioConsistencia` y `calcula
 ### 3.6 Operaciones públicas — Grupo D (curvas)
 
 ```
-calcularCurvaEquity(muestra_ordenada: Money[], unidad: "EUR"|"R"): Result<QuantResult<TimeSeries<Money|RValue>>, QuantError>
-calcularDrawdownHistorico(curva_equity: TimeSeries<Money|RValue>): Result<QuantResult<{serie: TimeSeries<Money|RValue>; max_drawdown: Money|RValue}>, QuantError>
+calcularCurvaEquity<Brand extends "Money"|"RValue">(muestra_ordenada: TimeSeries<FixedDecimal<Brand>>): Result<QuantResult<TimeSeries<FixedDecimal<Brand>>>, QuantError>
+calcularDrawdownHistorico<Brand extends "Money"|"RValue">(curva_equity: TimeSeries<FixedDecimal<Brand>>): Result<QuantResult<{serie: TimeSeries<FixedDecimal<Brand>>; max_drawdown: FixedDecimal<Brand>}>, QuantError>
+// Genérica sobre el brand — corregido en §8.6: la firma original tipaba muestra_ordenada
+// como Money[] incondicionalmente, incluso cuando unidad="R" (un RValue no es un Money).
+// El parámetro "unidad" desaparece: el propio tipo del dato ya determina la unidad.
 ```
 
 `muestra_ordenada` **debe** llegar pre-ordenada por el consumidor (orden cronológico canónico, §4.4) — Quant Engine valida el orden y retorna `INCONSISTENT_TRIGGER_STATE` si detecta timestamps no crecientes, nunca reordena en silencio (reordenar sería una decisión de negocio disfrazada de utilidad).
@@ -216,11 +225,20 @@ calcularDrawdownState(input: DrawdownStateInput): Result<QuantResult<DrawdownSta
 
 interface DrawdownStateInput {
   current_capital: Money
-  peak_capital: Money
   initial_capital: Money
   drawdown_type: "static" | "trailing" | "eod"
+  // Requerido si drawdown_type ≠ "static" — corregido en §8.6: "eod" (End Of
+  // Day Trailing) necesita el máximo de los cierres de día, un valor DISTINTO
+  // del pico histórico continuo que usa "trailing". Renombrado de
+  // "peak_capital" a "peak_capital_basis" para dejar explícito que el
+  // llamador aporta el pico ya correcto según el tipo — Quant Engine nunca
+  // decide cuál usar.
+  peak_capital_basis?: Money
   max_total_drawdown_pct: Percent
-  max_daily_drawdown_pct?: Percent
+  // "max_daily_drawdown_pct?: Percent" ELIMINADO en §8.6: era un parámetro
+  // muerto — ningún campo de DrawdownState lo consumía. Un "drawdown diario
+  // restante" real exige un 5º hecho de capital ("capital al inicio del
+  // día") que no existe en ningún esquema del proyecto todavía.
 }
 interface DrawdownState { piso_vigente: Money; drawdown_restante_eur: Money; drawdown_restante_pct: Percent }
 ```
@@ -470,6 +488,18 @@ El grafo de §4.1 se verificó explícitamente como DAG (sin ciclos): `core` no 
 1. **El kernel decimal sobre `BigInt` no tiene límite práctico de tamaño** (a diferencia de un `float`, no pierde precisión con valores grandes) — soporta sin cambios el crecimiento de capital/volumen de 19 §7.
 2. **El modo streaming de §5.3 es la única vía viable a la escala de "millones de operaciones"** — el modo batch (§3.5, recibir la muestra completa) debe tratarse como una utilidad de desarrollo/depuración o para carteras pequeñas, nunca como el camino de producción para una Cuenta con historial extenso. Se deja anotado como requisito no negociable para quien implemente Risk Engine sobre este contrato.
 3. **El catálogo de fórmulas es estable a 10 años por diseño** (§4.5, inmutabilidad de versión) — el riesgo real a 10 años no es que una fórmula deba cambiar, es que el número de `formula_version` acumuladas para una misma función crezca (p.ej. `score.v7`) y nadie limpie versiones ya sin uso; se recomienda una auditoría periódica de qué versiones ya no tienen ningún registro persistido que las referencie, candidatas a eliminación segura (coherente con el sistema de retirada de TPOS, 31).
+
+### 8.6 Hallazgos al implementar Grupos C-F (`packages/quant-engine`, BUILD 002)
+
+Esta sección se añade tras completar la implementación real del catálogo completo (Grupos C, D, E, F — Grupo B ya se había implementado y auditado en BUILD 001). Todos los hallazgos siguientes se encontraron escribiendo código y ejecutándolo (tests, benchmarks reales), no por inspección del documento.
+
+1. **`calcularCurvaEquity` (§3.6) tipaba `muestra_ordenada` como `Money[]` incondicionalmente, incluso cuando `unidad = "R"`** — un `RValue` no es un `Money`, así que la firma original era inconsistente con su propio parámetro `unidad`. Corregido generalizando la función sobre el brand del kernel decimal (`Money | RValue`): el tipo del dato ya determina la unidad sin ambigüedad, así que el parámetro `unidad` desaparece — elimina por construcción la posibilidad de que ambos diverjan. Ver `packages/quant-engine/src/curves/types.ts`.
+2. **`calcularTiempoMedioEnMercado` (§3.5) tipaba su entrada/salida como `number[]`/`number` nativos de JS/TS** — la única función de todo el catálogo que violaba §1.2 punto 2 ("nunca usa coma flotante, ni siquiera en un paso intermedio") en su propia firma. Corregido añadiendo un cuarto brand al kernel decimal, `Seconds` (escala 0, duración en segundos enteros) — ver `packages/quant-engine/src/decimal/kernel.ts`.
+3. **`DrawdownStateInput` (§3.7) tenía un único campo `peak_capital` pese a que `drawdown_type` incluye `"eod"` (End Of Day Trailing, 22 §151)** — "eod" necesita el máximo de los cierres de día, un valor **distinto** del pico histórico continuo que usa "trailing"; un solo campo `peak_capital` no puede representar ambos sin que el llamador se equivoque de pico por accidente. Corregido: renombrado a `peak_capital_basis` con una nota explícita de que el llamador es responsable de aportar el pico correcto según el tipo — Quant Engine nunca decide cuál usar (§1.2 punto 3). Además, `max_daily_drawdown_pct` (declarado en la interfaz original) nunca era consumido por ningún campo de `DrawdownState` — parámetro muerto, eliminado; un "drawdown diario restante" real requeriría un quinto hecho de capital ("capital al inicio del día") que no existe en ningún esquema del proyecto todavía.
+4. **Catálogo de errores (§3.3) incompleto para dos casos indefinidos reales, encontrados al implementar**: `Drawdown_restante_%` (Grupo E) divide por `current_capital`, y ninguno de los 4 `reason` de `UNDEFINED_RATIO` cubría "capital = 0" — añadido `"ZERO_CAPITAL"`. Y `calcularRatioConsistencia` (Grupo C) solo tenía prevista la división por cero para `N = 1` — pero con `N ≥ 2` y todos los valores de la muestra idénticos, `σ[R] = 0` exactamente, produciendo la misma división por cero sin que ninguna comprobación de tamaño de muestra la detectara. Cubierto reutilizando el mismo `reason: "ZERO_VARIANCE"` (la causa raíz es la misma).
+5. **Duplicación real encontrada entre dos funciones del propio catálogo**: `computeRFinal` (usado por `calcularRFinal`/`simularGestion`) y `calcularImpactoPorParcial` recorrían `parciales_ejecutados` cada una por su cuenta calculando la misma expresión (`pct_close/100 × rr_level`) — exactamente la clase de "formula drift" que §Riesgos #1 ya advertía en general. Unificadas en una única función interna de descomposición (`decomposeRFinal`), reutilizada por ambas.
+6. **Hallazgo de rendimiento real (no teórico) vía benchmark**: la precisión global del kernel decimal (`Decimal.set({ precision })`) estaba fijada en 50 dígitos significativos — casi el doble de los ~28-30 que exige §4.3.2 ("scale + 10" dígitos de guarda) para el brand más grande (`Money`/`RValue`, `numeric(18,4)`). `Decimal.div()` en decimal.js tiene coste creciente con la precisión configurada; con 50 dígitos, los agregados de Grupo C sobre 10.000 operaciones medían ~50-58ms de media, muy por encima de cualquier margen razonable. Reducido a 30 dígitos (todavía con margen de guarda sobre el mínimo exigido) — mejora medible en Grupo D sin cambiar ningún resultado de ningún test existente (verificado: los 73 tests que ya pasaban antes del cambio siguen pasando con los mismos valores exactos después).
+7. **El propio benchmark inicial medía el objetivo de latencia equivocado**: SPEC-001 §5.1 escribe el objetivo de Grupo C/G como "hasta 10.000 operaciones **(modo streaming, §5.3)** — < 15ms" — el calificador "modo streaming" está en el propio texto de este documento, no es una inferencia. El primer benchmark medía el modo **batch** (`calcularEsperanza`/`calcularDesviacionR` sobre un array de 10.000 elementos completo) contra ese objetivo, que §5.3/§8.5 punto 2 ya declaraba explícitamente "utilidad de desarrollo/depuración... nunca el camino de producción para una Cuenta con historial extenso". Corregido: el benchmark ahora mide una única actualización incremental (`calcularEsperanzaIncremental`/`calcularDesviacionDesdeAcumulador`) sobre un acumulador ya poblado con 10.000 elementos — la operación O(1) real de producción — y mantiene el batch como benchmark informativo, explícitamente etiquetado como no sujeto al objetivo. Cifras reales en ambos modos documentadas en `implementation/mvp-0.1.md` (sección de este build).
 
 ---
 

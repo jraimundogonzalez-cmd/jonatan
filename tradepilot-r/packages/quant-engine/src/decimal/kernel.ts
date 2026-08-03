@@ -9,19 +9,47 @@
  */
 import Decimal from "decimal.js";
 
-const KERNEL_PRECISION = 50;
+/**
+ * Precisión global de guarda (dígitos SIGNIFICATIVOS, no decimales) — SPEC-001
+ * §4.3.2 exige "scale + 10" dígitos de guarda para la división. Para el brand
+ * más grande del kernel (Money/RValue, `numeric(18,4)`: hasta 14 dígitos
+ * enteros + 4 de escala), eso son 14 + 4 + 10 = 28 dígitos significativos —
+ * se redondea a 30 con margen.
+ *
+ * **Hallazgo de rendimiento (Challenge Mode, encontrado por benchmark real,
+ * no por inspección)**: el valor original de esta constante era 50, casi el
+ * doble de lo que el propio §4.3.2 exige. `Decimal.div()` en decimal.js tiene
+ * coste creciente con la precisión configurada — con 50 dígitos, los
+ * benchmarks de Grupo C (`calcularEsperanza`/`calcularDesviacionR`, N=10.000)
+ * medían ~50-58ms, **por encima** del objetivo de <15ms de SPEC-001 §5.1;
+ * Grupo D (`calcularCurvaEquity`, N=10.000) rondaba el límite de 20ms. Con
+ * `KERNEL_PRECISION = 30` (todavía con margen de guarda de sobra para el
+ * dominio real), ambos grupos vuelven a cumplir sus objetivos — ver
+ * test/bench/quant-engine.bench.ts para las cifras reales antes/después.
+ */
+const KERNEL_PRECISION = 30;
 
 Decimal.set({
   precision: KERNEL_PRECISION,
   rounding: Decimal.ROUND_HALF_EVEN,
 });
 
-export type FixedDecimalBrand = "Money" | "RValue" | "Percent";
+/**
+ * `Seconds` — añadido al implementar Grupo C (`calcularTiempoMedioEnMercado`,
+ * SPEC-001 §3.5). Hallazgo de Challenge Mode: la especificación tipaba esa
+ * función sobre `number[]`/`number` nativos — la única función de todo el
+ * catálogo que violaba §1.2 punto 2 ("nunca usa coma flotante, ni siquiera en
+ * un paso intermedio") en su propia firma. Escala 0 (segundos enteros, acorde
+ * al nombre `time_in_market_sec`) — si en el futuro hiciera falta precisión
+ * de sub-segundo, se sube la escala aquí, en el único punto de configuración.
+ */
+export type FixedDecimalBrand = "Money" | "RValue" | "Percent" | "Seconds";
 
 const SCALE_BY_BRAND: Record<FixedDecimalBrand, number> = {
   Money: 4, // numeric(18,4) — 04 §1.2
   RValue: 4, // numeric(8,4)
   Percent: 2, // numeric(5,2)
+  Seconds: 0, // duración en segundos enteros
 };
 
 /**
@@ -50,7 +78,14 @@ function assertFiniteDecimalString(value: string): void {
   }
 }
 
-function wrap<Brand extends FixedDecimalBrand>(
+/**
+ * Envoltura genérica desde un `Decimal` ya calculado, parametrizada por
+ * brand — usada por código genérico sobre brand (p.ej. `curves/`, que opera
+ * indistintamente sobre `Money` o `RValue` según la unidad elegida por el
+ * llamador). Las envolturas específicas (`moneyFromDecimal`, etc.) siguen
+ * siendo la vía preferida cuando el brand es estático en el punto de uso.
+ */
+export function wrap<Brand extends FixedDecimalBrand>(
   brand: Brand,
   value: Decimal,
 ): FixedDecimal<Brand> {
@@ -82,6 +117,11 @@ export function percent(value: string): FixedDecimal<"Percent"> {
   return wrap("Percent", new Decimal(value));
 }
 
+export function seconds(value: string): FixedDecimal<"Seconds"> {
+  assertFiniteDecimalString(value);
+  return wrap("Seconds", new Decimal(value));
+}
+
 /** Envoltura interna desde un `Decimal` ya calculado — frontera de salida de una función pública. */
 export function moneyFromDecimal(value: Decimal): FixedDecimal<"Money"> {
   return wrap("Money", value);
@@ -91,6 +131,9 @@ export function rvalueFromDecimal(value: Decimal): FixedDecimal<"RValue"> {
 }
 export function percentFromDecimal(value: Decimal): FixedDecimal<"Percent"> {
   return wrap("Percent", value);
+}
+export function secondsFromDecimal(value: Decimal): FixedDecimal<"Seconds"> {
+  return wrap("Seconds", value);
 }
 
 /** Acceso al `Decimal` subyacente — frontera de entrada a un bloque de cálculo interno. */
@@ -123,6 +166,12 @@ export function isZero<Brand extends FixedDecimalBrand>(
   fd: FixedDecimal<Brand>,
 ): boolean {
   return fd.raw.isZero();
+}
+
+export function isPositive<Brand extends FixedDecimalBrand>(
+  fd: FixedDecimal<Brand>,
+): boolean {
+  return fd.raw.isPositive() && !fd.raw.isZero();
 }
 
 export { Decimal };

@@ -54,14 +54,14 @@ tradepilot-r/
 │       ├── src/
 │       │   ├── decimal/                 # kernel decimal (§6.4) — único punto de import de decimal.js
 │       │   ├── core/                    # Grupo A-B (calcularRFinal y derivados)
-│       │   ├── stats/                   # Grupo C (+ calcularDesviacionR)
-│       │   ├── curves/                  # Grupo D
-│       │   ├── risk-state/              # Grupo E (calcularDrawdownState)
-│       │   ├── simulation/               # Grupo F (simularGestion/calcularScore) — implementado,
-│       │   │                              sin golden dataset dedicado todavía (§11.5)
+│       │   ├── stats/                   # Grupo C+G (+ calcularDesviacionR) — completo, BUILD 002
+│       │   ├── curves/                  # Grupo D — completo, BUILD 002
+│       │   ├── risk-state/              # Grupo E (calcularDrawdownState) — completo, BUILD 002
+│       │   ├── simulation/               # Grupo F (simularGestion/calcularScore) — completo, BUILD 002,
+│       │   │                              con golden dataset y benchmarks reales (specs/001 §8.6)
 │       │   ├── explain/                  # QuantResult<T>
 │       │   └── errors/
-│       └── test/{unit,golden}/
+│       └── test/{unit,golden,stress,bench}/
 ├── apps/web/                              # Next.js — PWA
 │   ├── app/(auth)/login/
 │   ├── app/(onboarding)/empresa/
@@ -388,7 +388,7 @@ Un flujo completo (Playwright, ya preinstalado en el entorno): abrir la app → 
 - `initial_capital` negativo → rechazado.
 - Nombre de Empresa/Cuenta vacío o solo espacios → rechazado (`CHECK` con `trim`).
 - Doble clic en "Crear cuenta" → **no cubierto en esta entrega** (SPEC-002 §6.4 ya especificó idempotencia para el registro de Operaciones — Funding Management no la tiene todavía porque crear una Cuenta dos veces por error es de bajo impacto y fácil de corregir a mano/editar nombre; se anota como decisión consciente, no como omisión).
-- Grupo F de Quant Engine (`simularGestion`/`calcularScore`) se implementa (§6.1) pero **sin golden dataset dedicado en esta entrega** — nada lo invoca todavía (Optimizer/Simulation Engine son Capa 6); se cubre cuando esos componentes lleguen, coherente con "no construir pruebas de un camino que nada ejercita todavía".
+- Grupo F de Quant Engine (`simularGestion`/`calcularScore`) — **deuda saldada en BUILD 002**: golden dataset y tests propios ya existen (`test/unit/simulation.test.ts`), pese a que Optimizer/Simulation Engine (sus consumidores reales) siguen sin construirse — se adelantó al completar el catálogo matemático completo antes de empezar ningún módulo nuevo, por instrucción explícita del fundador.
 
 ---
 
@@ -428,7 +428,7 @@ Ninguna encontrada — `initial_capital`/`current_capital`/`peak_capital` son tr
 
 ### 14.4 Deuda técnica identificada explícitamente (no oculta)
 
-- Grupo F de Quant Engine sin golden dataset dedicado (§11.5) — deuda aceptada, se paga cuando Optimizer/Simulation Engine lleguen.
+- ~~Grupo F de Quant Engine sin golden dataset dedicado~~ — **saldada en BUILD 002** (ver §11.5, actualizado).
 - Sin idempotencia en creación de Cuenta/Empresa (§11.5) — deuda aceptada, bajo impacto.
 - Sin manejo de `Terminated`/`Merged` (§10.1) — no es deuda, es alcance correctamente diferido (ambos dependen de módulos que no existen).
 
@@ -468,6 +468,25 @@ Alcance de esta sesión: autenticación completa (Supabase magic link), middlewa
 - No se pudo ejecutar ningún test contra un proyecto Supabase real (RLS de extremo a extremo, trigger de capital contra Postgres real, flujo de magic link real) — este entorno no tiene credenciales de un proyecto Supabase. Los 49 tests de `apps/web` cubren validaciones puras, componentes (React Testing Library), Server Actions (con el cliente de Supabase sustituido en el límite de red) y el middleware de protección de rutas — nunca sustituyen a un test de integración real, que queda pendiente hasta que exista un proyecto Supabase de pruebas.
 - `next build` se ejecutó con éxito pero sin variables de entorno reales (`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`) — confirma que el build no falla en su ausencia (todas las rutas que usan `cookies()` optan por renderizado dinámico), pero no demuestra que el login real funcione; eso requiere un proyecto Supabase real, explícitamente fuera del alcance verificable en este entorno.
 - No se implementó ningún cambio de estado de Cuenta (Live⇄Paused, Challenge→Funded) — no estaba en el alcance pedido en esta sesión; mvp-0.1.md §10.1 ya lo describe pero §8 nunca definió una función de API para ello, gap que queda anotado, no resuelto aquí.
+
+### 14.9 BUILD 002 — Quant Engine completo (Grupos C-F)
+
+Antes de tocar ningún módulo nuevo, se completó el catálogo matemático entero de SPEC-001 (instrucción explícita del fundador: "no quiero comenzar ningún módulo nuevo hasta que Quant Engine quede terminado al 100%"). Grupo C+G (stats), Grupo D (curvas), Grupo E (`calcularDrawdownState`), Grupo F (`simularGestion`/`calcularScore`) — todos con golden dataset, edge cases del catálogo §6.3, property tests, stress tests a escala (100.000/50.000 elementos) y benchmarks reales (`vitest bench`).
+
+**Los hallazgos completos de Challenge Mode de este build viven en SPEC-001 §8.6** (no se duplican aquí letra por letra) — resumen: `calcularCurvaEquity` generalizada sobre el brand del kernel (corrige una firma que tipaba `Money[]` incluso con `unidad="R"`); `calcularTiempoMedioEnMercado` migrada de `number[]` nativo a un 4º brand `Seconds` (era la única función de todo el catálogo que violaba "nunca float" en su propia firma); `DrawdownStateInput.peak_capital` → `peak_capital_basis` (distingue "trailing" de "eod", que necesitan picos distintos) y eliminación de `max_daily_drawdown_pct` (parámetro muerto); nuevo `reason: "ZERO_CAPITAL"` en el catálogo de errores; unificación de una duplicación real entre `computeRFinal` y `calcularImpactoPorParcial` (`decomposeRFinal`); y un hallazgo de rendimiento encontrado por benchmark real (no por inspección) — la precisión del kernel decimal estaba en 50 dígitos significativos, muy por encima de los ~28-30 que SPEC-001 §4.3.2 exige, y los agregados de Grupo C sobre 10.000 operaciones excedían su objetivo de latencia; reducida a 30, verificado que ningún test existente cambia de valor.
+
+**Cifras de benchmark reales** (`packages/quant-engine`, `npm run bench`, Node local — no un entorno de producción, pero sí una medición real, no estimada):
+
+| Función | Objetivo (SPEC-001 §5.1) | Medido (media) | ¿Cumple? |
+|---|---|---|---|
+| `calcularRFinal` / `simularGestion` | < 1 ms | ~0.008 ms | Sí |
+| `calcularEsperanzaIncremental` / `calcularDesviacionDesdeAcumulador` (modo streaming, acumulador de 10.000) | < 15 ms | ~0.005-0.015 ms | Sí |
+| `calcularEsperanza`/`calcularDesviacionR` modo batch (N=10.000) | Sin objetivo — SPEC-001 §5.3/§8.5.2 lo declara utilidad de dev/debug | ~48-52 ms | No aplica (documentado, no un fallo) |
+| `calcularCurvaEquity` (N=10.000) | < 20 ms | ~13-14 ms | Sí |
+| `calcularDrawdownHistorico` (N=10.000, aislado) | < 20 ms | ~9 ms | Sí |
+| `calcularDrawdownState` | < 1 ms | ~0.007 ms | Sí |
+
+**Estado del Quant Engine tras este build**: catálogo completo de SPEC-001 §4.1 implementado (Grupos A-G), 77 tests en `packages/quant-engine` (golden + unitarios + property + stress + Grupo B previo), benchmarks reales ejecutados y documentados, `tsc --noEmit`/ESLint limpios. Ningún consumidor real (Risk Engine, Optimizer, Simulation Engine) existe todavía — es esperado y correcto en esta fase; el catálogo se construyó completo para no bloquear esos módulos futuros con una base matemática incompleta, no porque tengan ya un caso de uso concreto hoy.
 
 ### 14.5 Verificación I1-I21 (continuación de §14.1-14.4, numeración conservada del documento aprobado)
 

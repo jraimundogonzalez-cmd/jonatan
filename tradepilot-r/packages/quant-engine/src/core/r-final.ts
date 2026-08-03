@@ -21,7 +21,7 @@ import { wrapExact, type QuantResult } from "../explain/index.js";
 const ZERO = new Decimal(0);
 const HUNDRED = new Decimal(100);
 
-function echoInput(input: RFinalInput): Record<string, unknown> {
+export function echoInput(input: RFinalInput): Record<string, unknown> {
   return {
     riesgo_eur: toDisplayString(input.riesgo_eur),
     rr_objetivo: toDisplayString(input.rr_objetivo),
@@ -103,25 +103,58 @@ function calcularRCierreResto(input: RFinalInput, k: number): Decimal {
   return new Decimal(-1);
 }
 
-export function calcularRFinal(input: RFinalInput): Result<QuantResult<RValue>, QuantError> {
-  const validationError = validate(input);
-  if (validationError) return err(validationError);
+interface RFinalDecomposition {
+  readonly parciales: ReadonlyArray<{ readonly sequence: 1 | 2 | 3 | 4 | 5; readonly contribution: Decimal }>;
+  readonly resto: Decimal;
+}
 
+/**
+ * Descompone `R_final` en sus contribuciones aditivas (un término por
+ * parcial ejecutado + el término del resto) — **hallazgo de Challenge Mode**:
+ * antes de esta refactorización, `computeRFinal` y `calcularImpactoPorParcial`
+ * recorrían `parciales_ejecutados` por separado calculando la misma expresión
+ * (`pct_close/100 × rr_level`) cada una por su cuenta — la misma clase de
+ * "formula drift" que SPEC-001 §Riesgos #1 previene en general, aquí
+ * encontrada en la práctica entre dos funciones del propio catálogo. Ambas
+ * funciones pliegan/reexponen ahora esta única descomposición.
+ */
+function decomposeRFinal(input: RFinalInput): RFinalDecomposition {
   const k = input.parciales_ejecutados.length;
   const rCierreResto = calcularRCierreResto(input, k);
 
-  let sumPartials = ZERO;
   let sumPct = ZERO;
-  for (const p of input.parciales_ejecutados) {
-    const pctFraction = toDecimal(p.pct_close).div(HUNDRED);
-    sumPartials = sumPartials.plus(pctFraction.times(toDecimal(p.rr_level)));
+  const parciales = input.parciales_ejecutados.map((p) => {
+    const contribution = toDecimal(p.pct_close).div(HUNDRED).times(toDecimal(p.rr_level));
     sumPct = sumPct.plus(toDecimal(p.pct_close));
-  }
+    return { sequence: p.sequence, contribution };
+  });
 
-  const pRemanenteFraction = HUNDRED.minus(sumPct).div(HUNDRED);
-  const rFinal = sumPartials.plus(pRemanenteFraction.times(rCierreResto));
+  const resto = HUNDRED.minus(sumPct).div(HUNDRED).times(rCierreResto);
+  return { parciales, resto };
+}
 
-  return ok(wrapExact(rvalueFromDecimal(rFinal), "calcularRFinal", echoInput(input), null));
+/**
+ * Cálculo puro de `R_final`, sin el envelope `QuantResult` — punto único
+ * reutilizado por `calcularRFinal` y por `simularGestion` (Grupo F,
+ * simulation/simular-gestion.ts). "Simular" es "calcular sin persistir"
+ * (SPEC-001 §3.8) — nunca una segunda implementación de la fórmula, solo un
+ * `formula_id` distinto en el envelope público.
+ */
+export function computeRFinal(input: RFinalInput): Result<Decimal, QuantError> {
+  const validationError = validate(input);
+  if (validationError) return err(validationError);
+
+  const { parciales, resto } = decomposeRFinal(input);
+  const rFinal = parciales.reduce((acc, p) => acc.plus(p.contribution), ZERO).plus(resto);
+
+  return ok(rFinal);
+}
+
+export function calcularRFinal(input: RFinalInput): Result<QuantResult<RValue>, QuantError> {
+  const result = computeRFinal(input);
+  if (!result.ok) return result;
+
+  return ok(wrapExact(rvalueFromDecimal(result.value), "calcularRFinal", echoInput(input), null));
 }
 
 export function calcularBeneficioReal(riesgoEur: Money, rFinal: RValue): QuantResult<Money> {
@@ -174,18 +207,14 @@ export function calcularImpactoPorParcial(
   const validationError = validate(input);
   if (validationError) return err(validationError);
 
-  const k = input.parciales_ejecutados.length;
-  const rCierreResto = calcularRCierreResto(input, k);
+  const { parciales, resto } = decomposeRFinal(input);
 
-  const items: ImpactoPorParcialItem[] = [];
-  let sumPct = ZERO;
-  for (const p of input.parciales_ejecutados) {
-    const contribution = toDecimal(p.pct_close).div(HUNDRED).times(toDecimal(p.rr_level));
-    items.push({ kind: "parcial", sequence: p.sequence, contribution: rvalueFromDecimal(contribution) });
-    sumPct = sumPct.plus(toDecimal(p.pct_close));
-  }
-  const restoContribution = HUNDRED.minus(sumPct).div(HUNDRED).times(rCierreResto);
-  items.push({ kind: "resto", contribution: rvalueFromDecimal(restoContribution) });
+  const items: ImpactoPorParcialItem[] = parciales.map((p) => ({
+    kind: "parcial",
+    sequence: p.sequence,
+    contribution: rvalueFromDecimal(p.contribution),
+  }));
+  items.push({ kind: "resto", contribution: rvalueFromDecimal(resto) });
 
   return ok(
     wrapExact(items, "calcularImpactoPorParcial", {
