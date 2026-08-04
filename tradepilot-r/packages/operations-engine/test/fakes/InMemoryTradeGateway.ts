@@ -1,0 +1,76 @@
+import { err, ok, type Result, type RValue } from "@tradepilot/risk-engine";
+import type { OperationsError, Trade, TradePartialExecuted } from "../../src/domain/types.js";
+import type { AplicarCierreParams, AplicarEdicionParams, TradeGateway } from "../../src/ports/TradeGateway.js";
+
+/**
+ * Doble en memoria de `TradeGateway` — suficiente para probar la
+ * orquestación de `OperationsEngineService` (decisión de recalcular o no,
+ * ensamblaje de RFinalInput, propagación de errores) sin Postgres. No
+ * replica el motor de reversión de capital ni la máquina de estados
+ * completa de la migración — eso se valida contra Postgres real en
+ * `supabase/tests/` (mismo reparto de responsabilidades que Risk Engine).
+ */
+export class InMemoryTradeGateway implements TradeGateway {
+  private readonly trades = new Map<string, Trade>();
+  private readonly executedPartials = new Map<string, TradePartialExecuted[]>();
+  private readonly vigenteSampleByAccount = new Map<string, RValue[]>();
+
+  seedTrade(trade: Trade): void {
+    this.trades.set(trade.id, trade);
+  }
+
+  seedExecutedPartials(tradeId: string, partials: readonly TradePartialExecuted[]): void {
+    this.executedPartials.set(tradeId, [...partials]);
+  }
+
+  seedVigenteSample(accountId: string, sample: readonly RValue[]): void {
+    this.vigenteSampleByAccount.set(accountId, [...sample]);
+  }
+
+  async obtenerOperacion(tradeId: string): Promise<Result<Trade, OperationsError>> {
+    const trade = this.trades.get(tradeId);
+    if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: tradeId });
+    return ok(trade);
+  }
+
+  async listarParcialesEjecutados(tradeId: string): Promise<Result<readonly TradePartialExecuted[], OperationsError>> {
+    return ok(this.executedPartials.get(tradeId) ?? []);
+  }
+
+  async listarRFinalVigentePorCuenta(accountId: string): Promise<Result<readonly RValue[], OperationsError>> {
+    return ok(this.vigenteSampleByAccount.get(accountId) ?? []);
+  }
+
+  async aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>> {
+    const trade = this.trades.get(params.tradeId);
+    if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
+    const updated: Trade = {
+      ...trade,
+      status: "closed",
+      r_max: params.rMax,
+      r_final: params.rFinal,
+      pnl_amount: params.pnlAmount,
+      closure_reason: params.closureReason,
+      cierre_manual_rr: params.cierreManualRr ?? trade.cierre_manual_rr,
+    };
+    this.trades.set(params.tradeId, updated);
+    return ok(updated);
+  }
+
+  async aplicarEdicion(params: AplicarEdicionParams): Promise<Result<Trade, OperationsError>> {
+    const trade = this.trades.get(params.tradeId);
+    if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
+    const updated: Trade = {
+      ...trade,
+      risk_amount: params.riskAmount ?? trade.risk_amount,
+      rr_objective: params.rrObjective ?? trade.rr_objective,
+      r_max: params.rMax ?? trade.r_max,
+      closure_reason: params.closureReason ?? trade.closure_reason,
+      cierre_manual_rr: params.cierreManualRr ?? trade.cierre_manual_rr,
+      r_final: params.rFinal ?? trade.r_final,
+      pnl_amount: params.pnlAmount ?? trade.pnl_amount,
+    };
+    this.trades.set(params.tradeId, updated);
+    return ok(updated);
+  }
+}

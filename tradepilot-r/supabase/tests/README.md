@@ -24,22 +24,25 @@ createdb tradepilot_test
 psql -d tradepilot_test -f 00_local_test_setup.sql
 for f in ../migrations/*.sql; do psql -d tradepilot_test -f "$f"; done
 psql -d tradepilot_test -f ../functions/sql/funding.sql
+psql -d tradepilot_test -f ../functions/sql/operations.sql
 psql -d tradepilot_test -f 01_funding_management_rls.sql
 psql -d tradepilot_test -f 02_risk_engine.sql
+psql -d tradepilot_test -f 03_operations_engine.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 15 comprobaciones en total, revisables en segundos).
+bajo impacto: son 34 comprobaciones en total, revisables en unos minutos).
 
-`01_funding_management_rls.sql` y `02_risk_engine.sql` corren contra la
-**misma** base de datos, uno detrás del otro — por eso usan usuarios de
-prueba con UUIDs distintos entre sí (`1111.../2222...` en el primero,
-`3333.../4444...` en el segundo): si compartieran UUID, ambos scripts
-llaman a `crear_empresa('Personal', true)` para el mismo usuario y el
-segundo `\gset` de `crear_cuenta` fallaría con "more than one row returned
-by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los dos scripts es idempotente por sí mismo (ambos
+`01_funding_management_rls.sql`, `02_risk_engine.sql` y
+`03_operations_engine.sql` corren contra la **misma** base de datos, uno
+detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
+sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
+`7777.../8888...` en el tercero): si compartieran UUID, dos scripts
+llamarían a `crear_empresa('Personal', true)` para el mismo usuario y el
+`\gset` de `crear_cuenta` del segundo fallaría con "more than one row
+returned by a subquery" al encontrar dos empresas "Personal" para el mismo
+`user_id`. Ninguno de los tres scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -47,3 +50,16 @@ a crear la base de datos desde cero, no solo relanzar el script.
 BUILD 001 (`prop_firms`/`accounts`/`account_capital_events`) — nunca se
 habían ejecutado contra un Postgres real con RLS realmente vigente hasta
 BUILD 003.
+
+`03_operations_engine.sql` (BUILD 004) valida, además del aislamiento RLS
+habitual: la resolución de Plan de Gestión (guardado vs. anónimo, I11),
+idempotencia de `registrar_operacion`, la máquina de estados y la
+inmutabilidad de `account_id` aplicadas por trigger (no solo por convención
+de la capa de aplicación), la cascada completa de capital (abrir es neutral,
+cerrar mueve capital, editar mueve el delta, la reversión "fantasma"
+revierte exactamente lo revertido) y que `audit_log` capture toda edición.
+No ejercita `packages/operations-engine` (TypeScript) — eso lo cubre
+`npm test` en ese paquete con dobles en memoria; aquí se llama directamente
+a `aplicar_cierre_operacion`/`aplicar_edicion_operacion` con los valores que
+Risk Engine ya habría calculado, para aislar la capa SQL de la capa de
+orquestación.
