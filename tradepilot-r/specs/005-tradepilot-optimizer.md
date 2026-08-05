@@ -1,7 +1,7 @@
 # SPEC-005 · TradePilot Optimizer
 
 **Estado**: Pendiente de aprobación · **Versión del documento**: 1.0 · **Fase**: Fase 1 — Engineering Specifications
-**Depende de (bloqueante, no se reinterpreta aquí)**: 02 §5 (modelo original del optimizador, espacio de búsqueda, función objetivo `Score = E−λσ`), 12 §6 (demostración numérica de dominancia), 13 §6.3 (una recomendación nunca se aplica sola), 21.5 §6 (Optimizador como Domain Service, sin estado propio), 22.5 §2.7 (AI Engine como consumidor/orquestador de cuándo invocarlo), 26 §2.7 (Grupo F de Quant Engine — Optimizer lo consume **directamente**, sin pasar por Risk Engine, distinto del caso de Rule Engine), 27 §2.4 (Quant Capabilities, incl. optimización restringida por drawdown objetivo), 28 §2 (Scenario/Simulation formalizados como sustantivo/proceso), 32 §3.9/§3.10 (contratos de dominio de Scenario/Simulation), 19 I16 (Zero Friction), 19 I17 (Evaluate ≠ Execute, recién aprobado), SPEC-001 (Quant Engine — Explainable Quant, y el hallazgo del espacio de búsqueda en §8.4, origen directo de este documento)
+**Depende de (bloqueante, no se reinterpreta aquí)**: 02 §5 (modelo original del optimizador, espacio de búsqueda, función objetivo `Score = E−λσ`), 12 §6 (demostración numérica de dominancia), 13 §6.3 (una recomendación nunca se aplica sola), 21.5 §6 (Optimizador como Domain Service, sin estado propio), 22.5 §2.7 (AI Engine como consumidor/orquestador de cuándo invocarlo), 26 §2.7 (Grupo F de Quant Engine — Optimizer lo consume **directamente**, sin pasar por Risk Engine, distinto del caso de Rule Engine), 27 §2.4 (Quant Capabilities, incl. optimización restringida por drawdown objetivo), 28 §2 (Scenario/Simulation formalizados como sustantivo/proceso, y **Trade Set** como sustantivo oficial de la muestra de entrada de toda función agregada — §6.1 declara expresamente que reemplaza el uso informal de "muestra"/"histórico filtrado" de 02/12/26/27), 32 §3.9/§3.10 (contratos de dominio de Scenario/Simulation), 19 I16 (Zero Friction), 19 I17 (Evaluate ≠ Execute, recién aprobado), SPEC-001 (Quant Engine — Explainable Quant, y el hallazgo del espacio de búsqueda en §8.4, origen directo de este documento)
 **No re-abre ninguna decisión conceptual ya aprobada.** El modelo de 02 §5 (espacio, `Score`) se mantiene íntegro — lo que este documento resuelve es *cómo explorar ese espacio sin fuerza bruta*, que 02 §5.1 nunca llegó a resolver correctamente (SPEC-001 §8.4 ya lo demostró).
 
 ---
@@ -133,10 +133,19 @@ interface OptimizationProblem {
   base_scenario_space: ScenarioSpaceParams        // §4.1
   objectives: Objective[]                          // 1 objetivo = caso clásico (Score); ≥2 = Pareto (§9)
   constraints: Constraint[]                         // §4.3
-  bootstrap_sample: RValue[]                        // historial de R_max del usuario, 02 §5.2
+  bootstrap_trade_set: HistoricalTrade[]            // Trade Set de Operaciones reales cerradas (28 §2) — ver nota de alineación
   lambda?: RValue                                    // solo si objectives incluye "score" — siempre explícito (SPEC-001 §3.8)
 }
+
+interface HistoricalTrade {
+  r_max: RValue          // contexto del contrafactual — dato observado, nunca inventado (02 §1)
+  r_final: RValue        // resultado real ya calculado — es el baseline "trader_actual_behavior" de §10.2
+  risk_amount: Money     // congelado en creación (SPEC-002 §2.5 invariante 3) — habilita las métricas denominadas en Money
+  closed_at: Timestamp   // orden cronológico real de la curva de equity — nunca un orden sintético
+}
 ```
+
+**Nota de alineación con el vocabulario oficial (corrección documental, no de arquitectura)**: la versión 1.0 de esta especificación tipaba esta entrada como `bootstrap_sample: RValue[]` citando 02 §5.2. Esa cita reproducía la forma **informal anterior** a que 28 §6.1 la sustituyera: 02 §5.2 habla de reutilizar *"cada **operación** pasada"* filtrada por bucket, y 28 §2 formalizó exactamente eso como `Trade Set` — una colección de **Operaciones**, no un vector de escalares. Proyectar el Trade Set a `RValue[]` descartaba `r_final`, `risk_amount` y `closed_at`, y con ellos la posibilidad de calcular tres de las métricas que esta misma especificación declara en §4.2/§4.3 (`drawdown`, `recovery_factor`) y la comparación contra baseline que §10.2 declara obligatoria. Es la misma entrada que SPEC-011 §4.4 ya declara para el motor contrafactual, de modo que los dos consumidores de Grupo F comparten un único sustrato de evidencia. **Ningún cálculo, algoritmo, responsabilidad ni interfaz pública cambia por esta corrección** — solo deja de perderse información que el sistema ya poseía.
 
 Con un único objetivo (`Score`), el problema es idéntico al ya descrito en 02 §5.2 — no se pierde compatibilidad, se generaliza. Con dos o más objetivos declarados explícitamente (p.ej. maximizar `Expectancy` y minimizar `Drawdown` a la vez, la pregunta "¿qué gestión mantiene el mismo beneficio con menor Drawdown?" pedida por el fundador), el resultado deja de ser una única ganadora — es un frente de Pareto (§9).
 
