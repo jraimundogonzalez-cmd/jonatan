@@ -29,21 +29,24 @@ psql -d tradepilot_test -f 01_funding_management_rls.sql
 psql -d tradepilot_test -f 02_risk_engine.sql
 psql -d tradepilot_test -f 03_operations_engine.sql
 psql -d tradepilot_test -f 04_event_backbone.sql
+psql -d tradepilot_test -f 05_rule_engine.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 49 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 65 comprobaciones en total, revisables en unos minutos).
 
 `01_funding_management_rls.sql`, `02_risk_engine.sql`,
-`03_operations_engine.sql` y `04_event_backbone.sql` corren contra la **misma** base de datos, uno
+`03_operations_engine.sql`, `04_event_backbone.sql` y `05_rule_engine.sql`
+corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
-`7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto): si compartieran UUID, dos scripts
+`7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
+`bbbb.../cccc...` en el quinto): si compartieran UUID, dos scripts
 llamarían a `crear_empresa('Personal', true)` para el mismo usuario y el
 `\gset` de `crear_cuenta` del segundo fallaría con "more than one row
 returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los cuatro scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los cinco scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -75,3 +78,26 @@ que RLS aísle el outbox entre usuarios — incluida la función de lectura
 con BUILD 003 (`AcumuladorActualizado` se sigue emitiendo, ahora con
 secuencia) y la inmutabilidad del outbox (ninguna función del esquema
 escribe un UPDATE sobre `domain_events`).
+
+`05_rule_engine.sql` (BUILD 006B) valida el motor de evaluación: que
+`rule_evaluations` sea append-only y `rule_profile_snapshots` inmutable, que
+reprocesar el mismo `event_id` no inserte nada (idempotencia), que
+`ReglaIncumplida` se emita **solo** con veredicto `violated` en modo
+`enforced` (nunca en `shadow`), y el aislamiento RLS completo — con la
+Library (`rule_definitions`) legible por cualquier autenticado por ser
+catálogo global.
+
+Valida además la **frontera de propiedad** aprobada en BUILD 006B: Rule
+Engine no escribe jamás en `accounts`; es un trigger de Funding Management
+sobre `domain_events` quien actualiza el caché `compliance_flag`, y lo hace
+con *compare-and-set* sobre `compliance_flag_event_sequence`, de modo que un
+evento que llega tarde (secuencia 5 después de la 10) no puede pisar un
+estado más reciente.
+
+Las comprobaciones de inmutabilidad se hacen en **dos capas**, aplicando el
+hallazgo metodológico de BUILD 003: la capa 1 corre como `authenticated` y
+verifica que RLS bloquee la mutación antes de llegar al trigger (`UPDATE 0` /
+`DELETE 0`, sin error); la capa 2 (`[10b]`) hace `reset role` para saltarse
+RLS como superusuario y verifica que el trigger `append-only` levante el
+error igualmente. Una sola capa no bastaría: RLS no protege frente a un
+superusuario ni a un `service_role`.

@@ -6,7 +6,7 @@
 // calcularResultado espera sin depender directamente de @tradepilot/quant-engine
 // en su propio package.json — un único canal aprobado, no una excepción.
 export type { RFinalInput, Money, RValue, Percent, ParcialEjecutado, Result, QuantError } from "@tradepilot/quant-engine";
-export { BETrigger, ok, err, money, rvalue, percent, toDisplayString } from "@tradepilot/quant-engine";
+export { BETrigger, ok, err, money, rvalue, percent, toDisplayString, compare, toDecimal } from "@tradepilot/quant-engine";
 
 export type { AccountRiskState, CapitalFacts, DrawdownConfig, RiskEngineError } from "./domain/types.js";
 export type {

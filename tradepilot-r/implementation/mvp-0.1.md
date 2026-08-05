@@ -573,6 +573,39 @@ Antes de escribir código se auditó la petición original ("Management Plans En
 
 **Fuera de alcance deliberadamente**: ningún consumidor, ningún worker, ninguna función de marcado como publicado, y ningún Rule Engine. El índice previo `domain_events_unpublished_idx` se conserva pese a quedar redundante, para que el cambio sea estrictamente aditivo.
 
+### 14.15 BUILD 006B — Rule Engine (primer consumidor del Event Backbone)
+
+**Rule Engine es exclusivamente un motor de evaluación, nunca un motor de ejecución.** Produce veredictos con su evidencia y emite un evento; no cierra Operaciones, no bloquea al trader, no mueve capital y no escribe en ninguna entidad ajena. Es I17 ("Evaluar ≠ Actuar", 19 §8.3) aplicado al código, no solo al documento.
+
+**Dos contradicciones detectadas en la auditoría previa, resueltas por el fundador antes de escribir código**:
+
+1. **SPEC-004 se contradecía a sí misma sobre quién es dueño de `compliance_flag`.** Su §1.2.3 declara que Rule Engine "no modifica el estado de la Cuenta", pero su §4.3 paso 7 le ordena actualizar `accounts.compliance_flag`. SPEC-003 §8.1 resuelve la autoridad: `accounts` pertenece a Funding Management. **Resolución aprobada**: Rule Engine no escribe jamás en entidades de otros módulos; la actualización de un caché derivado corresponde siempre al módulo propietario. Este principio pasa a ser permanente en la arquitectura.
+2. **La categoría `calculation` abría una puerta a que Rule Engine calculara** — violando "Calcular ≠ Juzgar" (regla 14). **Resolución aprobada**: permanece como categoría *reservada* en el modelo, sin evaluador, sin Rule Definition y sin ningún camino de ejecución que pueda alcanzarla. Si aparece un caso real que la justifique, se abrirá una ADR específica antes de implementarla.
+
+**La frontera de propiedad es visible en la estructura del repositorio, no solo en un comentario**: son dos migraciones separadas. `20260803120700_rule_engine.sql` crea el esquema propio de Rule Engine; `20260803120800_funding_compliance_cache.sql` añade `accounts.compliance_flag` y el trigger de Funding Management que lo mantiene. Ese trigger escucha `ReglaIncumplida` sobre `domain_events` y aplica *compare-and-set* contra `compliance_flag_event_sequence`: un evento que llega tarde (secuencia 5 después de la 10) no puede pisar un estado más reciente. Es el Riesgo #1 de SPEC-004 cerrado con la secuencia que BUILD 006A creó. `RuleEngineService.evaluar` implementa los pasos 1-6 y 8 de §4.3 y **omite explícitamente el paso 7**, con el motivo escrito en el propio código.
+
+**Los siete puntos de atención del fundador, y cómo los garantiza el código**:
+
+| # | Exigencia | Garantía estructural |
+|---|---|---|
+| 1 | Determinista | Los seis evaluadores son funciones puras sin reloj, sin aleatoriedad y sin E/S; el orden entre reglas independientes no puede alterar un resultado. Un test invoca mil veces la misma evaluación y compara la serialización completa. |
+| 2 | Idempotente | `rule_engine_processed_events` con PK `(event_id, account_id)`, comprobada **dentro** de la misma transacción que inserta las evaluaciones. Reprocesar devuelve `persisted=false, 0 insertadas`. |
+| 3 | Explicable sin IA | Cada evaluación persiste `evaluation_context` con arquetipo, versión de arquetipo, parámetros congelados, `inputs_echo` de las magnitudes leídas, resultado con margen exacto y el evento disparador. Se responde "¿por qué?" leyendo una fila, sin modelo. |
+| 4 | Desacoplado de Quant Engine | `packages/rule-engine` declara una única dependencia, `@tradepilot/risk-engine`, y no importa `@tradepilot/quant-engine` en ninguna línea de `src/`. La aritmética decimal exacta llega por el canal ya aprobado en BUILD 004 (re-export del barril de Risk Engine). |
+| 5 | Desacoplado de la ejecución | La salida es una fila de `rule_evaluations` y, como mucho, un evento `ReglaIncumplida`. No hay ninguna escritura sobre `accounts` ni sobre `trades` en todo el paquete. |
+| 6 | Reproducible históricamente | La evaluación se hace contra un `rule_profile_snapshot` inmutable (trigger que rechaza UPDATE y DELETE), y cada fila guarda `rule_definition_version` + `archetype_version` + `triggering_event_sequence`. Mismo evento + mismo snapshot + misma versión ⇒ mismo veredicto. |
+| 7 | Ningún cambio futuro reescribe la historia | `rule_evaluations` es append-only por trigger, y las reglas se congelan en el Snapshot en el momento de la adopción: editar un Rule Profile crea un Snapshot nuevo, nunca muta el vigente. Un test evalúa la v1 y la v2 de la misma regla y comprueba que la fila histórica conserva su versión y su veredicto. |
+
+**Modo `shadow`**: una regla puede evaluarse y auditarse sin emitir incumplimiento. Ambas se persisten; solo `verdict='violated' AND mode='enforced'` escribe en el outbox. Permite estrenar una regla nueva midiéndola contra la operativa real antes de que afecte a nadie.
+
+**Veredicto `unavailable`, nunca cumplimiento asumido**: si falta una magnitud de Risk Engine, si el parámetro está mal formado o si una dependencia de una regla compuesta no está disponible, el veredicto es `unavailable` con `margin` nulo — jamás `compliant`. Un dato ausente no puede parecerse a un dato conforme.
+
+**Orden topológico con detección de ciclos**: las reglas `composite` se evalúan después de sus dependencias sea cual sea el orden de declaración en el Snapshot; un ciclo en la Library devuelve `CYCLIC_DEPENDENCY_IN_LIBRARY` en vez de colgar el proceso.
+
+**Tests**: 29 unitarios nuevos (16 de evaluadores puros, 13 del servicio) y 16 comprobaciones nuevas contra Postgres real (`supabase/tests/05_rule_engine.sql`), 65 en total en la suite SQL. La inmutabilidad se verifica en **dos capas**, aplicando el hallazgo metodológico de BUILD 003: como `authenticated`, RLS bloquea la mutación antes del trigger (`UPDATE 0`, sin error); tras `reset role`, el trigger levanta el error frente a un rol que se salta RLS. Una sola capa habría dado una falsa sensación de seguridad frente a un `service_role`.
+
+**Fuera de alcance deliberadamente**: el arquetipo `time_window_external_source` (22 §9 lo difiere hasta que exista una fuente de calendario real); cualquier evaluador para la categoría `calculation`; el worker que consume el outbox y dispara la evaluación; y toda superficie de UI del semáforo de cumplimiento.
+
 ### 14.5 Verificación I1-I21 (continuación de §14.1-14.4, numeración conservada del documento aprobado)
 
 - **I15 (precisión decimal)**: verificado — ningún campo monetario/R es `float`; el borde de API usa `string` (§8, hallazgo nuevo de esta entrega).
