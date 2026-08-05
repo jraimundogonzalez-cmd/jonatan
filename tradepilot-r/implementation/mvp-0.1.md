@@ -552,6 +552,27 @@ Antes de escribir código se auditó la petición original ("Management Plans En
 
 **Fuera de este build, deliberadamente**: reducción del frente de Pareto por *crowding* (§13.5/§14.3 la difieren hasta que exista uso multiobjetivo real medido — se usa el desempate determinista de §9.3); cualquier estrategia más allá de la de referencia (§6.2, TradePilot Labs); el conjunto de problemas benchmark para estrategias futuras (§6.1, Riesgo #2); AI Engine, que es quien decide cuándo invocar a Optimizer y persiste la recomendación (§3.4 — Optimizer nunca persiste, I17).
 
+### 14.14 BUILD 006A — Event Backbone
+
+**Dos contradicciones reales detectadas antes de escribir código, siguiendo el proceso acordado** (releer solo lo relacionado → detectar contradicciones → detenerse si existen). Ambas verificadas por `grep` contra el código, no inferidas del texto:
+
+1. **Operations Engine no emitía ninguno de los cinco eventos que SPEC-002 §3.1 le exige.** El único escritor del outbox era `risk_engine_apply_accumulator_update` (BUILD 003), que emite solo `AcumuladorActualizado`. Rule Engine (SPEC-004 §4.1) no habría tenido nada que consumir: su pipeline entero quedaba inerte. Es deuda técnica introducida por BUILD 004 — no se afirmó lo contrario en §14.11, pero tampoco se señaló como pendiente al congelar, y debió señalarse.
+2. **No existía la secuencia monotónica de la que depende el hallazgo principal de SPEC-004.** Su §14.2 resuelve el riesgo de escrituras desordenadas (un `compliance_flag` sobrescrito por una evaluación tardía) con `triggering_event_sequence`, derivado "del orden de eventos ya garantizado por Operations Engine/Funding Management". Ese orden no existía: `domain_events` solo tenía `id uuid` (aleatorio) y `occurred_at timestamptz default now()`, que en Postgres es el instante de **inicio de transacción** — dos eventos de la misma transacción reciben timestamps idénticos. Es literalmente el Riesgo #1 de SPEC-004, materializado.
+
+**Decisión de alcance del fundador**: no tratarlo como BUILD 005.1 sino como build independiente de infraestructura, base de todos los motores orientados a eventos.
+
+**Arquitectura**: emisión mediante triggers `AFTER` sobre las tablas fuente de verdad, nunca desde las RPC. Cierra "path drift" (SPEC-002 §5.7) por construcción — cualquier vía futura (Trade Capture Engine, Import Adapter, corrección manual) emite sin poder olvidarlo; da atomicidad gratuita (evento y hecho en la misma transacción); y no toca ningún archivo congelado.
+
+**Distinción central, la trampa clásica del patrón Outbox**: `event_sequence` (`bigint generated always as identity`) **ordena**, `published = false` **entrega**. La secuencia da orden total y monotonía por Cuenta —lo que SPEC-004 §14.2 necesita— pero **no** sirve como cursor de entrega: dos transacciones pueden tomar los números 5 y 6 y confirmarse en orden inverso, y un lector con cursor perdería el 5 para siempre. La cola de trabajo por flag es inmune a eso. Tampoco es libre de huecos (un `ROLLBACK` consume número): sirve para ordenar, nunca para detectar pérdidas por conteo.
+
+**Seis eventos, payload mínimo**: `OperacionRegistrada`, `ParcialEjecutado`, `OperacionCerrada` (+`closure_reason`), `OperacionEditada`, `OperacionCancelada` (+`previous_status`, que distingue la cancelación simple de la reversión "fantasma"), `CapitalRecalculado`. El payload lleva identidad y la **forma de la transición**, nunca una copia del estado de otro módulo — el consumidor relee la fuente de verdad, que es lo que impide que el outbox se convierta en una segunda base de datos.
+
+**Tests**: 15 comprobaciones nuevas contra Postgres real (`supabase/tests/04_event_backbone.sql`), 49 en total en la suite SQL. Incluyen que el orden por secuencia reproduce el orden causal real (`OperacionRegistrada → ParcialEjecutado → OperacionCerrada → OperacionEditada → OperacionCancelada`), que el reintento idempotente de `registrar_operacion` **no** emite un segundo evento, que el payload no contiene `r_final` ni `pnl_amount`, y el aislamiento RLS del outbox incluida `listar_eventos_pendientes`.
+
+**Compatibilidad hacia atrás verificada, no supuesta**: las tres suites previas (01/02/03) se reejecutaron completas contra el esquema nuevo — 1 error esperado en 01 y 6 en 03, exactamente los mismos que antes, cero regresiones. Los 186 tests de TypeScript no se tocan porque ningún paquete cambia.
+
+**Fuera de alcance deliberadamente**: ningún consumidor, ningún worker, ninguna función de marcado como publicado, y ningún Rule Engine. El índice previo `domain_events_unpublished_idx` se conserva pese a quedar redundante, para que el cambio sea estrictamente aditivo.
+
 ### 14.5 Verificación I1-I21 (continuación de §14.1-14.4, numeración conservada del documento aprobado)
 
 - **I15 (precisión decimal)**: verificado — ningún campo monetario/R es `float`; el borde de API usa `string` (§8, hallazgo nuevo de esta entrega).

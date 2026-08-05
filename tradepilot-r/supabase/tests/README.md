@@ -28,21 +28,22 @@ psql -d tradepilot_test -f ../functions/sql/operations.sql
 psql -d tradepilot_test -f 01_funding_management_rls.sql
 psql -d tradepilot_test -f 02_risk_engine.sql
 psql -d tradepilot_test -f 03_operations_engine.sql
+psql -d tradepilot_test -f 04_event_backbone.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 34 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 49 comprobaciones en total, revisables en unos minutos).
 
-`01_funding_management_rls.sql`, `02_risk_engine.sql` y
-`03_operations_engine.sql` corren contra la **misma** base de datos, uno
+`01_funding_management_rls.sql`, `02_risk_engine.sql`,
+`03_operations_engine.sql` y `04_event_backbone.sql` corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
-`7777.../8888...` en el tercero): si compartieran UUID, dos scripts
+`7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto): si compartieran UUID, dos scripts
 llamarían a `crear_empresa('Personal', true)` para el mismo usuario y el
 `\gset` de `crear_cuenta` del segundo fallaría con "more than one row
 returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los tres scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los cuatro scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -63,3 +64,14 @@ No ejercita `packages/operations-engine` (TypeScript) — eso lo cubre
 a `aplicar_cierre_operacion`/`aplicar_edicion_operacion` con los valores que
 Risk Engine ya habría calculado, para aislar la capa SQL de la capa de
 orquestación.
+
+`04_event_backbone.sql` (BUILD 006A) valida el modelo único de eventos: que
+los seis eventos del contrato se emitan desde el productor correcto, que
+`event_sequence` sea estrictamente creciente y refleje el orden causal real,
+que el payload no contenga copias del estado de otro módulo, que el
+reintento idempotente de `registrar_operacion` no emita un segundo evento, y
+que RLS aísle el outbox entre usuarios — incluida la función de lectura
+`listar_eventos_pendientes`. Comprueba además la compatibilidad hacia atrás
+con BUILD 003 (`AcumuladorActualizado` se sigue emitiendo, ahora con
+secuencia) y la inmutabilidad del outbox (ninguna función del esquema
+escribe un UPDATE sobre `domain_events`).
