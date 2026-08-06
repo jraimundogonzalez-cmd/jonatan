@@ -33,21 +33,22 @@ psql -d tradepilot_test -f 05_rule_engine.sql
 psql -d tradepilot_test -f 06_management_intent.sql
 psql -d tradepilot_test -f 07_management_intent_invariants.sql
 psql -d tradepilot_test -f 08_domain_events_user_ownership.sql
+psql -d tradepilot_test -f 09_management_intent_event.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 135 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 148 comprobaciones en total, revisables en unos minutos).
 
-Los ocho scripts corren contra la **misma** base de datos, uno
+Los nueve scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
-`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo): si compartieran
+`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los ocho scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los nueve scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -160,3 +161,20 @@ de forma ruidosa, nunca silenciosa.
 
 Las sondas que inserta se borran en `[16]` para no contaminar suites
 posteriores.
+
+`09_management_intent_event.sql` (BUILD 013, B3) valida la emisión del evento
+`IntencionDeGestionEmitida`: exactamente uno por Intención, con `user_id` del
+propietario y `account_id` **nulo** —una decisión pertenece al Usuario y
+concierne a N Cuentas—, tomando su posición del mismo contador global
+`event_sequence` que el resto del backbone.
+
+`[6]` demuestra la atomicidad con un `ROLLBACK` real: dentro de la transacción
+existen la Intención y su evento; después del rollback, ninguno de los dos. Es
+la propiedad que se obtiene gratis por emitir desde un trigger `AFTER` sobre la
+tabla fuente de verdad en vez de desde una RPC.
+
+`[9]` y `[10]` verifican lo contrario de lo habitual — que **no** se emita
+nada: ni las transiciones de un destino (`pending → sent → materialized`) ni el
+borrado de una Intención generan eventos nuevos. Y `[11]`-`[13]` confirman que
+el aislamiento por `user_id` de BUILD 012B alcanza también a este evento, que
+es el primero del sistema sin Cuenta.
