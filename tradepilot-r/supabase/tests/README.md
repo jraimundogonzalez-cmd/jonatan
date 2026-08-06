@@ -31,21 +31,22 @@ psql -d tradepilot_test -f 03_operations_engine.sql
 psql -d tradepilot_test -f 04_event_backbone.sql
 psql -d tradepilot_test -f 05_rule_engine.sql
 psql -d tradepilot_test -f 06_management_intent.sql
+psql -d tradepilot_test -f 07_management_intent_invariants.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 91 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 119 comprobaciones en total, revisables en unos minutos).
 
-Los seis scripts corren contra la **misma** base de datos, uno
+Los siete scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
-`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto): si compartieran
+`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los seis scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los siete scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -119,3 +120,18 @@ append-only de `account_capital_events` (BUILD 001, `20260803120300`) rechaza
 la cascada antes de que ninguna otra llegue a correr, y no existe ninguna
 función que borre Cuentas. Las cascadas realmente alcanzables se verifican en
 `[24]` (por Operación) y `[26]` (por Intención).
+
+`07_management_intent_invariants.sql` (BUILD 011, B2) valida la capa 2 de las
+mismas invariantes: la inmutabilidad de una Intención emitida (MI-2), la
+inmutabilidad de la declaración de un destino, y la máquina de estados
+completa — todas las transiciones válidas aceptadas y todas las inválidas
+rechazadas, incluida la regla central de que **`sent` no puede caducar**: un
+destino cuya orden ya salió no admite caducidad, porque un fill tardío
+llegaría a una Operación real —que I14 obliga a registrar igualmente— sin
+ningún destino al que vincularla.
+
+Repite la estructura de dos capas de `05`: primero como `authenticated`,
+donde RLS bloquea antes de que el trigger llegue a evaluarse (`UPDATE 0`,
+sin error); después tras `reset role`, donde el trigger es la única defensa.
+La comprobación `[28]` cierra verificando que la Intención sigue intacta tras
+todos los intentos de mutación.
