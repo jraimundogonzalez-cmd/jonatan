@@ -32,21 +32,22 @@ psql -d tradepilot_test -f 04_event_backbone.sql
 psql -d tradepilot_test -f 05_rule_engine.sql
 psql -d tradepilot_test -f 06_management_intent.sql
 psql -d tradepilot_test -f 07_management_intent_invariants.sql
+psql -d tradepilot_test -f 08_domain_events_user_ownership.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 119 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 135 comprobaciones en total, revisables en unos minutos).
 
-Los siete scripts corren contra la **misma** base de datos, uno
+Los ocho scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
-`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo): si compartieran
+`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los siete scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los ocho scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -135,3 +136,27 @@ donde RLS bloquea antes de que el trigger llegue a evaluarse (`UPDATE 0`,
 sin error); después tras `reset role`, donde el trigger es la única defensa.
 La comprobación `[28]` cierra verificando que la Intención sigue intacta tras
 todos los intentos de mutación.
+
+`08_domain_events_user_ownership.sql` (BUILD 012B) valida la adaptación del
+backbone de eventos: `domain_events` separa ahora **propiedad** (`user_id`,
+siempre presente, único ancla de RLS) de **sujeto de dominio** (`account_id`,
+nulo cuando el hecho pertenece al Usuario y no a una Cuenta concreta).
+
+Ejecuta la revisión que BUILD 003 había dejado programada por escrito junto a
+sus políticas: *"se revisita si en el futuro existe un evento genuinamente sin
+Cuenta asociada"*. Una Management Intent es ese evento.
+
+Su comprobación decisiva es `[4]`: un emisor existente (`registrar_operacion`)
+publica **sin haber sido modificado** — sigue insertando
+`(event_type, account_id, payload)` y un trigger `BEFORE INSERT` deriva el
+propietario. `[5]` extiende la prueba a la cadena completa (parcial + cierre).
+
+`[9]` demuestra que la fuga latente queda cerrada: la política anterior trataba
+`account_id is null` como visible para **todos** los usuarios autenticados, y
+ahora un evento de Usuario solo lo ve su dueño — incluido a través de
+`listar_eventos_pendientes` (`[11]`/`[12]`). `[14]` verifica que propiedad y
+sujeto no puedan divergir, y `[15]` que un evento sin ninguno de los dos falle
+de forma ruidosa, nunca silenciosa.
+
+Las sondas que inserta se borran en `[16]` para no contaminar suites
+posteriores.
