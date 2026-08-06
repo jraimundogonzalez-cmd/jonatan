@@ -30,23 +30,22 @@ psql -d tradepilot_test -f 02_risk_engine.sql
 psql -d tradepilot_test -f 03_operations_engine.sql
 psql -d tradepilot_test -f 04_event_backbone.sql
 psql -d tradepilot_test -f 05_rule_engine.sql
+psql -d tradepilot_test -f 06_management_intent.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 65 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 91 comprobaciones en total, revisables en unos minutos).
 
-`01_funding_management_rls.sql`, `02_risk_engine.sql`,
-`03_operations_engine.sql`, `04_event_backbone.sql` y `05_rule_engine.sql`
-corren contra la **misma** base de datos, uno
+Los seis scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
-`bbbb.../cccc...` en el quinto): si compartieran UUID, dos scripts
-llamarían a `crear_empresa('Personal', true)` para el mismo usuario y el
-`\gset` de `crear_cuenta` del segundo fallaría con "more than one row
-returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los cinco scripts es idempotente por sí mismo (todos
+`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto): si compartieran
+UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
+usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
+row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
+`user_id`. Ninguno de los seis scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -101,3 +100,22 @@ verifica que RLS bloquee la mutación antes de llegar al trigger (`UPDATE 0` /
 RLS como superusuario y verifica que el trigger `append-only` levante el
 error igualmente. Una sola capa no bastaría: RLS no protege frente a un
 superusuario ni a un `service_role`.
+
+`06_management_intent.sql` (BUILD 010, B1) valida **únicamente el esquema
+base** de Management Intent — sin triggers, funciones ni eventos, que
+pertenecen a B2 y posteriores. Cubre las restricciones CHECK y UNIQUE
+declarativas, el comportamiento de las claves foráneas y el aislamiento RLS.
+
+Su punto central: ambas tablas son de **solo lectura** para `authenticated`
+por diseño, sin política de INSERT/UPDATE/DELETE — mismo criterio que
+`audit_log` y `rule_definitions`. Es la capa 1 de la inmutabilidad de una
+Intención y lo que impide añadir un destino después de la emisión; toda
+escritura llegará por una única vía `SECURITY DEFINER` en B5/B8/B9. Por eso
+todo el sembrado se hace como superusuario.
+
+**Hallazgo del script, ajeno a este build**: la comprobación `[23]` documenta
+que **borrar una Cuenta es imposible en el sistema actual** — el trigger
+append-only de `account_capital_events` (BUILD 001, `20260803120300`) rechaza
+la cascada antes de que ninguna otra llegue a correr, y no existe ninguna
+función que borre Cuentas. Las cascadas realmente alcanzables se verifican en
+`[24]` (por Operación) y `[26]` (por Intención).
