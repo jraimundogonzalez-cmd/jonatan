@@ -34,21 +34,22 @@ psql -d tradepilot_test -f 06_management_intent.sql
 psql -d tradepilot_test -f 07_management_intent_invariants.sql
 psql -d tradepilot_test -f 08_domain_events_user_ownership.sql
 psql -d tradepilot_test -f 09_management_intent_event.sql
+psql -d tradepilot_test -f 10_accounts_max_risk_pct.sql
 ```
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 148 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 164 comprobaciones en total, revisables en unos minutos).
 
-Los nueve scripts corren contra la **misma** base de datos, uno
+Los diez scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
-`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno): si compartieran
+`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los nueve scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los diez scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -178,3 +179,23 @@ nada: ni las transiciones de un destino (`pending → sent → materialized`) ni
 borrado de una Intención generan eventos nuevos. Y `[11]`-`[13]` confirman que
 el aislamiento por `user_id` de BUILD 012B alcanza también a este evento, que
 es el primero del sistema sin Cuenta.
+
+`10_accounts_max_risk_pct.sql` (BUILD 014, B4) valida la incorporación del
+tope de riesgo por Cuenta (`accounts.max_risk_pct`), estrictamente aditiva: la
+columna es nullable y sin defecto, y las 16 Cuentas creadas por las suites
+01-09 mantienen `NULL` sin excepción.
+
+`[3]` demuestra **empíricamente que no hay reescritura de tabla**, comparando
+el `relfilenode` de una tabla con 500 filas antes y después de aplicar el mismo
+tipo de `ALTER` — `add column` nullable y sin defecto es una operación de solo
+metadatos desde PG11.
+
+`[6]` y `[7]` confirman que `obtener_cuenta` y `listar_cuentas` exponen el dato
+**sin haber sido modificadas**: devuelven el tipo de la tabla con `select *`, de
+modo que la columna fluye sola. Es la misma propiedad por la que
+`event_sequence` (BUILD 006A) no obligó a tocar `listar_eventos_pendientes`.
+
+`[16]` cierra verificando que la cascada de capital de Funding sigue intacta:
+abrir es neutral, cerrar mueve capital y actualiza el pico, y el tope no se ve
+afectado. Ninguna validación de negocio sobre el tope se prueba aquí — aplicarlo
+al construir una Intención es B5 y no existe todavía.
