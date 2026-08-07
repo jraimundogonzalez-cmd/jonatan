@@ -25,6 +25,7 @@ psql -d tradepilot_test -f 00_local_test_setup.sql
 for f in ../migrations/*.sql; do psql -d tradepilot_test -f "$f"; done
 psql -d tradepilot_test -f ../functions/sql/funding.sql
 psql -d tradepilot_test -f ../functions/sql/operations.sql
+psql -d tradepilot_test -f ../functions/sql/management_intent.sql
 psql -d tradepilot_test -f 01_funding_management_rls.sql
 psql -d tradepilot_test -f 02_risk_engine.sql
 psql -d tradepilot_test -f 03_operations_engine.sql
@@ -35,21 +36,52 @@ psql -d tradepilot_test -f 07_management_intent_invariants.sql
 psql -d tradepilot_test -f 08_domain_events_user_ownership.sql
 psql -d tradepilot_test -f 09_management_intent_event.sql
 psql -d tradepilot_test -f 10_accounts_max_risk_pct.sql
+psql -d tradepilot_test -f 11_management_intent_creation.sql
 ```
+
+**No uses `-q`**: varias comprobaciones se leen en la etiqueta del comando
+(`UPDATE 0`, `DELETE 0`), que el modo silencioso suprime.
+
+### La carrera de idempotencia (BUILD 015)
+
+`11_concurrency_a.sql` y `11_concurrency_b.sql` no pueden ejecutarse desde un
+único psql: prueban **dos sesiones simultáneas** llamando a
+`crear_intencion_de_gestion` con la misma clave de idempotencia. Se lanzan en
+paralelo, después de `11_management_intent_creation.sql` (reutilizan la Cuenta
+y el Plan que aquel sembró):
+
+```bash
+psql -d tradepilot_test -f 11_concurrency_a.sql > /tmp/a.txt 2>&1 &
+psql -d tradepilot_test -f 11_concurrency_b.sql > /tmp/b.txt 2>&1 &
+wait; cat /tmp/a.txt /tmp/b.txt
+```
+
+A abre una transacción, crea la Intención y la retiene **sin confirmar** 5 s.
+B espera 2 s, pasa la comprobación previa de idempotencia sin ver nada —la
+fila de A no está confirmada— y se bloquea en el INSERT contra el índice único
+parcial. Cuando A confirma, B recibe `unique_violation`, su subtransacción
+revierte y el manejador relee la fila ganadora.
+
+Lo que convierte esto en una carrera real y no en un reintento secuencial
+disfrazado es el **cronómetro de B**: si hubiera resuelto por la comprobación
+previa volvería en milisegundos. En la ejecución de referencia B esperó
+`00:00:03.006` —exactamente lo que le quedaba a A de sus 5 s— y devolvió el
+mismo `id` que A, con una sola Intención, un solo destino y un solo evento.
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 164 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 203 comprobaciones en total, revisables en unos minutos).
 
-Los diez scripts corren contra la **misma** base de datos, uno
+Los once scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
-`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo): si compartieran
+`bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo,
+`8b8b.../9c9c...` en el undécimo): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los diez scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los once scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -199,3 +231,40 @@ modo que la columna fluye sola. Es la misma propiedad por la que
 abrir es neutral, cerrar mueve capital y actualiza el pico, y el tope no se ve
 afectado. Ninguna validación de negocio sobre el tope se prueba aquí — aplicarlo
 al construir una Intención es B5 y no existe todavía.
+
+`11_management_intent_creation.sql` (BUILD 015, B5) valida
+`crear_intencion_de_gestion`, la **única vía de escritura** del agregado: 39
+comprobaciones sobre la creación atómica, la propiedad bajo SECURITY DEFINER,
+el congelado del Plan, el tope de riesgo, la idempotencia y la atomicidad.
+
+Su bloque decisivo es el de **propiedad**, porque una función SECURITY DEFINER
+se salta RLS por completo: `[14]` rechaza una Cuenta ajena, `[15]` un Plan
+ajeno y `[18]` una llamada sin sesión —con `INTENT_ERROR:NOT_AUTHENTICATED`,
+no con un NOT NULL crudo—. `[16]` es la prueba de atomicidad real: dos destinos
+válidos seguidos de uno ajeno, y `[17]` confirma que ni la Intención, ni los
+dos destinos buenos, ni el evento sobrevivieron. `[29]` repite ese recuento
+tras los once rechazos de forma.
+
+`[13]` demuestra la **regla 13 en vivo**: se edita el Plan de Gestión que una
+Intención ya congeló (de `3.0000`/`AFTER_NTH_PARTIAL`/2 parciales a
+`9.9900`/`NONE`/0) y el `frozen_plan` del destino sigue diciendo exactamente lo
+que decía. `[12]` verifica que se congela el **mismo subconjunto** que
+`trades` snapshota y no más: `condiciones_ejecucion` y `etiqueta_riesgo` quedan
+fuera por ser metadata descriptiva que no participa en ningún cálculo de
+R_final (criterio de BUILD 004).
+
+`[5]`-`[10]` cubren el tope de A4 en sus tres casos (sin tope, con tope que
+recorta, con tope holgado). `[8]` es el que protege I13: la forma declarada
+("0.5× la máster") sobrevive intacta **junto** al resultado, de modo que dos
+decisiones distintas que producen el mismo número siguen siendo distinguibles.
+`[10]` verifica que el valor del tope no se copia al destino — su única fuente
+de verdad es `accounts.max_risk_pct`. `[22]` cierra el flanco: si el llamador
+intenta traer ya escritas las claves `requested_risk_pct`/`resolved_risk_pct`,
+la construcción se rechaza; quien calcula no puede firmar su propio veredicto.
+
+`[9]` comprueba I5 sobre los dos jsonb: los cinco números que contienen son
+cadenas, no números JSON.
+
+`[35]`-`[37]` confirman que la función no abrió ninguna puerta lateral: el
+INSERT directo sigue rechazado por RLS en ambas tablas, y MI-2 sigue vigente
+sobre lo que la función creó.
