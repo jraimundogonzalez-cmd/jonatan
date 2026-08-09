@@ -297,6 +297,95 @@ $$;
 -- documentada aquí en vez de una reconciliación compensatoria que ninguna
 -- demanda real justifica todavía.
 -- ============================================================
+-- ============================================================
+-- crear_operacion_nucleo — BUILD 017.
+--
+-- **Única implementación del nacimiento de una Operación.** Extraída de
+-- `registrar_operacion` sin cambiar una coma de su comportamiento observable,
+-- para que la ruta desde una Intención (`abrir_operacion_desde_intencion`,
+-- management_intent.sql) no tenga que duplicar el `INSERT` ni —sobre todo— la
+-- fórmula de `risk_amount`. Dos fórmulas iguales hoy son dos fórmulas
+-- distintas dentro de un año.
+--
+-- **No resuelve nada: recibe un contexto ya resuelto.** No consulta
+-- `management_plans`, no valida `side` ni `rr_objective`, no decide parciales.
+-- Quien llama decide de dónde salen esos valores —del Plan vivo, de un Plan
+-- anónimo recién creado, o del `frozen_plan` de un destino de Intención— y el
+-- núcleo se limita a calcular el riesgo en euros e insertar. Es lo que permite
+-- que la ruta de Intención sea, estructuralmente, incapaz de leer el Plan vivo:
+-- nunca le pasa un identificador que el núcleo pueda seguir.
+--
+-- Comprueba la propiedad de la Cuenta por su cuenta, aunque todos sus
+-- llamantes ya lo hayan hecho: bajo `SECURITY DEFINER` no queda ninguna otra
+-- protección, y una función que sólo es segura si se la llama bien no es
+-- segura.
+-- ============================================================
+create or replace function public.crear_operacion_nucleo(
+  p_account_id uuid,
+  p_symbol text,
+  p_instrument_key text,
+  p_side text,
+  p_opened_at timestamptz,
+  p_risk_pct numeric,
+  p_management_plan_id uuid,
+  p_rr_objective numeric,
+  p_be_trigger text,
+  p_planned_partials jsonb,
+  p_idempotency_key uuid,
+  p_source text,
+  p_external_ref text
+)
+returns public.trades
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_account public.accounts;
+  v_risk_amount numeric(18,4);
+  v_trade public.trades;
+  r record;
+begin
+  select * into v_account from public.accounts where id = p_account_id and user_id = auth.uid();
+  if not found then
+    raise exception 'OPERATIONS_ERROR:ACCOUNT_NOT_FOUND:no existe una Cuenta % del usuario actual', p_account_id;
+  end if;
+
+  -- Invariante 3 (SPEC-002 §2.5): risk_amount se calcula y persiste una sola
+  -- vez, Capital_en_ese_instante × Riesgo%, nunca se recalcula después.
+  -- **Este es el único sitio del sistema donde vive esta fórmula.**
+  v_risk_amount := round(v_account.current_capital * p_risk_pct / 100, 4);
+
+  begin
+    insert into public.trades (
+      user_id, account_id, symbol, instrument_key, side, opened_at,
+      risk_pct, risk_amount, management_plan_id, rr_objective, be_trigger,
+      idempotency_key, source, external_ref
+    ) values (
+      auth.uid(), p_account_id, p_symbol, p_instrument_key, p_side, p_opened_at,
+      p_risk_pct, v_risk_amount, p_management_plan_id, p_rr_objective, p_be_trigger,
+      p_idempotency_key, coalesce(p_source, 'manual'), p_external_ref
+    )
+    returning * into v_trade;
+  exception when unique_violation then
+    -- Carrera genuina de reintentos simultáneos con la misma idempotency_key
+    -- — la fila ganadora ya está comprometida, se devuelve.
+    select * into v_trade from public.trades
+      where account_id = p_account_id and idempotency_key = p_idempotency_key;
+    return v_trade;
+  end;
+
+  for r in select * from jsonb_to_recordset(coalesce(p_planned_partials, '[]'::jsonb))
+                        as x(sequence smallint, rr_level text, pct_close text)
+  loop
+    insert into public.trade_partials_planned (trade_id, sequence, rr_level, pct_close)
+    values (v_trade.id, r.sequence, r.rr_level::numeric(8,4), r.pct_close::numeric(5,2));
+  end loop;
+
+  return v_trade;
+end;
+$$;
+
 create or replace function public.registrar_operacion(
   p_account_id uuid,
   p_symbol text,
@@ -320,10 +409,10 @@ declare
   v_account public.accounts;
   v_existing public.trades;
   v_risk_pct numeric(5,2);
-  v_risk_amount numeric(18,4);
   v_plan public.management_plans;
   v_rr_objective numeric(8,4);
   v_be_trigger text;
+  v_planned_partials jsonb;
   v_trade public.trades;
   r record;
 begin
@@ -353,9 +442,8 @@ begin
     raise exception 'OPERATIONS_ERROR:VALIDATION_ERROR:risk_pct:debe ser > 0 (recibido %)', p_risk_pct;
   end if;
 
-  -- Invariante 3 (SPEC-002 §2.5): risk_amount se calcula y persiste una sola
-  -- vez, Capital_en_ese_instante × Riesgo%, nunca se recalcula después.
-  v_risk_amount := round(v_account.current_capital * v_risk_pct / 100, 4);
+  -- `risk_amount` lo calcula `crear_operacion_nucleo` (BUILD 017): la fórmula
+  -- vive en un único sitio del sistema.
 
   if p_management_plan_id is not null then
     select * into v_plan from public.management_plans where id = p_management_plan_id and user_id = auth.uid();
@@ -391,38 +479,42 @@ begin
     v_be_trigger := p_be_trigger;
   end if;
 
-  begin
-    insert into public.trades (
-      user_id, account_id, symbol, side, opened_at,
-      risk_pct, risk_amount, management_plan_id, rr_objective, be_trigger,
-      idempotency_key, source, external_ref
-    ) values (
-      auth.uid(), p_account_id, p_symbol, p_side, p_opened_at,
-      v_risk_pct, v_risk_amount, v_plan.id, v_rr_objective, v_be_trigger,
-      p_idempotency_key, coalesce(p_source, 'manual'), p_external_ref
-    )
-    returning * into v_trade;
-  exception when unique_violation then
-    -- Carrera genuina de reintentos simultáneos con la misma idempotency_key
-    -- (ver nota arriba) — la fila ganadora ya está comprometida, se devuelve.
-    select * into v_trade from public.trades
-      where account_id = p_account_id and idempotency_key = p_idempotency_key;
-    return v_trade;
-  end;
-
+  -- Los parciales planificados se normalizan a la misma forma en ambas ramas
+  -- para que el núcleo no tenga que saber de dónde vienen: del Plan guardado
+  -- (que ya los tiene en su tabla) o del parámetro recibido (ya validado por
+  -- `validate_planned_partials` más arriba).
   if p_management_plan_id is not null then
-    for r in select sequence, rr_level, pct_close from public.management_plan_partials where plan_id = v_plan.id order by sequence
-    loop
-      insert into public.trade_partials_planned (trade_id, sequence, rr_level, pct_close)
-      values (v_trade.id, r.sequence, r.rr_level, r.pct_close);
-    end loop;
+    select coalesce(jsonb_agg(
+             jsonb_build_object('sequence', mpp.sequence,
+                                'rr_level', mpp.rr_level::text,
+                                'pct_close', mpp.pct_close::text)
+             order by mpp.sequence), '[]'::jsonb)
+      into v_planned_partials
+      from public.management_plan_partials mpp where mpp.plan_id = v_plan.id;
   else
-    for r in select * from jsonb_to_recordset(p_partials) as x(sequence smallint, rr_level text, pct_close text)
-    loop
-      insert into public.trade_partials_planned (trade_id, sequence, rr_level, pct_close)
-      values (v_trade.id, r.sequence, r.rr_level::numeric(8,4), r.pct_close::numeric(5,2));
-    end loop;
+    v_planned_partials := coalesce(p_partials, '[]'::jsonb);
   end if;
+
+  -- Camino único de creación (BUILD 017). `registrar_operacion` resuelve el
+  -- contexto —Plan vivo o Plan anónimo— y el núcleo lo materializa. Ninguna
+  -- Operación del sistema nace por otra vía.
+  v_trade := public.crear_operacion_nucleo(
+    p_account_id       => p_account_id,
+    p_symbol           => p_symbol,
+    -- Sin Intención no hay identidad canónica: la resolución
+    -- `símbolo nativo → instrument_key` pertenece a SPEC-008, no a este build.
+    p_instrument_key   => null,
+    p_side             => p_side,
+    p_opened_at        => p_opened_at,
+    p_risk_pct         => v_risk_pct,
+    p_management_plan_id => v_plan.id,
+    p_rr_objective     => v_rr_objective,
+    p_be_trigger       => v_be_trigger,
+    p_planned_partials => v_planned_partials,
+    p_idempotency_key  => p_idempotency_key,
+    p_source           => p_source,
+    p_external_ref     => p_external_ref
+  );
 
   return v_trade;
 end;

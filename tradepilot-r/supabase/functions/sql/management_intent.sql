@@ -108,8 +108,9 @@
 -- `JSON.parse` como float y violaría I5.
 --
 -- ============================================================
--- FUERA DE ALCANCE (BUILD 009): caducidad (B6), contratos de lectura (B7),
--- reclamación (B8), desenlace (B9). Esta función solo crea.
+-- FUERA DE ALCANCE de ESTA función: caducidad (B6), desenlace `rejected` /
+-- `discarded` (B9). La reclamación (B8) y los contratos de lectura mínimos
+-- (B7) viven más abajo, en BUILD 017. Esta función solo crea.
 -- ============================================================
 create or replace function public.crear_intencion_de_gestion(
   p_side text,
@@ -356,3 +357,250 @@ $$;
 
 comment on function public.crear_intencion_de_gestion(text, text, timestamptz, timestamptz, jsonb, timestamptz, uuid) is
   'Única vía de escritura del agregado Management Intent. Crea la Intención y todos sus destinos en una sola transacción: o existe entera, o no existe. Al ser SECURITY DEFINER comprueba a mano toda propiedad que RLS deja de garantizar.';
+
+-- ============================================================
+-- BUILD 017 / B8 — abrir_operacion_desde_intencion.
+--
+-- **El camino que faltaba.** Hasta este build, `crear_intencion_de_gestion`
+-- escribía una decisión que nadie consumía: verificado sobre Postgres real,
+-- tras `registrar_operacion` el destino seguía `pending` con `trade_id` nulo.
+-- La estructura del vínculo existía desde B1 (`trade_id`, el `CHECK` que lo ata
+-- al estado, el índice parcial) y la máquina de estados desde B2. Sólo faltaba
+-- quién puede escribirla.
+--
+-- **Fuente única de verdad.** La función no acepta ni Cuenta, ni Plan, ni
+-- riesgo, ni lado, ni instrumento: todo eso ya lo declara el destino y lo que
+-- no se recibe no puede contradecirse. Es el mismo mecanismo con el que
+-- `crear_intencion_de_gestion` rechaza `requested_risk_pct`/`resolved_risk_pct`
+-- cuando llegan del llamante — las escribe el dominio, nunca el llamador.
+--
+-- **El Plan vivo no puede sustituir al snapshot**, y no por disciplina sino por
+-- construcción: esta función nunca pasa un identificador de Plan que el núcleo
+-- pueda seguir; pasa los valores ya congelados. `management_plan_id` viaja como
+-- linaje (I11), no como puntero a leer.
+--
+-- **Atomicidad total.** Creación de la Operación y transiciones
+-- `pending → sent → materialized` ocurren en la misma transacción. No existe la
+-- transición directa `pending → materialized` (B2), así que el paso por `sent`
+-- es obligatorio: existe dentro de la transacción y nadie lo observa fuera.
+--
+-- **No emite ningún evento.** El desenlace de un destino sigue sin consumidor y
+-- BUILD 008 §7 lo dejó deliberadamente fuera: emitir sin consumidor es la
+-- sobreingeniería que 31 (TPOS) obliga a evitar. La Operación sí emite
+-- `OperacionRegistrada` por el trigger de siempre, sin cambios.
+-- ============================================================
+create or replace function public.abrir_operacion_desde_intencion(
+  p_destination_id uuid,
+  p_opened_at timestamptz,
+  p_idempotency_key uuid default null
+)
+returns public.trades
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_user_id uuid;
+  v_dest public.management_intent_destinations;
+  v_intent public.management_intents;
+  v_trade public.trades;
+  v_plan_id uuid;
+  v_risk_pct numeric(5,2);
+  v_partials jsonb;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null then
+    raise exception 'INTENT_ERROR:NOT_AUTHENTICATED:abrir una Operación desde una Intención exige sesión';
+  end if;
+
+  if p_opened_at is null then
+    raise exception 'INTENT_ERROR:VALIDATION_ERROR:opened_at:obligatorio — es el instante en que la Operación existió';
+  end if;
+
+  -- Propiedad y existencia en una sola consulta. Mismo mensaje exista o no el
+  -- destino ajeno: distinguirlos filtraría la existencia de Intenciones de
+  -- otros usuarios.
+  select d.* into v_dest
+    from public.management_intent_destinations d
+    join public.management_intents i on i.id = d.intent_id
+   where d.id = p_destination_id and i.user_id = v_user_id;
+  if not found then
+    raise exception 'INTENT_ERROR:DESTINATION_NOT_FOUND:no existe un destino % del usuario actual', p_destination_id;
+  end if;
+
+  select * into v_intent from public.management_intents where id = v_dest.intent_id;
+
+  -- Red de idempotencia que no depende de que el llamante recuerde su clave:
+  -- un destino ya materializado **es** su propia respuesta.
+  if v_dest.state = 'materialized' then
+    select * into v_trade from public.trades where id = v_dest.trade_id;
+    return v_trade;
+  end if;
+
+  if v_dest.state in ('rejected','expired','discarded') then
+    raise exception 'INTENT_ERROR:TERMINAL_STATE:%:un desenlace alcanzado no se reabre', v_dest.state;
+  end if;
+
+  -- Ventana de vigencia. Se comprueba aquí, en la reclamación, y no como un
+  -- estado almacenado: `pending` no es terminal, de modo que la transición
+  -- `pending → expired` de B6 seguirá siendo legal sobre estos mismos datos el
+  -- día que se construya. Aplazar no destruye información.
+  if p_opened_at < v_intent.valid_from or p_opened_at >= v_intent.valid_until then
+    raise exception 'INTENT_ERROR:OUT_OF_WINDOW:opened_at (%) fuera de la ventana de la Intención [%, %)',
+      p_opened_at, v_intent.valid_from, v_intent.valid_until;
+  end if;
+
+  -- Todo lo que sigue sale del congelado. Ni una lectura del Plan vivo.
+  v_plan_id  := (v_dest.frozen_plan->>'plan_id')::uuid;
+  v_risk_pct := (v_dest.risk_transformation->>'resolved_risk_pct')::numeric(5,2);
+  v_partials := coalesce(v_dest.frozen_plan->'partials', '[]'::jsonb);
+
+  -- El Plan congelado conserva su identidad aunque esté archivado (archivar no
+  -- borra), pero un borrado directo dejaría el linaje sin destino: `trades`
+  -- sí lleva FK a `management_plans`, a diferencia del destino, que
+  -- deliberadamente no la lleva.
+  if not exists (select 1 from public.management_plans where id = v_plan_id) then
+    raise exception 'INTENT_ERROR:PLAN_NOT_FOUND:el Plan de Gestión % congelado en este destino ya no existe', v_plan_id;
+  end if;
+
+  -- `pending → sent`: la orden sale. Obligatorio por la máquina de estados de
+  -- B2, que no admite el salto directo a `materialized`.
+  if v_dest.state = 'pending' then
+    update public.management_intent_destinations set state = 'sent' where id = v_dest.id;
+  end if;
+
+  -- Camino único de creación (BUILD 017). El mismo núcleo que usa
+  -- `registrar_operacion`: una sola fórmula de risk_amount en todo el sistema.
+  v_trade := public.crear_operacion_nucleo(
+    p_account_id         => v_dest.account_id,
+    -- Sin conector no hay símbolo nativo que resolver: en la ruta manual la
+    -- forma canónica decidida por el trader es el único dato de instrumento en
+    -- juego. `instrument_key` guarda esa identidad de forma explícita; `symbol`
+    -- la acompaña porque la columna es obligatoria. No se colapsan: el día que
+    -- exista un conector, `symbol` llevará el símbolo nativo y esta columna
+    -- seguirá llevando la clave canónica.
+    p_symbol             => v_intent.instrument_key,
+    p_instrument_key     => v_intent.instrument_key,
+    p_side               => v_intent.side,
+    p_opened_at          => p_opened_at,
+    p_risk_pct           => v_risk_pct,
+    p_management_plan_id => v_plan_id,
+    p_rr_objective       => (v_dest.frozen_plan->>'rr_objective')::numeric(8,4),
+    p_be_trigger         => v_dest.frozen_plan->>'be_trigger',
+    p_planned_partials   => v_partials,
+    p_idempotency_key    => p_idempotency_key,
+    p_source             => 'manual',
+    p_external_ref       => null
+  );
+
+  -- `sent → materialized`: estado y enlace se escriben juntos, como exige el
+  -- CHECK de B1.
+  update public.management_intent_destinations
+     set state = 'materialized', trade_id = v_trade.id
+   where id = v_dest.id;
+
+  return v_trade;
+end;
+$$;
+
+comment on function public.abrir_operacion_desde_intencion(uuid, timestamptz, uuid) is
+  'Única vía por la que una Intención se convierte en Operación. Crea la Operación desde el Plan congelado del destino y lo transiciona pending→sent→materialized en una sola transacción. No acepta Cuenta, Plan, riesgo, lado ni instrumento: todo eso lo declara el destino.';
+
+-- ============================================================
+-- BUILD 017 / B7-mín — contratos de lectura.
+--
+-- Lo mínimo para que una Intención pueda verse y para poder elegir desde qué
+-- destino abrir. `SECURITY INVOKER` a propósito: las políticas RLS de lectura
+-- de B1 ya resuelven la propiedad, y una función DEFINER aquí sería poder sin
+-- necesidad.
+--
+-- `caducada` se **deriva**, no se almacena: `pending` con la ventana vencida.
+-- B6 materializará esa misma verdad como estado el día que exista; hasta
+-- entonces, calcularla en lectura no pierde ninguna información.
+-- ============================================================
+create or replace function public.listar_intenciones()
+returns table (
+  id uuid,
+  decided_at timestamptz,
+  side text,
+  instrument_key text,
+  valid_from timestamptz,
+  valid_until timestamptz,
+  contract_version int,
+  destinos jsonb
+)
+language sql
+security invoker
+set search_path = public, pg_temp
+as $$
+  select i.id, i.decided_at, i.side, i.instrument_key, i.valid_from, i.valid_until,
+         i.contract_version,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'destination_id', d.id,
+                    'account_id', d.account_id,
+                    'state', d.state,
+                    'trade_id', d.trade_id,
+                    'risk_pct', d.risk_transformation->>'resolved_risk_pct',
+                    'risk_cap_applied', d.risk_cap_applied,
+                    'risk_cap_reason', d.risk_cap_reason,
+                    'frozen_plan', d.frozen_plan,
+                    'caducada', (d.state = 'pending' and i.valid_until <= now())
+                  ) order by d.created_at)
+             from public.management_intent_destinations d where d.intent_id = i.id
+         ), '[]'::jsonb)
+    from public.management_intents i
+   where i.user_id = auth.uid()
+   order by i.decided_at desc;
+$$;
+
+create or replace function public.obtener_intencion(p_id uuid)
+returns table (
+  id uuid,
+  decided_at timestamptz,
+  side text,
+  instrument_key text,
+  valid_from timestamptz,
+  valid_until timestamptz,
+  contract_version int,
+  destinos jsonb
+)
+language sql
+security invoker
+set search_path = public, pg_temp
+as $$
+  select * from public.listar_intenciones() t where t.id = p_id;
+$$;
+
+-- Destinos que todavía pueden convertirse en Operación: `pending` y dentro de
+-- su ventana. Es lo que una pantalla necesita para ofrecer "abrir desde esta
+-- decisión" sin ofrecer nunca algo que la RPC vaya a rechazar.
+create or replace function public.listar_destinos_disponibles(p_account_id uuid default null)
+returns table (
+  destination_id uuid,
+  intent_id uuid,
+  account_id uuid,
+  side text,
+  instrument_key text,
+  decided_at timestamptz,
+  valid_until timestamptz,
+  risk_pct text,
+  risk_cap_applied boolean,
+  risk_cap_reason text,
+  frozen_plan jsonb
+)
+language sql
+security invoker
+set search_path = public, pg_temp
+as $$
+  select d.id, i.id, d.account_id, i.side, i.instrument_key, i.decided_at, i.valid_until,
+         d.risk_transformation->>'resolved_risk_pct',
+         d.risk_cap_applied, d.risk_cap_reason, d.frozen_plan
+    from public.management_intent_destinations d
+    join public.management_intents i on i.id = d.intent_id
+   where i.user_id = auth.uid()
+     and d.state = 'pending'
+     and now() >= i.valid_from and now() < i.valid_until
+     and (p_account_id is null or d.account_id = p_account_id)
+   order by i.decided_at desc;
+$$;

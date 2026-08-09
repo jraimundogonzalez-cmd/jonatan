@@ -37,10 +37,18 @@ psql -d tradepilot_test -f 08_domain_events_user_ownership.sql
 psql -d tradepilot_test -f 09_management_intent_event.sql
 psql -d tradepilot_test -f 10_accounts_max_risk_pct.sql
 psql -d tradepilot_test -f 11_management_intent_creation.sql
+psql -d tradepilot_test -f 12_management_intent_binding.sql
 ```
 
 **No uses `-q`**: varias comprobaciones se leen en la etiqueta del comando
 (`UPDATE 0`, `DELETE 0`), que el modo silencioso suprime.
+
+### Las dos carreras de dos sesiones (BUILD 015 y BUILD 017)
+
+Hay dos, y prueban cosas distintas: la de BUILD 015 prueba que dos
+**creaciones** simultáneas con la misma clave de idempotencia producen una
+sola Intención; la de BUILD 017 prueba que dos **materializaciones**
+simultáneas del mismo destino producen una sola Operación.
 
 ### La carrera de idempotencia (BUILD 015)
 
@@ -68,20 +76,44 @@ previa volvería en milisegundos. En la ejecución de referencia B esperó
 `00:00:03.006` —exactamente lo que le quedaba a A de sus 5 s— y devolvió el
 mismo `id` que A, con una sola Intención, un solo destino y un solo evento.
 
+### La carrera de materialización (BUILD 017)
+
+`12_concurrency_a.sql` y `12_concurrency_b.sql` tampoco pueden ejecutarse
+desde un único psql. Se lanzan en paralelo **después** de
+`12_management_intent_binding.sql`, que siembra la Intención `CARRERA017`:
+
+```bash
+psql -d tradepilot_test -f 12_concurrency_a.sql > /tmp/a.txt 2>&1 &
+psql -d tradepilot_test -f 12_concurrency_b.sql > /tmp/b.txt 2>&1 &
+wait; cat /tmp/a.txt /tmp/b.txt
+```
+
+A abre una transacción, materializa el destino y la retiene **sin confirmar**
+5 s. B espera 2 s, ve el destino todavía `pending` en su instantánea, llega
+hasta el `UPDATE` de estado y se bloquea contra la fila que A retiene. Cuando
+A confirma, B reevalúa en READ COMMITTED, encuentra `materialized` y el
+trigger de B2 lo rechaza con `TERMINAL_STATE`.
+
+En la ejecución de referencia B esperó `00:00:03.012613` —lo que le quedaba a
+A de sus 5 s— y el destino quedó con **una sola Operación**. La red de
+idempotencia por estado devuelve la Operación ganadora en un reintento
+**secuencial**; en una carrera genuina la perdedora recibe el error tipado,
+que es el comportamiento correcto para un doble envío simultáneo.
+
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 203 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 244 comprobaciones en total, revisables en unos minutos).
 
-Los once scripts corren contra la **misma** base de datos, uno
+Los doce scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
 `bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo,
-`8b8b.../9c9c...` en el undécimo): si compartieran
+`8b8b.../9c9c...` en el undécimo, `ad17.../be17...` en el duodécimo): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los once scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los doce scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -268,3 +300,54 @@ cadenas, no números JSON.
 `[35]`-`[37]` confirman que la función no abrió ninguna puerta lateral: el
 INSERT directo sigue rechazado por RLS en ambas tablas, y MI-2 sigue vigente
 sobre lo que la función creó.
+
+`12_management_intent_binding.sql` (BUILD 017, B8 + B7-mín) valida el cierre
+del primer corte real del dominio: que una Intención se convierta en Operación
+y que el vínculo no pueda mentir.
+
+`[1]`-`[8]` son el camino feliz completo: la Operación nace, el destino queda
+`materialized` apuntando a ella, `management_plan_id` es el del Plan congelado
+(linaje I11), los parciales planificados salen del snapshot, `risk_amount` es
+capital vigente × riesgo resuelto, e `instrument_key` es el de la Intención.
+`[7]` es la comprobación estructural que hace innecesaria cualquier otra:
+la firma de la función tiene **tres parámetros** —destino, `opened_at` y clave
+de idempotencia— y ninguno es Cuenta, Plan, riesgo, lado ni instrumento. Lo
+que no se recibe no puede contradecirse. `[8]` confirma que no se emitió
+ningún evento nuevo de desenlace: BUILD 008 §7 lo dejó fuera hasta que exista
+un consumidor real.
+
+`[9]`-`[11]` son la Regla 13 en vivo: se edita el Plan **vivo** de `3.0000` /
+`AFTER_NTH_PARTIAL` / 2 parciales a `9.9900` / `NONE` / 0, y la Operación que
+nace después sigue saliendo del congelado. `[12]` comprueba que un Plan
+**archivado** no impide materializar: archivar no borra, y el snapshot es
+autosuficiente.
+
+`[13]`-`[15b]` cubren la ventana de vigencia por sus dos bordes, y verifican
+que un rechazo deja el destino en `pending` — lo que mantiene legal la
+transición `pending → expired` de B6 el día que se construya.
+
+`[16]`-`[17]` son las dos redes de idempotencia: por estado (un destino ya
+materializado **es** su propia respuesta, sin que el llamante recuerde clave
+alguna) y por clave. `[18]` comprueba que un desenlace terminal no se reabre.
+
+`[19]`-`[23]` cierran el aislamiento: destino inexistente y destino ajeno
+producen **el mismo** mensaje —distinguirlos filtraría la existencia de
+Intenciones de otros usuarios—, la escritura directa sobre destinos sigue
+bloqueada por RLS para `authenticated`, y la declaración sigue siendo
+inmutable incluso para el propietario de la tabla.
+
+`[24]`-`[32]` son la invariante nueva de este build: una Operación vinculada
+no admite editar `rr_objective`, `be_trigger`, `symbol`, `side` ni `risk_pct`,
+y sí admite los campos de desenlace que BUILD 018 necesitará. `[30]` confirma
+que cerrarla sigue funcionando; `[31]` que una Operación **no** vinculada
+conserva toda su libertad de edición; `[32]` que la columna nueva es aditiva:
+las Operaciones sin Intención la dejan nula.
+
+`[33]`-`[35]` prueban la atomicidad inyectando un trigger temporal que revienta
+el `INSERT` en `trades` **después** de que el destino haya pasado a `sent`. Es
+la única forma honesta de comprobar que la transición no sobrevive al fallo: el
+destino vuelve a `pending`, no queda ninguna Operación, y el mismo destino
+sigue pudiendo materializarse después.
+
+`[36]`-`[39]` son los contratos de lectura mínimos, incluida la derivación de
+`caducada` (`pending` con la ventana vencida) sin almacenar ningún estado.
