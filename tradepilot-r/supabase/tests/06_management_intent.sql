@@ -231,19 +231,31 @@ reset role;
 delete from public.accounts where id = :'cuenta_m_id'::uuid;
 \set ON_ERROR_STOP on
 
-\echo '--- [24] CASCADA por Operación: borrar la Operación arrastra su destino — esperado: 1 → 0 ---'
+-- BUILD 016B invirtió esta aserción, y a propósito. Cuando B1 escribió esta FK
+-- con `on delete cascade`, `trade_id` no tenía ningún uso; BUILD 017 la
+-- convirtió en el vínculo histórico entre una decisión y su Operación, y la
+-- cascada pasó a ser destructiva: borrar la Operación **eliminaba el destino**,
+-- dejando una Intención con cero destinos y violando en silencio la invariante
+-- que su propia función de creación garantiza. Ahora la Operación no se borra
+-- (trigger de H7) y la FK es RESTRICT (segunda cerradura sobre la misma puerta).
+\echo '--- [24] la Operación NO destruye su destino — esperado: DELETE rechazado, destino sobrevive ---'
 select count(*) as destinos_con_esa_operacion_antes from public.management_intent_destinations
   where trade_id = :'trade_m_id'::uuid;
+\set ON_ERROR_STOP off
 delete from public.trades where id = :'trade_m_id'::uuid;
+\set ON_ERROR_STOP on
 select count(*) as destinos_con_esa_operacion_despues from public.management_intent_destinations
   where trade_id = :'trade_m_id'::uuid;
 
-\echo '--- [25] la Intención SOBREVIVE a la desaparición de un destino — esperado: 1 ---'
+\echo '--- [25] la Intención SOBREVIVE al intento de borrar su Operación — esperado: 1 ---'
 \echo '        Pertenece al Usuario, no a la Cuenta ni a la Operación.'
 select count(*) as intencion_superviviente from public.management_intents
   where id = '11111111-dddd-dddd-dddd-111111111111';
 
-\echo '--- [26] CASCADA por Intención: arrastra sus destinos restantes — esperado: 1 → 0 ---'
+-- Son 2 desde BUILD 016B: el destino de [24] ya no lo destruye la Operación.
+-- La cascada que sí sigue viva es la de la propia Intención sobre sus destinos,
+-- que es la dirección correcta — el agregado manda sobre sus partes.
+\echo '--- [26] CASCADA por Intención: arrastra sus destinos restantes — esperado: 2 → 0 ---'
 select count(*) as destinos_antes from public.management_intent_destinations
   where intent_id = '11111111-dddd-dddd-dddd-111111111111';
 delete from public.management_intents where id = '11111111-dddd-dddd-dddd-111111111111';

@@ -76,11 +76,26 @@ select aplicar_cierre_operacion(
 );
 select current_capital from accounts where id = :'cuenta_g_id'::uuid;
 
-\echo '--- [7] intento directo de reabrir (UPDATE crudo, sin pasar por ninguna RPC) — esperado: ERROR INVALID_STATE_TRANSITION ---'
+-- BUILD 016B cerró la superficie: `authenticated` ya no tiene UPDATE sobre
+-- `trades`. Estas dos sondas se ejecutan ahora en **dos niveles**, y los dos
+-- prueban cosas distintas — la aserción de dominio original no se pierde, se
+-- ejecuta donde sigue siendo alcanzable:
+--   nivel A · como authenticated  → la puerta pública está cerrada;
+--   nivel B · como propietario    → el trigger sigue siendo la frontera real,
+--                                   incluso para quien salta RLS.
 \set ON_ERROR_STOP off
+\echo '--- [7a] reabrir por UPDATE crudo como authenticated — esperado: ERROR permission denied ---'
 update trades set status = 'open' where id = :'trade_g_id'::uuid;
-\echo '--- [8] intento de mover account_id (UPDATE crudo) — esperado: ERROR IMMUTABLE_ACCOUNT_ID ---'
+\echo '--- [8a] mover account_id por UPDATE crudo como authenticated — esperado: ERROR permission denied ---'
 update trades set account_id = gen_random_uuid() where id = :'trade_g_id'::uuid;
+
+reset role;
+\echo '--- [7b] reabrir por UPDATE crudo como PROPIETARIO — esperado: ERROR INVALID_STATE_TRANSITION ---'
+update trades set status = 'open' where id = :'trade_g_id'::uuid;
+\echo '--- [8b] mover account_id por UPDATE crudo como PROPIETARIO — esperado: ERROR IMMUTABLE_ACCOUNT_ID ---'
+update trades set account_id = gen_random_uuid() where id = :'trade_g_id'::uuid;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
 \set ON_ERROR_STOP on
 
 \echo '--- [9] aplicar_edicion_operacion con corrección de r_final/pnl (delta +50) — esperado: capital 10200.0000 ---'

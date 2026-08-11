@@ -38,6 +38,7 @@ psql -d tradepilot_test -f 09_management_intent_event.sql
 psql -d tradepilot_test -f 10_accounts_max_risk_pct.sql
 psql -d tradepilot_test -f 11_management_intent_creation.sql
 psql -d tradepilot_test -f 12_management_intent_binding.sql
+psql -d tradepilot_test -f 13_operations_integrity.sql
 ```
 
 **No uses `-q`**: varias comprobaciones se leen en la etiqueta del comando
@@ -102,18 +103,18 @@ que es el comportamiento correcto para un doble envío simultáneo.
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 244 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 292 comprobaciones en total, revisables en unos minutos).
 
-Los doce scripts corren contra la **misma** base de datos, uno
+Los trece scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
 `bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo,
-`8b8b.../9c9c...` en el undécimo, `ad17.../be17...` en el duodécimo): si compartieran
+`8b8b.../9c9c...` en el undécimo, `ad17.../be17...` en el duodécimo, `c016.../d016...` en el decimotercero): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los doce scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los trece scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -351,3 +352,51 @@ sigue pudiendo materializarse después.
 
 `[36]`-`[39]` son los contratos de lectura mínimos, incluida la derivación de
 `caducada` (`pending` con la ventana vencida) sin almacenar ningún estado.
+
+`13_operations_integrity.sql` (BUILD 016B) valida el cierre de la superficie de
+escritura de Operations. Es la única suite que ejecuta **cada ataque en dos
+niveles**, y los dos prueban cosas distintas:
+
+- **nivel A, como `authenticated`** → debe fallar por *privilegios*. Demuestra
+  que la superficie pública está cerrada.
+- **nivel B, como propietario de las tablas**, que salta RLS y tiene todos los
+  privilegios → debe fallar por *trigger*. Demuestra que la integridad **no
+  depende** de que esa superficie esté cerrada.
+
+Una suite que sólo dijera "permission denied" y terminase ahí no probaría lo
+segundo, que es exactamente la diferencia entre una frontera y una cerradura.
+
+`[1]`-`[6]` comprueban primero lo que más importa: que las rutas legítimas
+siguen funcionando con la puerta cerrada — `registrar_operacion`,
+`registrar_parcial_ejecutado`, `aplicar_cierre_operacion`,
+`abrir_operacion_desde_intencion`— y que una corrección legítima del desenlace
+por `aplicar_edicion_operacion` queda registrada en `audit_log` con su
+`before`/`after`. Es la frontera de D2: el desenlace se corrige por la vía del
+dominio y deja evidencia; la identidad no se corrige por ninguna vía.
+
+`[7]`-`[18]` son el nivel A, incluida la comprobación de que
+`crear_operacion_nucleo` ya no es invocable —era una tercera vía de nacimiento
+de Operaciones— y una verificación final de que ninguno de los once intentos
+cambió el estado real.
+
+`[19]`-`[38]` son el nivel B: nueve campos de identidad rechazados por trigger,
+el borrado de Operaciones rechazado, los parciales ejecutados y planificados
+inmutables, y el acumulador de riesgo defendido por control optimista de versión
+y por la prohibición de que `n` retroceda. `[36]` cierra la frontera desde el
+otro lado: el propietario **sí** puede corregir `r_final`, porque el desenlace
+es corregible por diseño, y `[37]` comprueba que también eso queda auditado.
+
+`[39]`-`[42]` son H8: borrar una Operación vinculada ya no destruye el destino
+de su Intención. Antes de 016B ese destino desaparecía y la Intención quedaba
+con cero destinos, violando en silencio la invariante que su propia función de
+creación garantiza.
+
+`[43]`-`[47]` cierran el aislamiento y verifican la superficie: las seis RPC de
+escritura son `SECURITY DEFINER`, el núcleo no es ejecutable, y `authenticated`
+conserva únicamente `SELECT`.
+
+`[48]` deja constancia deliberada de lo que **no** se ha cerrado: `accounts`
+sigue siendo escribible directamente (H6). Es deuda de Funding Management, no de
+Operations, y 016B no construye protecciones paralelas fuera de su frontera. Su
+impacto está documentado: un `current_capital` corrupto produce `risk_amount`
+corruptos en toda Operación futura.

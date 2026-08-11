@@ -284,11 +284,20 @@ select (aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_notes => 'nota 
 select status, r_final, pnl_amount from aplicar_cierre_operacion(
   :'op_1'::uuid, now(), 'TAKE_PROFIT_FULL', null, '2.5000', '0.5000', '50.0000');
 
-\echo '--- [31] una Operación NO vinculada sí admite editar rr_objective — esperado: 4.4400 ---'
+-- BUILD 016B estrechó esta libertad, y a propósito: `rr_objective` es un hecho
+-- de **identidad**, y desde 016B ninguna Operación —vinculada o no— admite
+-- corregirlo. Lo que una Operación libre conserva es la libertad sobre su
+-- **desenlace**, que es exactamente lo que BUILD 018 necesita. La aserción no
+-- desaparece: se parte en las dos mitades que ahora tienen respuestas distintas.
 select id as op_libre from registrar_operacion(
   p_account_id => :'cta_4'::uuid, p_symbol => 'LIBRE', p_side => 'long', p_opened_at => now(),
   p_risk_pct => '1.00', p_management_plan_id => :'plan_arch'::uuid) \gset
+
+\echo '--- [31a] Operación NO vinculada: editar rr_objective — esperado: ERROR IMMUTABLE_IDENTITY_FACT (016B) ---'
 select (aplicar_edicion_operacion(p_trade_id => :'op_libre'::uuid, p_rr_objective => '4.4400')).rr_objective;
+
+\echo '--- [31b] Operación NO vinculada: editar el DESENLACE — esperado: notes actualizado, sin error ---'
+select (aplicar_edicion_operacion(p_trade_id => :'op_libre'::uuid, p_notes => 'desenlace libre')).notes;
 
 \echo '--- [32] esa Operación libre tiene instrument_key NULO — esperado: t (aditiva, sin retrospectiva) ---'
 select (instrument_key is null) as instrument_key_nulo, symbol from public.trades where id = :'op_libre'::uuid;

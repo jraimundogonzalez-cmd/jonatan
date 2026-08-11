@@ -57,10 +57,19 @@ select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444
 \echo '--- [8] SELECT directo de B sobre account_risk_state de A — esperado: 0 ---'
 select count(*) as filas_visibles_para_b from public.account_risk_state where account_id = :'cuenta_a_id';
 
-\echo '--- [9] Escritura de B sobre el acumulador de A — esperado: 0 filas devueltas (RLS bloquea el UPDATE, no hay fila que "perder") ---'
+-- BUILD 016B endureció esta comprobación y a la vez la hizo más legible. Hasta
+-- 016B la función era `SECURITY INVOKER` **sin ninguna comprobación de
+-- propiedad**: el aislamiento lo daba RLS, y el intento de B se saldaba con un
+-- silencioso "0 filas". Al pasar a `SECURITY DEFINER` —necesario para poder
+-- revocar el UPDATE directo sobre la tabla— RLS deja de filtrar dentro de la
+-- función, así que la propiedad se comprueba explícitamente y el intento
+-- ajeno recibe ahora un error tipado. La aserción no se pierde: se refuerza.
+\echo '--- [9] Escritura de B sobre el acumulador de A — esperado: ERROR ACCOUNT_NOT_FOUND ---'
+\set ON_ERROR_STOP off
 select * from risk_engine_apply_accumulator_update(
   :'cuenta_a_id'::uuid, 'bbbbbbbb-0000-0000-0000-000000000001'::uuid, 'OperacionCerrada', 2, 99, 99.0000, 99.0000
 );
+\set ON_ERROR_STOP on
 
 select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
 

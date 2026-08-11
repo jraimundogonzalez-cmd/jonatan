@@ -386,6 +386,26 @@ begin
 end;
 $$;
 
+-- BUILD 016B — el núcleo deja de ser público.
+--
+-- Se verificó que `authenticated` podía invocarlo directamente y crear una
+-- Operación sin pasar por ninguna de las dos vías legítimas: era una tercera
+-- puerta. Cerrar el INSERT directo sobre `trades` sin cerrar ésta no habría
+-- cerrado nada.
+--
+-- La revocación va **aquí y no en la migración** porque `alter default
+-- privileges` concede EXECUTE a cada función nueva en el momento de crearla, y
+-- este fichero se ejecuta después de las migraciones: revocar antes no serviría
+-- de nada. Se revoca también a `public`, a quien Postgres concede EXECUTE por
+-- defecto en toda función nueva.
+--
+-- Sus dos únicos llamantes son `registrar_operacion` y
+-- `abrir_operacion_desde_intencion`, ambos `SECURITY DEFINER`: se ejecutan con
+-- los privilegios del propietario y conservan el acceso.
+revoke execute on function public.crear_operacion_nucleo(
+  uuid, text, text, text, timestamptz, numeric, uuid, numeric, text, jsonb, uuid, text, text
+) from public, authenticated;
+
 create or replace function public.registrar_operacion(
   p_account_id uuid,
   p_symbol text,
@@ -402,8 +422,8 @@ create or replace function public.registrar_operacion(
 )
 returns public.trades
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_account public.accounts;
@@ -537,8 +557,8 @@ create or replace function public.registrar_parcial_ejecutado(
 )
 returns public.trade_partials_executed
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_trade public.trades;
@@ -591,8 +611,8 @@ $$;
 create or replace function public.cancelar_operacion(p_trade_id uuid, p_motivo text)
 returns public.trades
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_trade public.trades;
@@ -635,8 +655,8 @@ create or replace function public.cancelar_operacion_fantasma(
 )
 returns public.trades
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_trade public.trades;
@@ -687,8 +707,8 @@ create or replace function public.aplicar_cierre_operacion(
 )
 returns public.trades
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_trade public.trades;
@@ -769,8 +789,8 @@ create or replace function public.aplicar_edicion_operacion(
 )
 returns public.trades
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_trade public.trades;
