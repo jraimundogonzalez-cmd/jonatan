@@ -39,17 +39,19 @@ psql -d tradepilot_test -f 10_accounts_max_risk_pct.sql
 psql -d tradepilot_test -f 11_management_intent_creation.sql
 psql -d tradepilot_test -f 12_management_intent_binding.sql
 psql -d tradepilot_test -f 13_operations_integrity.sql
+psql -d tradepilot_test -f 14_operations_outcome.sql
 ```
 
 **No uses `-q`**: varias comprobaciones se leen en la etiqueta del comando
 (`UPDATE 0`, `DELETE 0`), que el modo silencioso suprime.
 
-### Las dos carreras de dos sesiones (BUILD 015 y BUILD 017)
+### Las carreras de dos sesiones (BUILD 015, BUILD 017 y BUILD 018)
 
-Hay dos, y prueban cosas distintas: la de BUILD 015 prueba que dos
-**creaciones** simultáneas con la misma clave de idempotencia producen una
-sola Intención; la de BUILD 017 prueba que dos **materializaciones**
-simultáneas del mismo destino producen una sola Operación.
+Hay ocho en total, repartidas en tres parejas de ficheros, y prueban cosas
+distintas: la de BUILD 015 prueba que dos **creaciones** simultáneas con la
+misma clave de idempotencia producen una sola Intención; la de BUILD 017 que
+dos **materializaciones** simultáneas del mismo destino producen una sola
+Operación; y las seis de BUILD 018 cubren el ciclo de vida del **desenlace**.
 
 ### La carrera de idempotencia (BUILD 015)
 
@@ -101,20 +103,57 @@ idempotencia por estado devuelve la Operación ganadora en un reintento
 **secuencial**; en una carrera genuina la perdedora recibe el error tipado,
 que es el comportamiento correcto para un doble envío simultáneo.
 
+### Las seis carreras del desenlace (BUILD 018)
+
+`14_race_a.sql` y `14_race_b.sql` contienen **seis carreras**, no una, y se
+lanzan después de `14_race_seed.sql`, que siembra las seis Operaciones
+`CARRERA1`..`CARRERA6`:
+
+```bash
+psql -d tradepilot_test -f 14_race_seed.sql
+psql -d tradepilot_test -f 14_race_a.sql > /tmp/a.txt 2>&1 &
+psql -d tradepilot_test -f 14_race_b.sql > /tmp/b.txt 2>&1 &
+wait; cat /tmp/a.txt /tmp/b.txt
+```
+
+Las seis, en orden: **cierre vs cierre con la misma clave** (B recibe la
+Operación de A sin escribir nada), **cierre vs cierre con claves distintas**
+(B recibe `INVALID_STATE_TRANSITION`), **parcial nuevo vs cierre con testigo
+obsoleto** (B recibe `EVIDENCE_CHANGED`), **cierre vs cancelación simple** (B
+recibe `VALIDATION_ERROR:status`), **cierre vs corrección** y **corrección vs
+corrección** (B no falla: se mide que no haya escritura perdida).
+
+Las dos últimas son las que justifican el `for update` por encima de todo lo
+demás. En la sexta, A corrige el desenlace de `100.0000` a `150.0000` y B lo
+corrige a `200.0000` sobre una instantánea que todavía dice `100.0000`. Si B
+calculase su delta con ese valor obsoleto sumaría 100 en vez de 50 y el
+capital acabaría en `250.0000` con la Operación diciendo `200.0000`. La
+aserción es directa: **Σ eventos `trade_pnl` = `pnl_amount`**, en las seis.
+
+Cada ronda arranca en una **barrera de reloj de pared** — ambas sesiones
+duermen hasta el siguiente múltiplo de 10 s del reloj Unix. No es decoración:
+la primera versión dejaba que las rondas se re-sincronizaran solas y funcionó
+en cinco de las seis; en la sexta el desfase acumulado por las consultas de
+verificación de B bastó para que A ya hubiera confirmado, y B midió `0.067 s`
+en lugar de 3. La carrera se había convertido en un reintento secuencial sin
+que nada fallara. En la ejecución de referencia, con barrera, las seis esperas
+de B fueron `3.013`, `3.007`, `3.332`, `3.215`, `3.171` y `3.036` segundos.
+
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 292 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 343 comprobaciones en total, revisables en unos minutos).
 
-Los trece scripts corren contra la **misma** base de datos, uno
+Los catorce scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
 `bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo,
-`8b8b.../9c9c...` en el undécimo, `ad17.../be17...` en el duodécimo, `c016.../d016...` en el decimotercero): si compartieran
+`8b8b.../9c9c...` en el undécimo, `ad17.../be17...` en el duodécimo, `c016.../d016...` en el decimotercero,
+`c018.../d018...` en el decimocuarto, `e018...` en la siembra de sus carreras): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los trece scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los catorce scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -400,3 +439,108 @@ sigue siendo escribible directamente (H6). Es deuda de Funding Management, no de
 Operations, y 016B no construye protecciones paralelas fuera de su frontera. Su
 impacto está documentado: un `current_capital` corrupto produce `risk_amount`
 corruptos en toda Operación futura.
+
+`14_operations_outcome.sql` (BUILD 018) valida lo que 016B dejó abierto. 016B
+cerró **quién puede escribir**; 018 cierra **qué es un desenlace válido**. Por
+la única puerta que quedaba —la RPC, expuesta por PostgREST a cualquier sesión
+autenticada— se podía cerrar una Operación con `r_final = 99` sin un solo
+parcial que lo sostuviera, `pnl_amount = 999999` sin relación con
+`risk_amount × r_final`, y `closure_reason = BREAK_EVEN` con `r_final = 5`.
+
+**Lo que esta suite no demuestra**, y conviene leerlo antes que nada:
+PostgreSQL **no vuelve a calcular R_final** y no debe hacerlo nunca — una
+segunda implementación de la fórmula sería una segunda fuente de verdad. Lo
+que se comprueba es **coherencia**: que el desenlace no se contradiga a sí
+mismo ni a la evidencia registrada. Un `r_final` incorrecto pero coherente
+sigue siendo aceptable para la base, y eso es deliberado. `[13]`-`[25]` no
+rechazan "un r_final falso", rechazan "un r_final que la propia Operación
+desmiente". La única comprobación económica es una comparación con tolerancia,
+`abs(pnl_amount − risk_amount × r_final) ≤ 0.0001`: el kernel decimal redondea
+con ROUND_HALF_EVEN y `round()` de PostgreSQL redondea half-up, así que una
+igualdad exacta rechazaría cierres correctos. `[49]` cierra esa afirmación por
+estructura, no por promesa: ninguna rutina del esquema multiplica `pct_close`
+por `rr_level`, que es el producto que la fórmula necesariamente contiene.
+
+Repite la estructura de dos niveles de `13`: nivel A por la RPC —la vía real
+de la aplicación— y nivel B como propietario de las tablas, saltándose RLS y
+la RPC por completo. Es lo que demuestra que la coherencia **no depende** de
+que esa puerta esté bien escrita, y la razón de que 018 viva en triggers.
+
+`[5]`-`[7]` son `time_in_market_sec`, que existía desde BUILD 004 y **nadie
+escribía jamás**. Su comprobación decisiva es `[6]`, y es la contraria de lo
+habitual: el UPDATE crudo que le pone `999999` **tiene éxito**, y aun así el
+valor falso no sobrevive, porque el trigger `BEFORE` lo reescribe siempre. Un
+campo derivado no se vuelve infalsificable rechazando el valor ajeno, sino
+ignorándolo.
+
+`[8]`-`[13]` son la idempotencia del cierre, que no existía: el cierre era la
+única escritura de Operations sin clave, y dos envíos simultáneos producían
+**dos `trade_pnl` sobre la misma Operación**, duplicando el efecto en capital.
+`[13]` cierra el flanco por el que se podría replicar un cierre: la clave, una
+vez escrita, es inmutable.
+
+`[27]`-`[34]` son las cuatro reglas de `closure_reason`, y **son exactamente
+cuatro**. `[34]` documenta una ausencia deliberada: `STOP_LOSS` **no** exige
+ausencia de parciales, porque un parcial a 1R seguido de un stop en el
+original es legítimo y frecuente, y exigirlo lo haría irregistrable. `[31]`
+documenta la otra cara: sin parciales el motor congelado produciría −1, no 0,
+así que un cierre a 0R sin parciales se representa como `MANUAL_CLOSE` con
+`cierre_manual_rr = 0`. Las ambigüedades restantes entre `STOP_LOSS` y
+`BREAK_EVEN` quedan fuera a propósito: el modelo de cuatro ramas de
+`calcularRCierreResto` y los cuatro valores del catálogo **no son
+biyectivos**, y el corpus no permite cerrar esa brecha sin inventar semántica.
+
+`[37]`-`[39]` son el testigo de evidencia (`p_expected_partials`), que existe
+porque el `for update` **no basta**: `OperationsEngineService` calcula R_final
+en una transacción anterior y distinta, así que el bloqueo serializa la
+escritura, no una lectura que ya ocurrió. Un contador basta, y es demostrable
+gracias a 016B: los parciales ejecutados son inmutables e imborrables y
+`UNIQUE (trade_id, sequence)` impide reutilizar una posición, luego la única
+mutación posible del conjunto es la inserción y toda inserción cambia el
+contador.
+
+`[40]`-`[44]` verifican que 018 **no cierra** la corrección del desenlace: la
+obliga a ser coherente. Se corrige entero o no se corrige.
+
+**El fixture de esta suite tiene una trampa documentada en `[4b]`**: las siete
+Operaciones de ataque nacen todas antes de que ninguna se cierre, porque
+`risk_amount` se congela al nacer como Capital_en_ese_instante × Riesgo% y
+016B lo hizo inmutable. Escrito de la otra forma —que es como se escribió la
+primera vez— la primera Operación cerrada con beneficio deja a las siguientes
+con `risk_amount` 100.50 en vez de 100.00, y nueve comprobaciones devuelven
+`INCOHERENT_PNL` en lugar de su error esperado. Lo detectó la propia suite.
+
+### Los cuatro fixtures que BUILD 018 corrigió
+
+El trigger de coherencia rechazó cuatro cierres de las suites anteriores. En
+los cuatro casos el desenlace declarado era **aritméticamente imposible** bajo
+la fórmula congelada, y nadie lo detectaba porque nadie comprobaba la
+coherencia. Ninguna aserción de dominio se perdió: los valores esperados
+—capital, estado, P&L— son los mismos en los cuatro.
+
+- `03` `[6]`: `TAKE_PROFIT_FULL` con `r_max` 3.0 sobre un Plan de `rr_objective`
+  5.0. El precio nunca llegó al objetivo. Sin parciales ejecutados la fórmula
+  da −1, no 1.5 → es un `MANUAL_CLOSE` a 1.5R. `[9]` corrige a la vez
+  `cierre_manual_rr` para no dejar la Operación diciendo dos cosas distintas.
+- `08` `[5]`: `TAKE_PROFIT_FULL` con `r_max` 2.0 y `rr_objective` 3.0. Con el
+  parcial de 50% a 1.5R, `R_final = 1.25` exige `R_resto = 1.0`, que sólo se
+  obtiene por cierre manual.
+- `12` `[30]`: `TAKE_PROFIT_FULL` con `r_max` 2.5 y `rr_objective` 3.0.
+- `13` `[3]`: aquí los números **ya eran exactos** — con el parcial de 50% a
+  1.0R, `R_final = 0.5` sale de `R_resto = 0`, que es la prioridad 3 de la
+  fórmula. Lo único falso era el nombre: `R_resto = 0` con parciales
+  ejecutados **es** un break-even, no un take-profit completo.
+
+`13` `[36]` cambió por otra razón: corregía `r_final` a 3.0 dejando
+`pnl_amount` en 200 y `r_max` en 2.5, es decir una Operación que se
+contradecía por partida doble. Desde 018 el desenlace se corrige entero, en un
+solo UPDATE. La libertad de D2 no se estrecha: se obliga a ser coherente.
+
+`12` `[24]`-`[28]` cambiaron de código de error, no de frontera: desde 018
+`aplicar_edicion_operacion` rechaza los hechos de identidad **antes de
+escribir nada** y nombrando el campo (`IMMUTABLE_IDENTITY_FACT:<campo>`), en
+vez de dejar que el trigger de 017 los parase con un código genérico. `[28b]`
+es nuevo y existe para que eso no deje muerto al trigger de 017: ataca
+`instrument_key` por UPDATE crudo como propietario, que es el hecho que 017
+protege y 016B no. Si 018 lo hubiera dejado inalcanzable, `[28b]` pasaría a no
+dar error y el fallo sería visible ahí.

@@ -262,27 +262,55 @@ select set_config('request.jwt.claim.sub', 'ad17ad17-1717-1717-1717-ad17ad17ad17
 \echo ' HECHOS HEREDADOS — inmutables mientras la Operación esté vinculada'
 \echo '============================================================'
 
-\echo '--- [24] editar rr_objective de una Operación VINCULADA — esperado: ERROR IMMUTABLE_INHERITED_FACT ---'
+-- BUILD 018 movió el punto de rechazo, no la frontera. Hasta 018 estos cinco
+-- intentos llegaban hasta el `UPDATE` y los paraba el trigger de 017 con un
+-- único código genérico (`IMMUTABLE_INHERITED_FACT`). Desde 018,
+-- `aplicar_edicion_operacion` los rechaza **antes de escribir nada**, y con el
+-- código de 016B nombrando el campo concreto: `IMMUTABLE_IDENTITY_FACT:<campo>`.
+-- La aserción de dominio es idéntica —una Operación vinculada no admite tocar
+-- estos cinco hechos— y el mensaje es más preciso.
+--
+-- Que el trigger de 017 siga vivo se comprueba en `[28b]`, sobre el único
+-- campo que 017 protege y 016B no.
+\echo '--- [24] editar rr_objective de una Operación VINCULADA — esperado: ERROR IMMUTABLE_IDENTITY_FACT:rr_objective ---'
 select aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_rr_objective => '7.7700');
 
-\echo '--- [25] editar be_trigger de una Operación VINCULADA — esperado: ERROR ---'
+\echo '--- [25] editar be_trigger de una Operación VINCULADA — esperado: ERROR IMMUTABLE_IDENTITY_FACT:be_trigger ---'
 select aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_be_trigger => 'NONE');
 
-\echo '--- [26] editar symbol de una Operación VINCULADA — esperado: ERROR ---'
+\echo '--- [26] editar symbol de una Operación VINCULADA — esperado: ERROR IMMUTABLE_IDENTITY_FACT:symbol ---'
 select aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_symbol => 'OTRO');
 
-\echo '--- [27] editar side de una Operación VINCULADA — esperado: ERROR ---'
+\echo '--- [27] editar side de una Operación VINCULADA — esperado: ERROR IMMUTABLE_IDENTITY_FACT:side ---'
 select aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_side => 'short');
 
-\echo '--- [28] editar risk_pct de una Operación VINCULADA — esperado: ERROR ---'
+\echo '--- [28] editar risk_pct de una Operación VINCULADA — esperado: ERROR IMMUTABLE_IDENTITY_FACT:risk_pct ---'
 select aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_risk_pct => '5.00');
+
+-- Nivel B: `instrument_key` no está en la lista de identidad de 016B —lo
+-- protege 017 y sólo 017, por ser el hecho que la Operación hereda de la
+-- Intención—, así que este UPDATE crudo como propietario (RLS fuera, sin RPC
+-- de por medio) es la sonda que todavía alcanza el trigger de hechos
+-- heredados. Si 018 lo hubiera dejado inalcanzable, esta comprobación pasaría
+-- a no dar error y el fallo sería visible aquí.
+reset role;
+\echo '--- [28b] NIVEL B: UPDATE crudo de instrument_key sobre la Operación VINCULADA — esperado: ERROR IMMUTABLE_INHERITED_FACT (trigger de 017) ---'
+update public.trades set instrument_key = 'CLAVE-FALSIFICADA' where id = :'op_1'::uuid;
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'ad17ad17-1717-1717-1717-ad17ad17ad17', false);
 
 \echo '--- [29] los campos de DESENLACE sí se editan — esperado: notes actualizado, sin error ---'
 select (aplicar_edicion_operacion(p_trade_id => :'op_1'::uuid, p_notes => 'nota de desenlace')).notes as notes;
 
+-- BUILD 018: mismo arreglo de fixture que en `03` [6] y `08` [5]. El Plan
+-- congelado de esta Intención tiene `rr_objective` 3.0000 y el desenlace
+-- declaraba `r_max` 2.5000 — el precio nunca llegó al objetivo, así que
+-- `TAKE_PROFIT_FULL` era imposible. Sin parciales ejecutados, 0.5R sólo se
+-- alcanza cerrando a mano en 0.5R (0.5 ≤ r_max = 2.5). La aserción —cerrar una
+-- Operación vinculada sigue funcionando, `closed` / 0.5000 / 50.0000— no cambia.
 \echo '--- [30] cerrar una Operación vinculada sigue funcionando — esperado: closed ---'
 select status, r_final, pnl_amount from aplicar_cierre_operacion(
-  :'op_1'::uuid, now(), 'TAKE_PROFIT_FULL', null, '2.5000', '0.5000', '50.0000');
+  :'op_1'::uuid, now(), 'MANUAL_CLOSE', '0.5000', '2.5000', '0.5000', '50.0000');
 
 -- BUILD 016B estrechó esta libertad, y a propósito: `rr_objective` es un hecho
 -- de **identidad**, y desde 016B ninguna Operación —vinculada o no— admite

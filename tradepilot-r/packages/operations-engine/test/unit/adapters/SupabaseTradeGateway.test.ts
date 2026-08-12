@@ -64,6 +64,7 @@ describe("SupabaseTradeGateway.aplicarCierre", () => {
       rMax: rvalue("0.4000"),
       rFinal: rvalue("-1.0000"),
       pnlAmount: money("-100.0000"),
+      expectedPartials: 0,
     });
     expect(rpcMock).toHaveBeenCalledWith("aplicar_cierre_operacion", {
       p_trade_id: "trade-1",
@@ -73,20 +74,53 @@ describe("SupabaseTradeGateway.aplicarCierre", () => {
       p_r_max: "0.4000",
       p_r_final: "-1.0000",
       p_pnl_amount: "-100.0000",
+      p_expected_partials: 0,
+      p_idempotency_key: null,
     });
+  });
+
+  // BUILD 018 — el testigo de la evidencia y la clave de idempotencia son parte
+  // del contrato del cierre, no un extra opcional de la ruta real.
+  it("envía el testigo de la evidencia y la clave de idempotencia cuando se aportan", async () => {
+    rpcMock.mockResolvedValueOnce({ data: TRADE_ROW, error: null });
+    const gateway = new SupabaseTradeGateway(client);
+    await gateway.aplicarCierre({
+      tradeId: "trade-1",
+      closedAt: "2026-01-01T00:00:00Z",
+      closureReason: "STOP_LOSS",
+      rMax: rvalue("0.4000"),
+      rFinal: rvalue("-1.0000"),
+      pnlAmount: money("-100.0000"),
+      expectedPartials: 3,
+      idempotencyKey: "11111111-2222-3333-4444-555555555555",
+    });
+    expect(rpcMock).toHaveBeenCalledWith(
+      "aplicar_cierre_operacion",
+      expect.objectContaining({
+        p_expected_partials: 3,
+        p_idempotency_key: "11111111-2222-3333-4444-555555555555",
+      }),
+    );
   });
 });
 
 describe("SupabaseTradeGateway.aplicarEdicion", () => {
   beforeEach(() => rpcMock.mockReset());
 
-  it("envía risk_amount (nunca risk_pct) — el único input de Quant Engine que este paquete edita", async () => {
+  // BUILD 016B/018 invirtió esta aserción. `risk_amount` era "el único input de
+  // Quant Engine que este paquete edita"; desde 016B es un hecho de identidad,
+  // inmutable, y la base lo rechaza con IMMUTABLE_IDENTITY_FACT. La aserción no
+  // se elimina: se convierte en la afirmación contraria, que es la que ahora
+  // hay que proteger — ni `risk_amount` ni `rr_objective` salen jamás de este
+  // adaptador, aunque los parámetros sigan existiendo en la firma SQL por
+  // compatibilidad histórica.
+  it("nunca envía risk_amount ni rr_objective — son identidad, no desenlace", async () => {
     rpcMock.mockResolvedValueOnce({ data: TRADE_ROW, error: null });
     const gateway = new SupabaseTradeGateway(client);
-    await gateway.aplicarEdicion({ tradeId: "trade-1", riskAmount: money("150.0000") });
+    await gateway.aplicarEdicion({ tradeId: "trade-1", rMax: rvalue("2.0000") });
     expect(rpcMock).toHaveBeenCalledWith(
       "aplicar_edicion_operacion",
-      expect.objectContaining({ p_trade_id: "trade-1", p_risk_amount: "150.0000" }),
+      expect.objectContaining({ p_trade_id: "trade-1", p_r_max: "2.0000", p_risk_amount: null, p_rr_objective: null }),
     );
   });
 

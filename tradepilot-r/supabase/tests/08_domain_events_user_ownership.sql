@@ -60,9 +60,18 @@ select event_type, (user_id = '1a1a1a1a-7777-7777-7777-1a1a1a1a1a1a') as propiet
 
 \echo '--- [5] la cadena completa de emisores sigue funcionando: parcial + cierre ---'
 select registrar_parcial_ejecutado(:'trade_q_id'::uuid, 1, '1.5000', '50.00', now()) is not null as parcial_ok;
+-- BUILD 018: mismo arreglo de fixture que en `03_operations_engine.sql` [6].
+-- Declaraba `TAKE_PROFIT_FULL` con `r_max` 2.0000 sobre un Plan de
+-- `rr_objective` 3.0000 — el precio nunca llegó al objetivo, así que el
+-- take-profit no pudo ejecutarse entero. Y los números tampoco cerraban: con
+-- el parcial de 50% a 1.5R ya ejecutado, la fórmula congelada da
+-- 0.50×1.5 + 0.50×R_resto; para que R_final valga 1.2500 hace falta
+-- R_resto = 1.0, que sólo se obtiene por cierre manual a 1.0R. La aserción de
+-- este paso —que la cadena parcial + cierre sigue emitiendo con propietario
+-- derivado— es exactamente la misma.
 select (aplicar_cierre_operacion(
   p_trade_id => :'trade_q_id'::uuid, p_closed_at => now(),
-  p_closure_reason => 'TAKE_PROFIT_FULL', p_cierre_manual_rr => null,
+  p_closure_reason => 'MANUAL_CLOSE', p_cierre_manual_rr => '1.0000',
   p_r_max => '2.0000', p_r_final => '1.2500', p_pnl_amount => '125.0000'
 )).status as estado_tras_cierre;
 

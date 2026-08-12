@@ -69,10 +69,25 @@ select count(*) as planes_guardados from listar_planes_gestion();
 \echo '--- [5] capital tras abrir dos Operaciones — esperado: SIN cambios (10000.0000, capital-neutral) ---'
 select current_capital from accounts where id = :'cuenta_g_id'::uuid;
 
+-- BUILD 018 corrigió este fixture, no la aserción. Hasta 018 declaraba
+-- `TAKE_PROFIT_FULL` con `r_max` 3.0000 sobre un Plan de `rr_objective`
+-- 5.0000: un desenlace **imposible** — el precio nunca alcanzó el objetivo,
+-- así que el take-profit no pudo ejecutarse entero. Nadie lo detectaba porque
+-- nadie comprobaba la coherencia del desenlace. El trigger de 018 sí, y este
+-- fixture fue el primero en caer.
+--
+-- El desenlace real que describen estos números es otro: sin parciales
+-- ejecutados (k=0) y sin cierre manual, la fórmula congelada da R_final = −1,
+-- no 1.5. Para que R_final valga 1.5000 el cierre tiene que ser **manual** a
+-- 1.5R (prioridad 1 de `R_cierre_resto`), con 1.5 ≤ r_max = 3.0.
+--
+-- La aserción de dominio —la cascada de capital: 10000 → 10150— se conserva
+-- intacta; lo que cambia es que ahora los números cuentan una historia que
+-- pudo ocurrir.
 \echo '--- [6] aplicar_cierre_operacion (simula lo que packages/operations-engine escribiría tras invocar Risk Engine) — esperado: capital 10150.0000 ---'
 select aplicar_cierre_operacion(
-  p_trade_id => :'trade_g_id'::uuid, p_closed_at => now(), p_closure_reason => 'TAKE_PROFIT_FULL',
-  p_cierre_manual_rr => null, p_r_max => '3.0000', p_r_final => '1.5000', p_pnl_amount => '150.0000'
+  p_trade_id => :'trade_g_id'::uuid, p_closed_at => now(), p_closure_reason => 'MANUAL_CLOSE',
+  p_cierre_manual_rr => '1.5000', p_r_max => '3.0000', p_r_final => '1.5000', p_pnl_amount => '150.0000'
 );
 select current_capital from accounts where id = :'cuenta_g_id'::uuid;
 
@@ -98,9 +113,14 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
 \set ON_ERROR_STOP on
 
+-- La corrección lleva el cierre manual de 1.5R a 2.0R: por eso se corrigen a
+-- la vez `cierre_manual_rr`, `r_final` y `pnl_amount`. Corregir sólo `r_final`
+-- dejaría la Operación diciendo "cerré a mano en 1.5R" y "acabé en 2.0R" a la
+-- vez. La aserción de dominio —delta +50, capital 10200.0000— no cambia.
 \echo '--- [9] aplicar_edicion_operacion con corrección de r_final/pnl (delta +50) — esperado: capital 10200.0000 ---'
 select r_final, pnl_amount, cierre_manual_rr from aplicar_edicion_operacion(
-  p_trade_id => :'trade_g_id'::uuid, p_r_final => '2.0000', p_pnl_amount => '200.0000'
+  p_trade_id => :'trade_g_id'::uuid, p_cierre_manual_rr => '2.0000',
+  p_r_final => '2.0000', p_pnl_amount => '200.0000'
 );
 select current_capital from accounts where id = :'cuenta_g_id'::uuid;
 

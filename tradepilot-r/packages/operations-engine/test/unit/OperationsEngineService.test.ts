@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { BETrigger, RiskEngineService, money, rvalue, toDisplayString } from "@tradepilot/risk-engine";
+import { BETrigger, RiskEngineService, money, percent, rvalue, toDisplayString } from "@tradepilot/risk-engine";
 import { OperationsEngineService } from "../../src/services/OperationsEngineService.js";
 import type { Trade } from "../../src/domain/types.js";
 import { InMemoryTradeGateway } from "../fakes/InMemoryTradeGateway.js";
@@ -86,6 +86,46 @@ describe("OperationsEngineService.cerrarOperacion", () => {
     }
   });
 
+  // BUILD 018 — el testigo de evidencia. En SQL `p_expected_partials` tiene
+  // `default null` por compatibilidad con las llamadas históricas, y `null`
+  // significa "no verifico": omitirlo no da error, simplemente desactiva la
+  // protección. La ruta de producción no puede permitírselo, y estos dos tests
+  // son el único lugar donde un olvido sería visible.
+  it("SIEMPRE envía el testigo de evidencia al cerrar — sin parciales, expectedPartials = 0", async () => {
+    gateway.seedTrade(openTrade());
+
+    const result = await service.cerrarOperacion({
+      trade_id: TRADE_ID,
+      closed_at: "2026-01-01T00:00:00Z",
+      closure_reason: "STOP_LOSS",
+      r_max: rvalue("0.4000"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(gateway.lastCierreParams).not.toBeNull();
+    // Cero es un testigo tan válido como cualquier otro: dice "cerré sobre una
+    // Operación sin evidencia". `undefined` sería la ausencia de testigo.
+    expect(gateway.lastCierreParams!.expectedPartials).toBe(0);
+  });
+
+  it("SIEMPRE envía el testigo de evidencia al cerrar — con parciales, cuenta exactamente los que leyó", async () => {
+    gateway.seedTrade(openTrade());
+    gateway.seedExecutedPartials(TRADE_ID, [
+      { sequence: 1, rr_level: rvalue("1.0000"), pct_close: percent("30.00") },
+      { sequence: 2, rr_level: rvalue("2.0000"), pct_close: percent("30.00") },
+    ]);
+
+    const result = await service.cerrarOperacion({
+      trade_id: TRADE_ID,
+      closed_at: "2026-01-01T00:00:00Z",
+      closure_reason: "BREAK_EVEN",
+      r_max: rvalue("2.5000"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(gateway.lastCierreParams!.expectedPartials).toBe(2);
+  });
+
   it("rechaza cerrar una Operación que no está Abierta", async () => {
     gateway.seedTrade(openTrade({ status: "closed" }));
 
@@ -160,17 +200,21 @@ describe("OperationsEngineService.editarOperacion", () => {
     expect(result.value.accumulator_update).toBeNull();
   });
 
-  it("editar rr_objective en una Operación Cerrada recalcula vía Risk Engine y reconstruye el acumulador desde la muestra vigente", async () => {
+  // BUILD 016B/018: `rr_objective` es identidad y ya no es editable. La
+  // aserción que importa —una corrección que afecta a R_final dispara el
+  // recálculo vía Risk Engine **y** la reconstrucción del acumulador— se
+  // conserva íntegra usando `r_max`, que sí es desenlace corregible.
+  it("editar r_max en una Operación Cerrada recalcula vía Risk Engine y reconstruye el acumulador desde la muestra vigente", async () => {
     gateway.seedTrade(
       openTrade({ status: "closed", r_max: rvalue("0.4000"), r_final: rvalue("-1.0000"), pnl_amount: money("-100.0000") }),
     );
     gateway.seedVigenteSample(ACCOUNT_ID, [rvalue("-1.0000"), rvalue("2.0000")]);
 
-    const result = await service.editarOperacion({ trade_id: TRADE_ID, rr_objective: rvalue("5.0000") });
+    const result = await service.editarOperacion({ trade_id: TRADE_ID, r_max: rvalue("5.0000") });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
-    expect(result.value.trade.rr_objective).toEqual(rvalue("5.0000"));
+    expect(result.value.trade.r_max).toEqual(rvalue("5.0000"));
     expect(result.value.accumulator_update).not.toBeNull();
     expect(result.value.accumulator_update?.ok).toBe(true);
     if (result.value.accumulator_update?.ok) {

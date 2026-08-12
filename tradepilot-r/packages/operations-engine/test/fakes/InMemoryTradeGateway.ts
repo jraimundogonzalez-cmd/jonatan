@@ -15,6 +15,19 @@ export class InMemoryTradeGateway implements TradeGateway {
   private readonly executedPartials = new Map<string, TradePartialExecuted[]>();
   private readonly vigenteSampleByAccount = new Map<string, RValue[]>();
 
+  /**
+   * BUILD 018 — los parámetros con los que se invocó el último cierre.
+   *
+   * Existe para una sola aserción, y es una que no se puede hacer de otro
+   * modo: que `OperationsEngineService` **siempre** envíe el testigo de
+   * evidencia (`expectedPartials`). En SQL el parámetro tiene `default null`
+   * por compatibilidad con las llamadas históricas, así que omitirlo no
+   * produce ningún error — la Operación se cerraría igual, sin protección
+   * frente a un parcial insertado en la ventana entre el cálculo y el cierre.
+   * Un olvido en la ruta de producción sería invisible salvo aquí.
+   */
+  lastCierreParams: AplicarCierreParams | null = null;
+
   seedTrade(trade: Trade): void {
     this.trades.set(trade.id, trade);
   }
@@ -42,6 +55,7 @@ export class InMemoryTradeGateway implements TradeGateway {
   }
 
   async aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>> {
+    this.lastCierreParams = params;
     const trade = this.trades.get(params.tradeId);
     if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
     const updated: Trade = {
@@ -60,10 +74,11 @@ export class InMemoryTradeGateway implements TradeGateway {
   async aplicarEdicion(params: AplicarEdicionParams): Promise<Result<Trade, OperationsError>> {
     const trade = this.trades.get(params.tradeId);
     if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
+    // BUILD 016B/018: `risk_amount` y `rr_objective` son identidad y ya no
+    // viajan en `AplicarEdicionParams` — el doble no puede escribirlos porque
+    // el puerto real tampoco los recibe.
     const updated: Trade = {
       ...trade,
-      risk_amount: params.riskAmount ?? trade.risk_amount,
-      rr_objective: params.rrObjective ?? trade.rr_objective,
       r_max: params.rMax ?? trade.r_max,
       closure_reason: params.closureReason ?? trade.closure_reason,
       cierre_manual_rr: params.cierreManualRr ?? trade.cierre_manual_rr,

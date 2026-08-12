@@ -567,7 +567,16 @@ declare
   v_row public.trade_partials_executed;
   v_already_pct numeric(7,2);
 begin
-  select * into v_trade from public.trades where id = p_trade_id and user_id = auth.uid();
+  -- BUILD 018: `for update` ANTES de cualquier comprobación de estado. Sin él,
+  -- dos sesiones simultáneas evalúan el estado sobre su propia instantánea y
+  -- ambas escriben. En READ COMMITTED, la sesión que espera relee la versión
+  -- más reciente al liberarse el bloqueo, así que ve el resultado de la
+  -- ganadora. `trades` es el punto único de serialización del ciclo de vida de
+  -- la Operación: al no haber un segundo objeto que bloquear, no hay orden de
+  -- adquisición que respetar ni interbloqueo posible.
+  select * into v_trade from public.trades
+    where id = p_trade_id and user_id = auth.uid()
+    for update;
   if not found then
     raise exception 'OPERATIONS_ERROR:TRADE_NOT_FOUND:no existe una Operación % del usuario actual', p_trade_id;
   end if;
@@ -594,9 +603,19 @@ begin
     raise exception 'OPERATIONS_ERROR:VALIDATION_ERROR:pct_close:la suma de parciales ejecutados superaría 100%% (% + %)', v_already_pct, v_pct_close;
   end if;
 
-  insert into public.trade_partials_executed (trade_id, sequence, rr_level, pct_close, executed_at)
-  values (p_trade_id, p_sequence, v_rr_level, v_pct_close, p_executed_at)
-  returning * into v_row;
+  -- BUILD 018 — `UNIQUE (trade_id, sequence)` existe desde BUILD 004
+  -- (20260803120500). Lo que faltaba era traducir su violación a un error de
+  -- dominio: hasta aquí escapaba el mensaje interno de Postgres, que un cliente
+  -- no puede reconocer. La secuencia forma parte del contrato matemático y no
+  -- debe depender de que el Quant Engine detecte el duplicado al cerrar —
+  -- detectarlo entonces dejaría además la Operación **imposible de cerrar**.
+  begin
+    insert into public.trade_partials_executed (trade_id, sequence, rr_level, pct_close, executed_at)
+    values (p_trade_id, p_sequence, v_rr_level, v_pct_close, p_executed_at)
+    returning * into v_row;
+  exception when unique_violation then
+    raise exception 'OPERATIONS_ERROR:DUPLICATE_PARTIAL_SEQUENCE:ya existe un parcial ejecutado con sequence % en esta Operación', p_sequence;
+  end;
 
   return v_row;
 end;
@@ -621,7 +640,16 @@ begin
     raise exception 'OPERATIONS_ERROR:CANCELLATION_REQUIRES_REASON:se requiere un motivo de cancelación';
   end if;
 
-  select * into v_trade from public.trades where id = p_trade_id and user_id = auth.uid();
+  -- BUILD 018: `for update` ANTES de cualquier comprobación de estado. Sin él,
+  -- dos sesiones simultáneas evalúan el estado sobre su propia instantánea y
+  -- ambas escriben. En READ COMMITTED, la sesión que espera relee la versión
+  -- más reciente al liberarse el bloqueo, así que ve el resultado de la
+  -- ganadora. `trades` es el punto único de serialización del ciclo de vida de
+  -- la Operación: al no haber un segundo objeto que bloquear, no hay orden de
+  -- adquisición que respetar ni interbloqueo posible.
+  select * into v_trade from public.trades
+    where id = p_trade_id and user_id = auth.uid()
+    for update;
   if not found then
     raise exception 'OPERATIONS_ERROR:TRADE_NOT_FOUND:no existe una Operación % del usuario actual', p_trade_id;
   end if;
@@ -668,7 +696,16 @@ begin
     raise exception 'OPERATIONS_ERROR:CONFIRMATION_REQUIRED:revertir una Operación cerrada exige confirmación explícita';
   end if;
 
-  select * into v_trade from public.trades where id = p_trade_id and user_id = auth.uid();
+  -- BUILD 018: `for update` ANTES de cualquier comprobación de estado. Sin él,
+  -- dos sesiones simultáneas evalúan el estado sobre su propia instantánea y
+  -- ambas escriben. En READ COMMITTED, la sesión que espera relee la versión
+  -- más reciente al liberarse el bloqueo, así que ve el resultado de la
+  -- ganadora. `trades` es el punto único de serialización del ciclo de vida de
+  -- la Operación: al no haber un segundo objeto que bloquear, no hay orden de
+  -- adquisición que respetar ni interbloqueo posible.
+  select * into v_trade from public.trades
+    where id = p_trade_id and user_id = auth.uid()
+    for update;
   if not found then
     raise exception 'OPERATIONS_ERROR:TRADE_NOT_FOUND:no existe una Operación % del usuario actual', p_trade_id;
   end if;
@@ -696,6 +733,29 @@ $$;
 -- Engine). Nunca calcula nada — solo persiste el resultado ya calculado y
 -- mueve capital reutilizando el trigger existente (SPEC-002 §4.1).
 -- ============================================================
+-- BUILD 018 — dos parámetros nuevos, ambos al final y con `default null`, de
+-- modo que ninguna llamada existente se rompe.
+--
+-- **`p_expected_partials` — el testigo de la evidencia.** Es el número de
+-- parciales ejecutados que el llamante usó para calcular `r_final`. Existe
+-- porque `for update` **no basta** aquí: el cálculo ocurre en
+-- `OperationsEngineService`, en una transacción anterior y distinta, así que
+-- entre la lectura de los parciales y esta llamada hay una ventana en la que
+-- otra sesión puede insertar uno. El bloqueo serializa la escritura, no una
+-- lectura que ya ocurrió. Sin este testigo, `R_final` puede persistirse sobre
+-- evidencia que ya no existe tal como se leyó.
+--
+-- Un contador basta, y es demostrable gracias a BUILD 016B: los parciales
+-- ejecutados son inmutables e imborrables, y `UNIQUE (trade_id, sequence)`
+-- impide reutilizar una posición — luego la única mutación posible del
+-- conjunto es la inserción, y toda inserción cambia el contador. Detecta el
+-- 100 % de los cambios posibles. No es una fórmula ni una segunda fuente de
+-- verdad: es control optimista sobre una precondición, el mismo patrón que
+-- Risk Engine usa con `version`.
+--
+-- `null` significa "no verifico", y existe **sólo** por compatibilidad con las
+-- llamadas históricas. La ruta de producción (`OperationsEngineService`) lo
+-- envía siempre.
 create or replace function public.aplicar_cierre_operacion(
   p_trade_id uuid,
   p_closed_at timestamptz,
@@ -703,7 +763,9 @@ create or replace function public.aplicar_cierre_operacion(
   p_cierre_manual_rr text,
   p_r_max text,
   p_r_final text,
-  p_pnl_amount text
+  p_pnl_amount text,
+  p_expected_partials integer default null,
+  p_idempotency_key uuid default null
 )
 returns public.trades
 language plpgsql
@@ -712,14 +774,47 @@ set search_path = public, pg_temp
 as $$
 declare
   v_trade public.trades;
+  v_partials integer;
 begin
-  select * into v_trade from public.trades where id = p_trade_id and user_id = auth.uid();
+  -- BUILD 018: `for update` ANTES de cualquier comprobación de estado. Sin él,
+  -- dos sesiones simultáneas evalúan el estado sobre su propia instantánea y
+  -- ambas escriben. En READ COMMITTED, la sesión que espera relee la versión
+  -- más reciente al liberarse el bloqueo, así que ve el resultado de la
+  -- ganadora. `trades` es el punto único de serialización del ciclo de vida de
+  -- la Operación: al no haber un segundo objeto que bloquear, no hay orden de
+  -- adquisición que respetar ni interbloqueo posible.
+  select * into v_trade from public.trades
+    where id = p_trade_id and user_id = auth.uid()
+    for update;
   if not found then
     raise exception 'OPERATIONS_ERROR:TRADE_NOT_FOUND:no existe una Operación % del usuario actual', p_trade_id;
   end if;
+  -- Idempotencia. Una repetición **exacta** de la misma clave devuelve la
+  -- Operación sin escribir nada —ni desenlace, ni evento de capital—; cualquier
+  -- otra combinación es un segundo cierre y se rechaza. De esta única regla
+  -- salen los cinco casos posibles: sin clave luego con clave, con clave A dos
+  -- veces, y con clave A luego B.
+  if v_trade.status = 'closed'
+     and p_idempotency_key is not null
+     and v_trade.closure_idempotency_key = p_idempotency_key then
+    return v_trade;
+  end if;
+
   if v_trade.status <> 'open' then
     raise exception 'OPERATIONS_ERROR:INVALID_STATE_TRANSITION:%:closed:solo una Operación Abierta puede cerrarse', v_trade.status;
   end if;
+
+  -- El testigo de la evidencia, comprobado **bajo el bloqueo**: si otra sesión
+  -- insertó un parcial entre el cálculo y esta llamada, el desenlace que llega
+  -- se calculó sobre una evidencia que ya no es la vigente.
+  if p_expected_partials is not null then
+    select count(*) into v_partials from public.trade_partials_executed where trade_id = p_trade_id;
+    if v_partials <> p_expected_partials then
+      raise exception 'OPERATIONS_ERROR:EVIDENCE_CHANGED:los parciales ejecutados cambiaron durante el cierre (esperados %, actuales %) — recalcula y reintenta',
+        p_expected_partials, v_partials;
+    end if;
+  end if;
+
   if p_closure_reason not in ('STOP_LOSS','BREAK_EVEN','TAKE_PROFIT_FULL','MANUAL_CLOSE') then
     raise exception 'OPERATIONS_ERROR:VALIDATION_ERROR:closure_reason:"%" no es un valor reconocido', p_closure_reason;
   end if;
@@ -734,7 +829,8 @@ begin
     r_max = p_r_max::numeric(8,4),
     r_final = p_r_final::numeric(8,4),
     pnl_amount = p_pnl_amount::numeric(18,4),
-    status = 'closed'
+    status = 'closed',
+    closure_idempotency_key = p_idempotency_key
   where id = p_trade_id
   returning * into v_trade;
 
@@ -798,9 +894,50 @@ declare
   v_new_pnl numeric(18,4);
   v_delta numeric(18,4);
 begin
-  select * into v_trade from public.trades where id = p_trade_id and user_id = auth.uid();
+  -- BUILD 018: `for update` ANTES de cualquier comprobación de estado. Sin él,
+  -- dos sesiones simultáneas evalúan el estado sobre su propia instantánea y
+  -- ambas escriben. En READ COMMITTED, la sesión que espera relee la versión
+  -- más reciente al liberarse el bloqueo, así que ve el resultado de la
+  -- ganadora. `trades` es el punto único de serialización del ciclo de vida de
+  -- la Operación: al no haber un segundo objeto que bloquear, no hay orden de
+  -- adquisición que respetar ni interbloqueo posible.
+  select * into v_trade from public.trades
+    where id = p_trade_id and user_id = auth.uid()
+    for update;
   if not found then
     raise exception 'OPERATIONS_ERROR:TRADE_NOT_FOUND:no existe una Operación % del usuario actual', p_trade_id;
+  end if;
+
+  -- BUILD 018 — rechazo tipado y anticipado de los hechos de identidad.
+  --
+  -- BUILD 016B los hizo inmutables por trigger, y el trigger sigue siendo la
+  -- frontera real: esto es **diagnóstico**, no seguridad. Sin ello, quien pase
+  -- `p_risk_amount` recibe un error genérico que no le dice qué campo tocó.
+  --
+  -- La firma **no cambia**: los parámetros se conservan por compatibilidad
+  -- histórica (la cabecera de la suite 03 documenta un fallo real causado por
+  -- reordenar parámetros de esta misma función). Contrato SQL y superficie de
+  -- aplicación son cosas distintas: en TypeScript sí desaparecen.
+  if p_symbol is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:symbol:la identidad de una Operación se fija al nacer y no se corrige';
+  end if;
+  if p_side is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:side:la identidad de una Operación se fija al nacer y no se corrige';
+  end if;
+  if p_opened_at is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:opened_at:la identidad de una Operación se fija al nacer y no se corrige';
+  end if;
+  if p_risk_pct is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:risk_pct:la identidad de una Operación se fija al nacer y no se corrige';
+  end if;
+  if p_risk_amount is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:risk_amount:se calcula una sola vez al nacer, Capital_en_ese_instante × Riesgo%% (SPEC-002 §2.5)';
+  end if;
+  if p_rr_objective is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:rr_objective:la identidad de una Operación se fija al nacer y no se corrige';
+  end if;
+  if p_be_trigger is not null then
+    raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:be_trigger:la identidad de una Operación se fija al nacer y no se corrige';
   end if;
 
   v_old_pnl := coalesce(v_trade.pnl_amount, 0);

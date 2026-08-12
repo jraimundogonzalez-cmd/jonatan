@@ -28,6 +28,8 @@ export interface CerrarOperacionInput {
   readonly closure_reason: ClosureReason;
   readonly cierre_manual_rr?: RValue;
   readonly r_max: RValue;
+  /** BUILD 018 — idempotencia del cierre. Un reintento con la misma clave no duplica el efecto económico. */
+  readonly idempotency_key?: string;
 }
 
 export interface CierreOperacionResultado {
@@ -35,10 +37,12 @@ export interface CierreOperacionResultado {
   readonly accumulator_update: Result<ProcesarEventoResultado, RiskEngineError>;
 }
 
+/**
+ * BUILD 016B/018 — `risk_amount` y `rr_objective` ya no están aquí: son hechos
+ * de identidad y la base los rechaza. Sólo el **desenlace** es corregible.
+ */
 export interface EditarOperacionInput {
   readonly trade_id: string;
-  readonly risk_amount?: Money;
-  readonly rr_objective?: RValue;
   readonly r_max?: RValue;
   readonly closure_reason?: ClosureReason;
   readonly cierre_manual_rr?: RValue;
@@ -55,8 +59,6 @@ export interface EdicionOperacionResultado {
 function buildEdicionParams(input: EditarOperacionInput): AplicarEdicionParams {
   return {
     tradeId: input.trade_id,
-    ...(input.risk_amount ? { riskAmount: input.risk_amount } : {}),
-    ...(input.rr_objective ? { rrObjective: input.rr_objective } : {}),
     ...(input.r_max ? { rMax: input.r_max } : {}),
     ...(input.closure_reason ? { closureReason: input.closure_reason } : {}),
     ...(input.cierre_manual_rr ? { cierreManualRr: input.cierre_manual_rr } : {}),
@@ -108,6 +110,10 @@ export class OperationsEngineService {
       rMax: input.r_max,
       rFinal: resultado.value.r_final.value,
       pnlAmount: resultado.value.beneficio_real.value,
+      // El testigo de la evidencia: exactamente los parciales sobre los que se
+      // acaba de calcular. La ruta real **siempre** lo envía.
+      expectedPartials: partialsResult.value.length,
+      ...(input.idempotency_key ? { idempotencyKey: input.idempotency_key } : {}),
     });
     if (!aplicado.ok) return aplicado;
 
@@ -145,8 +151,6 @@ export class OperationsEngineService {
     const trade = tradeResult.value;
 
     const touchesRFinal =
-      input.risk_amount !== undefined ||
-      input.rr_objective !== undefined ||
       input.r_max !== undefined ||
       input.closure_reason !== undefined ||
       input.cierre_manual_rr !== undefined;
@@ -166,9 +170,11 @@ export class OperationsEngineService {
     const partialsResult = await this.tradeGateway.listarParcialesEjecutados(input.trade_id);
     if (!partialsResult.ok) return partialsResult;
 
+    // `riesgo_eur` y `rr_objetivo` salen **siempre** de la Operación: son
+    // identidad y no pueden llegar como entrada de la corrección.
     const rFinalInput: RFinalInput = {
-      riesgo_eur: input.risk_amount ?? trade.risk_amount,
-      rr_objetivo: input.rr_objective ?? trade.rr_objective,
+      riesgo_eur: trade.risk_amount,
+      rr_objetivo: trade.rr_objective,
       parciales_ejecutados: partialsResult.value,
       r_max: rMax,
       be_trigger: trade.be_trigger,

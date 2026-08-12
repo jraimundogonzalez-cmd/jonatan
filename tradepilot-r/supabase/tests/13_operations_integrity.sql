@@ -50,9 +50,17 @@ select status, risk_pct, risk_amount, rr_objective from public.trades where id =
 \echo '--- [2] registrar_parcial_ejecutado — esperado: 1 parcial ---'
 select sequence, rr_level, pct_close from registrar_parcial_ejecutado(:'op'::uuid, 1, '1.0000', '50.00', now());
 
+-- BUILD 018 corrigió el `closure_reason` de este fixture, y sólo eso: los
+-- números ya eran exactos. Con el parcial de 50% a 1.0R ejecutado, la fórmula
+-- congelada da 0.50×1.0 + 0.50×R_resto = 0.5000 justo cuando R_resto = 0 — que
+-- es la prioridad 3 (`k ≥ 1`, sin cierre manual, `r_max` 2.5 por debajo del
+-- `rr_objective` 3.0). R_resto = 0 con parciales ejecutados **es** un cierre a
+-- break-even, no un take-profit completo: `TAKE_PROFIT_FULL` afirmaba que el
+-- precio alcanzó un objetivo que `r_max` desmiente. Los tres valores
+-- esperados —closed / 0.5000 / 50.0000— siguen siendo los mismos.
 \echo '--- [3] aplicar_cierre_operacion — esperado: closed / 0.5000 / 50.0000 ---'
 select status, r_final, pnl_amount from aplicar_cierre_operacion(
-  :'op'::uuid, now(), 'TAKE_PROFIT_FULL', null, '2.5000', '0.5000', '50.0000');
+  :'op'::uuid, now(), 'BREAK_EVEN', null, '2.5000', '0.5000', '50.0000');
 
 \echo '--- [4] abrir_operacion_desde_intencion — esperado: Operación con instrument_key ---'
 select id as intent from crear_intencion_de_gestion(
@@ -181,8 +189,16 @@ update public.account_risk_state set n = -1, version = version + 1 where account
 \echo '--- [35] H1: DELETE del acumulador — esperado: ERROR NOT_DELETABLE ---'
 delete from public.account_risk_state where account_id = :'cta'::uuid;
 
+-- BUILD 018 no estrechó esta libertad: la obligó a ser **coherente**. Corregir
+-- `r_final` a 3.0000 dejando `pnl_amount` en 200.0000 y `r_max` en 2.5000
+-- producía una Operación que se contradecía a sí misma por partida doble —un
+-- P&L que no es `risk_amount` × `r_final`, y un resultado por encima del máximo
+-- que la propia Operación declara haber alcanzado—. Desde 018 el desenlace se
+-- corrige **entero o nada**, en un solo UPDATE. La aserción de D2 —el desenlace
+-- es corregible por el propietario, la identidad nunca— es exactamente la
+-- misma, y el valor esperado tampoco cambia.
 \echo '--- [36] desenlace: el propietario SÍ puede corregir r_final (D2) — esperado: 3.0000 ---'
-update public.trades set r_final = 3.0000 where id = :'op'::uuid;
+update public.trades set r_max = 3.0000, r_final = 3.0000, pnl_amount = 300.0000 where id = :'op'::uuid;
 select r_final from public.trades where id = :'op'::uuid;
 
 \echo '--- [37] y esa corrección también quedó auditada — esperado: entradas > 1 ---'

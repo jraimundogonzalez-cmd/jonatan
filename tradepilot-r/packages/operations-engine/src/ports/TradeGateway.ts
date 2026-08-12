@@ -9,17 +9,32 @@ export interface AplicarCierreParams {
   readonly rMax: RValue;
   readonly rFinal: RValue;
   readonly pnlAmount: Money;
+  /**
+   * BUILD 018 — testigo de la evidencia: cuántos parciales ejecutados se
+   * usaron para calcular `rFinal`. El `for update` del cierre no protege esta
+   * lectura, porque ocurrió en una transacción anterior; si otra sesión
+   * inserta un parcial en esa ventana, la base rechaza con `EVIDENCE_CHANGED`
+   * y el orquestador recalcula. Siempre se envía desde la ruta real.
+   */
+  readonly expectedPartials: number;
+  /** Idempotencia del cierre — una repetición exacta devuelve la Operación sin escribir. */
+  readonly idempotencyKey?: string;
 }
 
 /**
  * Cualquier campo ausente conserva su valor actual (semántica `Partial`,
  * SPEC-002 §7 `Partial<OperacionEditable>`) — `status` no aparece aquí a
  * propósito, `editarOperacion` nunca lo toca (FORBIDDEN_STATUS_EDIT).
+ *
+ * BUILD 016B/018: `riskAmount` y `rrObjective` desaparecen de la superficie de
+ * aplicación — son hechos de **identidad**, inmutables desde el nacimiento, y
+ * la base los rechaza con `IMMUTABLE_IDENTITY_FACT`. Los parámetros SQL siguen
+ * existiendo por compatibilidad histórica: contrato SQL y superficie de
+ * aplicación son cosas distintas. Aquí sólo queda el **desenlace**, que es lo
+ * único corregible.
  */
 export interface AplicarEdicionParams {
   readonly tradeId: string;
-  readonly riskAmount?: Money;
-  readonly rrObjective?: RValue;
   readonly rMax?: RValue;
   readonly closureReason?: ClosureReason;
   readonly cierreManualRr?: RValue;

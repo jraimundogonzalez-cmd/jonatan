@@ -94,6 +94,8 @@ export class SupabaseTradeGateway implements TradeGateway {
       p_r_max: toDisplayString(params.rMax),
       p_r_final: toDisplayString(params.rFinal),
       p_pnl_amount: toDisplayString(params.pnlAmount),
+      p_expected_partials: params.expectedPartials,
+      p_idempotency_key: params.idempotencyKey ?? null,
     });
     if (error) return err(gatewayError(error.message));
     return ok(rowToTrade(data as TradeRow));
@@ -102,8 +104,11 @@ export class SupabaseTradeGateway implements TradeGateway {
   async aplicarEdicion(params: AplicarEdicionParams): Promise<Result<Trade, OperationsError>> {
     const { data, error } = await this.client.rpc("aplicar_edicion_operacion", {
       p_trade_id: params.tradeId,
-      p_risk_amount: params.riskAmount ? toDisplayString(params.riskAmount) : null,
-      p_rr_objective: params.rrObjective ? toDisplayString(params.rrObjective) : null,
+      // `p_risk_amount` y `p_rr_objective` existen en la firma SQL por
+      // compatibilidad histórica, pero son identidad: se envían siempre nulos
+      // porque la superficie de aplicación ya no los ofrece (BUILD 016B/018).
+      p_risk_amount: null,
+      p_rr_objective: null,
       p_r_max: params.rMax ? toDisplayString(params.rMax) : null,
       p_closure_reason: params.closureReason ?? null,
       p_cierre_manual_rr: params.cierreManualRr ? toDisplayString(params.cierreManualRr) : null,
