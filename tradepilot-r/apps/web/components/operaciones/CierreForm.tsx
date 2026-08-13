@@ -14,10 +14,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { OperationsError, PrevisualizacionCierre } from "@tradepilot/operations-engine";
-import { toDisplayString } from "@tradepilot/risk-engine";
+import type { OperationsError } from "@tradepilot/operations-engine";
 import { Button, Input } from "@/components/ui";
-import { cerrarOperacionAction, previsualizarCierreAction } from "@/actions/operaciones";
+import { cerrarOperacionAction, previsualizarCierreAction, type PrevisualizacionUI } from "@/actions/operaciones";
 import { MOTIVOS_DE_CIERRE, formatR } from "@/lib/format/operacion";
 import { formatMoney } from "@/lib/format/money";
 import { campoDeError, categoriaDeError, codigoDeError, mensajeDeError } from "@/types/operations";
@@ -47,7 +46,7 @@ export function CierreForm({
   const [closureReason, setClosureReason] = useState<ClosureReason>("STOP_LOSS");
   const [rMax, setRMax] = useState("");
   const [cierreManualRr, setCierreManualRr] = useState("");
-  const [preview, setPreview] = useState<PrevisualizacionCierre | null>(null);
+  const [preview, setPreview] = useState<PrevisualizacionUI | null>(null);
   const [error, setError] = useState<OperationsError | null>(null);
   const [evidenciaCambio, setEvidenciaCambio] = useState<string | null>(null);
 
@@ -193,11 +192,11 @@ export function CierreForm({
           <div className={styles.hechos}>
             <div className={styles.hecho}>
               <span className={styles.hechoLabel}>R final estimado</span>
-              <span className={styles.hechoValorGrande}>{formatR(toDisplayString(preview.r_final))}</span>
+              <span className={styles.hechoValorGrande}>{formatR(preview.r_final)}</span>
             </div>
             <div className={styles.hecho}>
               <span className={styles.hechoLabel}>P&amp;L estimado</span>
-              <span className={styles.hechoValorGrande}>{formatMoney(toDisplayString(preview.pnl_amount), currency)}</span>
+              <span className={styles.hechoValorGrande}>{formatMoney(preview.pnl_amount, currency)}</span>
             </div>
             <div className={styles.hecho}>
               <span className={styles.hechoLabel}>Parciales usados</span>

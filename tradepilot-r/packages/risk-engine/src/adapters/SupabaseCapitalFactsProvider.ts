@@ -9,9 +9,15 @@ import { err, money, ok, type Result } from "@tradepilot/quant-engine";
 import type { CapitalFacts, RiskEngineError } from "../domain/types.js";
 import type { CapitalFactsProvider } from "../ports/CapitalFactsProvider.js";
 
+// BUILD 020 — misma normalización que en el repositorio del acumulador:
+// PostgREST entrega `numeric` como número JSON y `money()` exige cadena (I5).
+function texto(v: string | number): string {
+  return typeof v === "number" ? v.toFixed(4) : v;
+}
+
 interface AccountRow {
-  readonly current_capital: string;
-  readonly initial_capital: string;
+  readonly current_capital: string | number;
+  readonly initial_capital: string | number;
 }
 
 export class SupabaseCapitalFactsProvider implements CapitalFactsProvider {
@@ -26,8 +32,8 @@ export class SupabaseCapitalFactsProvider implements CapitalFactsProvider {
 
     const row = data as AccountRow;
     return ok({
-      current_capital: money(row.current_capital),
-      initial_capital: money(row.initial_capital),
+      current_capital: money(texto(row.current_capital)),
+      initial_capital: money(texto(row.initial_capital)),
     });
   }
 }

@@ -10,12 +10,32 @@
 // del servicio no los admiten.
 
 import { revalidatePath } from "next/cache";
-import { rvalue } from "@tradepilot/risk-engine";
-import type { ClosureReason, OperationsError, PrevisualizacionCierre } from "@tradepilot/operations-engine";
+import { rvalue, toDisplayString } from "@tradepilot/risk-engine";
+import type { ClosureReason, OperationsError } from "@tradepilot/operations-engine";
+
+/**
+ * BUILD 020 — la previsualización cruza a un Client Component, y una Server
+ * Action es una **frontera de serialización**: lo que viaja se convierte en
+ * JSON y al otro lado ya no hay kernel decimal. Devolver los objetos `RValue`
+ * y `Money` de Quant Engine parecía natural y era un error: llegaban al
+ * navegador convertidos en objetos planos, y la primera llamada a
+ * `toDisplayString` reventaba con `fd.raw.toFixed is not a function`, dejando
+ * el formulario de cierre inutilizable.
+ *
+ * Aquí se aplica la misma regla que en cualquier otra frontera del proyecto
+ * (I5): los decimales cruzan como **cadenas**. La conversión se hace en el
+ * servidor, donde el kernel sí existe.
+ */
+export interface PrevisualizacionUI {
+  readonly r_final: string;
+  readonly pnl_amount: string;
+  readonly evidencia_leida: number;
+}
 import { createClient } from "@/lib/supabase/server";
 import { crearOperationsEngine } from "@/lib/operations/engine";
 import {
   cancelarOperacion,
+  obtenerOperacion,
   registrarOperacion,
   registrarParcialEjecutado,
   type RegistrarOperacionInput,
@@ -102,7 +122,7 @@ function aRValueSeguro(raw: string): { ok: true; value: ReturnType<typeof rvalue
  */
 export async function previsualizarCierreAction(
   input: CierreFormInput,
-): Promise<OperationsResult<PrevisualizacionCierre>> {
+): Promise<OperationsResult<PrevisualizacionUI>> {
   const rMax = aRValueSeguro(input.r_max);
   if (!rMax.ok) return rMax;
 
@@ -124,7 +144,15 @@ export async function previsualizarCierreAction(
     r_max: rMax.value,
     ...(cierreManual ? { cierre_manual_rr: cierreManual } : {}),
   });
-  return result.ok ? { ok: true, value: result.value } : { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: result.error };
+  return {
+    ok: true,
+    value: {
+      r_final: toDisplayString(result.value.r_final),
+      pnl_amount: toDisplayString(result.value.pnl_amount),
+      evidencia_leida: result.value.evidencia_leida,
+    },
+  };
 }
 
 /**
@@ -168,9 +196,11 @@ export async function cerrarOperacionAction(
   // El acumulador de riesgo es asíncrono por diseño (BUILD 003: idempotente y
   // reintentable). Un fallo suyo no convierte en fallo un cierre que ya movió
   // capital — pero tampoco se descarta en silencio: viaja dentro del resultado.
+  // Relectura por `lib/api` y no por `.rpc()` directo: es ahí donde vive la
+  // normalización de decimales de la frontera (ver `lib/api/decimales.ts`).
+  // Saltársela devolvía `number` donde el resto del código espera cadenas.
   const supabaseRead = await createClient();
-  const { data } = await supabaseRead.rpc("obtener_operacion", { p_id: input.trade_id });
-  return { ok: true, value: data as OperacionRow };
+  return obtenerOperacion(supabaseRead, input.trade_id);
 }
 
 export interface CorreccionFormInput {
@@ -223,7 +253,9 @@ export async function corregirDesenlaceAction(
   if (!result.ok) return { ok: false, error: result.error };
   revalidarOperacion(input.account_id, input.trade_id);
 
+  // Relectura por `lib/api` y no por `.rpc()` directo: es ahí donde vive la
+  // normalización de decimales de la frontera (ver `lib/api/decimales.ts`).
+  // Saltársela devolvía `number` donde el resto del código espera cadenas.
   const supabaseRead = await createClient();
-  const { data } = await supabaseRead.rpc("obtener_operacion", { p_id: input.trade_id });
-  return { ok: true, value: data as OperacionRow };
+  return obtenerOperacion(supabaseRead, input.trade_id);
 }

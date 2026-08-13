@@ -2,6 +2,7 @@
 // Cada función envuelve una llamada RPC a Postgres (supabase/functions/sql/funding.sql) —
 // nunca una llamada SQL directa desde un componente (mvp-0.1.md §6.3).
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ESCALAS_CUENTA, ESCALAS_EVENTO_CAPITAL, normalizarFila, normalizarFilas } from "./decimales";
 import {
   KNOWN_FUNDING_ERROR_CODES,
   type Account,
@@ -88,7 +89,7 @@ export async function crearCuenta(
     p_profit_split_pct: input.profit_split_pct ?? null,
   });
   if (error) return err(parsePostgresError(error.message));
-  return ok(data as Account);
+  return ok(normalizarFila(data as Account, ESCALAS_CUENTA));
 }
 
 /**
@@ -106,14 +107,14 @@ export async function listarEmpresas(client: SupabaseClient): Promise<FundingRes
 export async function listarCuentas(client: SupabaseClient): Promise<FundingResult<Account[]>> {
   const { data, error } = await client.rpc("listar_cuentas");
   if (error) return err(parsePostgresError(error.message));
-  return ok((data ?? []) as Account[]);
+  return ok(normalizarFilas((data ?? []) as Account[], ESCALAS_CUENTA));
 }
 
 export async function obtenerCuenta(client: SupabaseClient, id: string): Promise<FundingResult<Account>> {
   const { data, error } = await client.rpc("obtener_cuenta", { p_id: id });
   if (error) return err(parsePostgresError(error.message));
   if (!data) return err({ code: "ACCOUNT_NOT_FOUND" });
-  return ok(data as Account);
+  return ok(normalizarFila(data as Account, ESCALAS_CUENTA));
 }
 
 export async function registrarEventoCapital(
@@ -145,5 +146,5 @@ export async function listarEventosCapital(
 ): Promise<FundingResult<CapitalEvent[]>> {
   const { data, error } = await client.rpc("listar_eventos_capital", { p_account_id: accountId });
   if (error) return err(parsePostgresError(error.message));
-  return ok((data ?? []) as CapitalEvent[]);
+  return ok(normalizarFilas((data ?? []) as CapitalEvent[], ESCALAS_EVENTO_CAPITAL));
 }

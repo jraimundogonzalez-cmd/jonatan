@@ -22,18 +22,18 @@ interface TradeRow {
   readonly account_id: string;
   readonly management_plan_id: string;
   readonly status: TradeStatus;
-  readonly risk_amount: string;
-  readonly rr_objective: string;
+  readonly risk_amount: string | number;
+  readonly rr_objective: string | number;
   readonly be_trigger: string;
-  readonly r_max: string | null;
-  readonly r_final: string | null;
-  readonly pnl_amount: string | null;
+  readonly r_max: string | number | null;
+  readonly r_final: string | number | null;
+  readonly pnl_amount: string | number | null;
   readonly closure_reason: ClosureReason | null;
-  readonly cierre_manual_rr: string | null;
+  readonly cierre_manual_rr: string | number | null;
   readonly symbol: string;
   readonly side: TradeSide;
   readonly opened_at: string;
-  readonly risk_pct: string;
+  readonly risk_pct: string | number;
   readonly instrument_key: string | null;
   readonly closed_at: string | null;
   readonly time_in_market_sec: number | null;
@@ -45,9 +45,29 @@ interface TradeRow {
 
 interface TradePartialExecutedRow {
   readonly sequence: 1 | 2 | 3 | 4 | 5;
-  readonly rr_level: string;
-  readonly pct_close: string;
+  readonly rr_level: string | number;
+  readonly pct_close: string | number;
   readonly executed_at: string;
+}
+
+/**
+ * BUILD 020 — PostgREST serializa `numeric` como número JSON, no como cadena.
+ * `money()` y `rvalue()` esperan cadena (I5), así que se normaliza aquí, en la
+ * frontera de entrada, antes de que el kernel decimal vea el valor.
+ *
+ * Encontrado ejecutando la aplicación contra PostgREST real: los dobles de los
+ * tests devuelven cadenas —que es lo que el contrato dice— y por eso ninguno lo
+ * detectó. El contrato es correcto; lo que faltaba era comprobar qué entrega la
+ * plataforma. No recupera precisión ya perdida en `JSON.parse`; sólo devuelve
+ * el valor a la forma que el resto del código exige.
+ */
+function texto(v: string | number): string {
+  return typeof v === "number" ? v.toFixed(4) : v;
+}
+
+/** Aplica `f` sobre el valor normalizado, o `null` si no hay valor. */
+function opcional<T>(v: string | number | null | undefined, f: (s: string) => T): T | null {
+  return v === null || v === undefined ? null : f(texto(v));
 }
 
 function rowToTrade(row: TradeRow): Trade {
@@ -59,17 +79,17 @@ function rowToTrade(row: TradeRow): Trade {
     // valores del enum — frontera de entrada, mismo patrón que `rvalue(...)`.
     be_trigger: row.be_trigger as Trade["be_trigger"],
     status: row.status,
-    risk_amount: money(row.risk_amount),
-    rr_objective: rvalue(row.rr_objective),
-    r_max: row.r_max !== null ? rvalue(row.r_max) : null,
-    r_final: row.r_final !== null ? rvalue(row.r_final) : null,
-    pnl_amount: row.pnl_amount !== null ? money(row.pnl_amount) : null,
+    risk_amount: money(texto(row.risk_amount)),
+    rr_objective: rvalue(texto(row.rr_objective)),
+    r_max: opcional(row.r_max, rvalue),
+    r_final: opcional(row.r_final, rvalue),
+    pnl_amount: opcional(row.pnl_amount, money),
     closure_reason: row.closure_reason,
-    cierre_manual_rr: row.cierre_manual_rr !== null ? rvalue(row.cierre_manual_rr) : null,
+    cierre_manual_rr: opcional(row.cierre_manual_rr, rvalue),
     symbol: row.symbol,
     side: row.side,
     opened_at: row.opened_at,
-    risk_pct: row.risk_pct,
+    risk_pct: texto(row.risk_pct),
     instrument_key: row.instrument_key ?? null,
     closed_at: row.closed_at ?? null,
     time_in_market_sec: row.time_in_market_sec ?? null,
@@ -196,8 +216,8 @@ export class SupabaseTradeGateway implements TradeGateway {
     return ok(
       rows.map((row) => ({
         sequence: row.sequence,
-        rr_level: rvalue(row.rr_level),
-        pct_close: percent(row.pct_close),
+        rr_level: rvalue(texto(row.rr_level)),
+        pct_close: percent(texto(row.pct_close)),
         executed_at: row.executed_at,
       })),
     );
@@ -206,8 +226,8 @@ export class SupabaseTradeGateway implements TradeGateway {
   async listarRFinalVigentePorCuenta(accountId: string): Promise<Result<readonly RValue[], OperationsError>> {
     const { data, error } = await this.client.rpc("listar_r_final_vigente_por_cuenta", { p_account_id: accountId });
     if (error) return err(parseOperationsError(error.message));
-    const rows = (data ?? []) as ReadonlyArray<{ r_final: string }>;
-    return ok(rows.map((row) => rvalue(row.r_final)));
+    const rows = (data ?? []) as ReadonlyArray<{ r_final: string | number }>;
+    return ok(rows.map((row) => rvalue(texto(row.r_final))));
   }
 
   async aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>> {

@@ -11,6 +11,13 @@
 // se ha roto — hay un test que lo comprueba.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseOperationsError, type OperationsError } from "@tradepilot/operations-engine";
+import {
+  ESCALAS_OPERACION,
+  ESCALAS_PARCIAL,
+  ESCALAS_PLAN_GESTION,
+  normalizarFila,
+  normalizarFilas,
+} from "./decimales";
 import type {
   AuditEntryRow,
   OperacionRow,
@@ -36,7 +43,7 @@ export async function listarOperaciones(
 ): Promise<OperationsResult<OperacionRow[]>> {
   const { data, error } = await client.rpc("listar_operaciones", { p_account_id: accountId });
   if (error) return err(parseOperationsError(error.message));
-  return ok((data ?? []) as OperacionRow[]);
+  return ok(normalizarFilas((data ?? []) as OperacionRow[], ESCALAS_OPERACION));
 }
 
 export async function obtenerOperacion(
@@ -46,7 +53,7 @@ export async function obtenerOperacion(
   const { data, error } = await client.rpc("obtener_operacion", { p_id: id });
   if (error) return err(parseOperationsError(error.message));
   if (!data) return err({ code: "TRADE_NOT_FOUND", trade_id: id });
-  return ok(data as OperacionRow);
+  return ok(normalizarFila(data as OperacionRow, ESCALAS_OPERACION));
 }
 
 export async function listarParcialesEjecutados(
@@ -55,7 +62,7 @@ export async function listarParcialesEjecutados(
 ): Promise<OperationsResult<ParcialEjecutadoRow[]>> {
   const { data, error } = await client.rpc("listar_parciales_ejecutados", { p_trade_id: tradeId });
   if (error) return err(parseOperationsError(error.message));
-  return ok((data ?? []) as ParcialEjecutadoRow[]);
+  return ok(normalizarFilas((data ?? []) as ParcialEjecutadoRow[], ESCALAS_PARCIAL));
 }
 
 export async function listarParcialesPlanificados(
@@ -64,7 +71,7 @@ export async function listarParcialesPlanificados(
 ): Promise<OperationsResult<ParcialPlanificadoRow[]>> {
   const { data, error } = await client.rpc("listar_parciales_planificados", { p_trade_id: tradeId });
   if (error) return err(parseOperationsError(error.message));
-  return ok((data ?? []) as ParcialPlanificadoRow[]);
+  return ok(normalizarFilas((data ?? []) as ParcialPlanificadoRow[], ESCALAS_PARCIAL));
 }
 
 export async function listarPlanesGestion(
@@ -72,7 +79,7 @@ export async function listarPlanesGestion(
 ): Promise<OperationsResult<PlanGestionRow[]>> {
   const { data, error } = await client.rpc("listar_planes_gestion");
   if (error) return err(parseOperationsError(error.message));
-  return ok((data ?? []) as PlanGestionRow[]);
+  return ok(normalizarFilas((data ?? []) as PlanGestionRow[], ESCALAS_PLAN_GESTION));
 }
 
 /**
@@ -119,7 +126,7 @@ export async function registrarOperacion(
     p_be_trigger: input.be_trigger ?? "NONE",
   });
   if (error) return err(parseOperationsError(error.message));
-  return ok(data as OperacionRow);
+  return ok(normalizarFila(data as OperacionRow, ESCALAS_OPERACION));
 }
 
 export async function registrarParcialEjecutado(
@@ -138,7 +145,7 @@ export async function registrarParcialEjecutado(
     p_executed_at: executedAt,
   });
   if (error) return err(parseOperationsError(error.message));
-  return ok(data as ParcialEjecutadoRow);
+  return ok(normalizarFila(data as ParcialEjecutadoRow, ESCALAS_PARCIAL));
 }
 
 export async function cancelarOperacion(
@@ -151,5 +158,5 @@ export async function cancelarOperacion(
     p_motivo: motivo,
   });
   if (error) return err(parseOperationsError(error.message));
-  return ok(data as OperacionRow);
+  return ok(normalizarFila(data as OperacionRow, ESCALAS_OPERACION));
 }

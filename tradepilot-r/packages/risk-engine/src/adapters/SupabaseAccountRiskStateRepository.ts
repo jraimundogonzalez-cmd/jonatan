@@ -9,11 +9,26 @@ import { err, ok, rvalue, toDisplayString, type Result, type WelfordAccumulator 
 import type { AccountRiskState, RiskEngineError } from "../domain/types.js";
 import type { AccountRiskStateRepository, ApplyAccumulatorOutcome } from "../ports/AccountRiskStateRepository.js";
 
+/**
+ * BUILD 020 — PostgREST serializa `numeric` como número JSON, no como cadena,
+ * y `rvalue()` exige cadena (I5). Sin esta normalización, cerrar una Operación
+ * desde la aplicación reventaba con `value.trim is not a function` en cuanto
+ * Risk Engine leía el acumulador.
+ *
+ * Encontrado ejecutando el producto contra PostgREST real: los tests de este
+ * paquete usan repositorios en memoria que devuelven cadenas —lo que el
+ * contrato dice— y por eso nunca lo vieron. Es normalización de frontera de
+ * entrada, no un cambio del acumulador ni de su matemática.
+ */
+function texto(v: string | number): string {
+  return typeof v === "number" ? v.toFixed(4) : v;
+}
+
 interface AccountRiskStateRow {
   readonly account_id: string;
   readonly n: number;
-  readonly mean: string;
-  readonly m2: string;
+  readonly mean: string | number;
+  readonly m2: string | number;
   readonly version: number;
   readonly updated_at: string;
 }
@@ -22,14 +37,14 @@ interface ApplyAccumulatorUpdateRow {
   readonly applied: boolean;
   readonly current_version: number;
   readonly current_n: number;
-  readonly current_mean: string;
-  readonly current_m2: string;
+  readonly current_mean: string | number;
+  readonly current_m2: string | number;
 }
 
 function rowToState(accountId: string, row: AccountRiskStateRow): AccountRiskState {
   return {
     account_id: accountId,
-    accumulator: { n: row.n, mean: rvalue(row.mean), m2: rvalue(row.m2) },
+    accumulator: { n: row.n, mean: rvalue(texto(row.mean)), m2: rvalue(texto(row.m2)) },
     version: row.version,
     updated_at: row.updated_at,
   };
@@ -44,7 +59,7 @@ function rowToState(accountId: string, row: AccountRiskStateRow): AccountRiskSta
 function applyRowToState(accountId: string, row: ApplyAccumulatorUpdateRow): AccountRiskState {
   return {
     account_id: accountId,
-    accumulator: { n: row.current_n, mean: rvalue(row.current_mean), m2: rvalue(row.current_m2) },
+    accumulator: { n: row.current_n, mean: rvalue(texto(row.current_mean)), m2: rvalue(texto(row.current_m2)) },
     version: row.current_version,
     updated_at: new Date().toISOString(),
   };

@@ -176,3 +176,68 @@ describe("SupabaseTradeGateway.aplicarEdicion", () => {
     expect(result).toEqual({ ok: false, error: { code: "EVIDENCE_CHANGED", esperados: 1, actuales: 2 } });
   });
 });
+
+// BUILD 020 — el resto de esta suite usa filas con decimales en CADENA, que es
+// lo que el contrato dice. PostgREST entrega números JSON. Estos casos usan la
+// fila tal como llega de la plataforma real; sin normalización en la frontera,
+// `money()`/`rvalue()` reciben un `number` y revientan.
+const FILA_POSTGREST = {
+  id: "trade-1",
+  account_id: "acc-1",
+  management_plan_id: "plan-1",
+  status: "closed",
+  risk_amount: 100.5,
+  rr_objective: 3,
+  be_trigger: "NONE",
+  r_max: 2.5,
+  r_final: 1.5,
+  pnl_amount: 150.75,
+  closure_reason: "MANUAL_CLOSE",
+  cierre_manual_rr: 1.5,
+  risk_pct: 1,
+  symbol: "XAUUSD",
+  side: "long",
+  opened_at: "2026-01-01T00:00:00Z",
+};
+
+describe("SupabaseTradeGateway con decimales tal como los serializa PostgREST", () => {
+  beforeEach(() => rpcMock.mockReset());
+
+  it("acepta `numeric` como número JSON y lo devuelve al kernel decimal", async () => {
+    rpcMock.mockResolvedValueOnce({ data: FILA_POSTGREST, error: null });
+    const gateway = new SupabaseTradeGateway(client);
+    const result = await gateway.obtenerOperacion("trade-1");
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(toDisplayString(result.value.risk_amount)).toBe("100.5000");
+    expect(toDisplayString(result.value.r_final!)).toBe("1.5000");
+    expect(toDisplayString(result.value.pnl_amount!)).toBe("150.7500");
+    expect(toDisplayString(result.value.cierre_manual_rr!)).toBe("1.5000");
+    expect(result.value.risk_pct).toBe("1.0000");
+  });
+
+  it("un nulo sigue siendo nulo, no un cero", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: { ...FILA_POSTGREST, r_final: null, pnl_amount: null, cierre_manual_rr: null },
+      error: null,
+    });
+    const gateway = new SupabaseTradeGateway(client);
+    const result = await gateway.obtenerOperacion("trade-1");
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.value.r_final).toBeNull();
+    expect(result.value.pnl_amount).toBeNull();
+    expect(result.value.cierre_manual_rr).toBeNull();
+  });
+
+  it("los parciales ejecutados también llegan como números", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: [{ sequence: 1, rr_level: 1, pct_close: 50, executed_at: "2026-01-01T01:00:00Z" }],
+      error: null,
+    });
+    const gateway = new SupabaseTradeGateway(client);
+    const result = await gateway.listarParcialesEjecutados("trade-1");
+    if (!result.ok) throw new Error("unreachable");
+    expect(toDisplayString(result.value[0]!.rr_level)).toBe("1.0000");
+    expect(toDisplayString(result.value[0]!.pct_close)).toBe("50.00");
+  });
+});
