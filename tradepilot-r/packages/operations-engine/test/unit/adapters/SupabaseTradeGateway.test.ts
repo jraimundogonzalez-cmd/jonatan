@@ -139,6 +139,40 @@ describe("SupabaseTradeGateway.aplicarEdicion", () => {
       p_pnl_amount: null,
       p_notes: "nota nueva",
       p_comments: null,
+      // BUILD 019: la bandera de borrado viaja siempre, y `false` cuando no se
+      // pide. Es lo que garantiza que el borrado no pueda ocurrir por omisión.
+      p_borrar_cierre_manual_rr: false,
     });
+  });
+
+  it("el borrado explícito de cierre_manual_rr viaja como true, y sin valor acompañante", async () => {
+    rpcMock.mockResolvedValueOnce({ data: TRADE_ROW, error: null });
+    const gateway = new SupabaseTradeGateway(client);
+    await gateway.aplicarEdicion({ tradeId: "trade-1", borrarCierreManualRr: true });
+    expect(rpcMock).toHaveBeenCalledWith(
+      "aplicar_edicion_operacion",
+      expect.objectContaining({ p_borrar_cierre_manual_rr: true, p_cierre_manual_rr: null }),
+    );
+  });
+
+  it("traduce un error de dominio a su código tipado en lugar de a GATEWAY_ERROR", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message:
+          "OPERATIONS_ERROR:EVIDENCE_CHANGED:los parciales ejecutados cambiaron durante el cierre (esperados 1, actuales 2) — recalcula y reintenta",
+      },
+    });
+    const gateway = new SupabaseTradeGateway(client);
+    const result = await gateway.aplicarCierre({
+      tradeId: "trade-1",
+      closedAt: "2026-01-01T00:00:00Z",
+      closureReason: "STOP_LOSS",
+      rMax: rvalue("1.0000"),
+      rFinal: rvalue("-1.0000"),
+      pnlAmount: money("-100.0000"),
+      expectedPartials: 1,
+    });
+    expect(result).toEqual({ ok: false, error: { code: "EVIDENCE_CHANGED", esperados: 1, actuales: 2 } });
   });
 });

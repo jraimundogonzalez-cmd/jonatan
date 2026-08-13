@@ -28,6 +28,12 @@ export class InMemoryTradeGateway implements TradeGateway {
    */
   lastCierreParams: AplicarCierreParams | null = null;
 
+  /** Cuántas veces se intentó escribir el cierre. `previsualizarCierre` debe dejarlo en 0. */
+  cierreCallCount = 0;
+
+  /** BUILD 019 — para observar que el borrado explícito llega al puerto. */
+  lastEdicionParams: AplicarEdicionParams | null = null;
+
   seedTrade(trade: Trade): void {
     this.trades.set(trade.id, trade);
   }
@@ -56,6 +62,7 @@ export class InMemoryTradeGateway implements TradeGateway {
 
   async aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>> {
     this.lastCierreParams = params;
+    this.cierreCallCount += 1;
     const trade = this.trades.get(params.tradeId);
     if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
     const updated: Trade = {
@@ -72,6 +79,7 @@ export class InMemoryTradeGateway implements TradeGateway {
   }
 
   async aplicarEdicion(params: AplicarEdicionParams): Promise<Result<Trade, OperationsError>> {
+    this.lastEdicionParams = params;
     const trade = this.trades.get(params.tradeId);
     if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
     // BUILD 016B/018: `risk_amount` y `rr_objective` son identidad y ya no
@@ -81,7 +89,8 @@ export class InMemoryTradeGateway implements TradeGateway {
       ...trade,
       r_max: params.rMax ?? trade.r_max,
       closure_reason: params.closureReason ?? trade.closure_reason,
-      cierre_manual_rr: params.cierreManualRr ?? trade.cierre_manual_rr,
+      // BUILD 019: la bandera vacía el campo; sin ella, `undefined` conserva.
+      cierre_manual_rr: params.borrarCierreManualRr ? null : (params.cierreManualRr ?? trade.cierre_manual_rr),
       r_final: params.rFinal ?? trade.r_final,
       pnl_amount: params.pnlAmount ?? trade.pnl_amount,
     };

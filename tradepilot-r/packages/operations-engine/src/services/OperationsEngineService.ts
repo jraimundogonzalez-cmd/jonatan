@@ -30,6 +30,34 @@ export interface CerrarOperacionInput {
   readonly r_max: RValue;
   /** BUILD 018 — idempotencia del cierre. Un reintento con la misma clave no duplica el efecto económico. */
   readonly idempotency_key?: string;
+  /**
+   * BUILD 019 — cuántos parciales ejecutados vio la **previsualización** que el
+   * usuario acaba de confirmar.
+   *
+   * El testigo de 018 (`p_expected_partials`) cubre la ventana entre la lectura
+   * de este servicio y la escritura de la RPC: milisegundos. La previsualización
+   * abre otra ventana mucho mayor —entre mirar y confirmar pueden pasar
+   * minutos— que aquel testigo **no puede cubrir**, porque su lectura fresca
+   * coincidiría consigo misma y la RPC aceptaría sin más.
+   *
+   * Sin esto: previsualizas 0.5R, otra sesión registra un parcial, confirmas, y
+   * se persiste 1.2R sin que nadie avise. La previsualización habría mentido.
+   *
+   * No es semántica nueva: es el mismo `EVIDENCE_CHANGED`, detectado un peldaño
+   * más arriba. Omitirlo desactiva sólo esta comprobación, nunca la de 018.
+   */
+  readonly evidencia_previsualizada?: number;
+}
+
+/**
+ * BUILD 019 — resultado de una previsualización. No es un hecho persistido y
+ * la UI debe presentarlo como tal.
+ */
+export interface PrevisualizacionCierre {
+  readonly r_final: RValue;
+  readonly pnl_amount: Money;
+  /** Los parciales sobre los que se calculó. Viaja de vuelta como `evidencia_previsualizada`. */
+  readonly evidencia_leida: number;
 }
 
 export interface CierreOperacionResultado {
@@ -48,6 +76,15 @@ export interface EditarOperacionInput {
   readonly cierre_manual_rr?: RValue;
   readonly notes?: string;
   readonly comments?: string;
+  /**
+   * BUILD 019 — borrado explícito de `cierre_manual_rr`, la decisión D1.
+   *
+   * Nunca se deriva de `closure_reason`: derivarlo volvería a hacer implícito
+   * el borrado y, además, obligaría a este servicio a conocer las cuatro reglas
+   * de BUILD 018 — una segunda fuente de verdad de algo ya congelado en el
+   * trigger. El usuario lo declara, el dominio lo juzga.
+   */
+  readonly borrar_cierre_manual_rr?: boolean;
 }
 
 export interface EdicionOperacionResultado {
@@ -64,6 +101,7 @@ function buildEdicionParams(input: EditarOperacionInput): AplicarEdicionParams {
     ...(input.cierre_manual_rr ? { cierreManualRr: input.cierre_manual_rr } : {}),
     ...(input.notes !== undefined ? { notes: input.notes } : {}),
     ...(input.comments !== undefined ? { comments: input.comments } : {}),
+    ...(input.borrar_cierre_manual_rr ? { borrarCierreManualRr: true } : {}),
   };
 }
 
@@ -83,12 +121,66 @@ export class OperationsEngineService {
     if (!tradeResult.ok) return tradeResult;
     const trade = tradeResult.value;
 
+    // BUILD 019 — la red de idempotencia va ANTES de la comprobación de estado,
+    // en el mismo orden que `aplicar_cierre_operacion`.
+    //
+    // Hallazgo real de la verificación end-to-end de este build: BUILD 018
+    // construyó la idempotencia del cierre dentro de la RPC, pero este servicio
+    // cortaba antes con `status !== "open"` y **la RPC nunca llegaba a
+    // ejecutarse** en un reintento. Por la ruta real de la aplicación —la
+    // única que la interfaz puede usar— un reenvío del mismo cierre devolvía
+    // `INVALID_STATE_TRANSITION` en vez de la Operación ya cerrada. La
+    // idempotencia existía y era inalcanzable.
+    //
+    // Esto no duplica la autoridad: la RPC sigue decidiendo bajo `for update`,
+    // que es donde la decisión es correcta. Este atajo sólo puede evitar un
+    // error, nunca inventar un éxito — su condición es exactamente la de la
+    // RPC, y sólo se cumple si este mismo cierre ya se aplicó.
+    if (
+      trade.status === "closed" &&
+      input.idempotency_key !== undefined &&
+      trade.closure_idempotency_key === input.idempotency_key
+    ) {
+      // Risk Engine es idempotente por `event_id` (= trade_id), así que
+      // reprocesar converge en vez de duplicar: un reintento tras un fallo
+      // parcial —Operación cerrada, acumulador todavía no— se completa aquí.
+      const accumulatorUpdate = await this.riskEngineService.procesarOperacionCerrada({
+        kind: "OperacionCerrada",
+        event_id: input.trade_id,
+        account_id: trade.account_id,
+        trade_id: input.trade_id,
+        occurred_at: new Date().toISOString(),
+        r_final_input: {
+          riesgo_eur: trade.risk_amount,
+          rr_objetivo: trade.rr_objective,
+          parciales_ejecutados: [],
+          r_max: input.r_max,
+          be_trigger: trade.be_trigger,
+        },
+      });
+      return ok({ trade, accumulator_update: accumulatorUpdate });
+    }
+
     if (trade.status !== "open") {
       return err({ code: "INVALID_STATE_TRANSITION", from: trade.status, to: "closed" });
     }
 
     const partialsResult = await this.tradeGateway.listarParcialesEjecutados(input.trade_id);
     if (!partialsResult.ok) return partialsResult;
+
+    // BUILD 019 — la ventana previsualización → confirmación. Se comprueba
+    // ANTES de calcular y antes de tocar la RPC: si la evidencia ya no es la
+    // que el usuario vio, no hay nada que calcular todavía.
+    if (
+      input.evidencia_previsualizada !== undefined &&
+      input.evidencia_previsualizada !== partialsResult.value.length
+    ) {
+      return err({
+        code: "EVIDENCE_CHANGED",
+        esperados: input.evidencia_previsualizada,
+        actuales: partialsResult.value.length,
+      });
+    }
 
     const rFinalInput: RFinalInput = {
       riesgo_eur: trade.risk_amount,
@@ -141,6 +233,51 @@ export class OperationsEngineService {
   }
 
   /**
+   * BUILD 019 — previsualización del desenlace. **No escribe absolutamente
+   * nada**: ni Operación, ni capital, ni evento, ni auditoría.
+   *
+   * No hay aquí una segunda fórmula: hay una segunda invocación de la única que
+   * existe. Arma el mismo `RFinalInput` que `cerrarOperacion` y llama al mismo
+   * `calcularResultado`. Si esto y el cierre divergieran alguna vez, sería
+   * porque alguien duplicó la fórmula — y hay un test que lo vigila.
+   *
+   * Devuelve además cuántos parciales usó, que es lo que el llamante enviará de
+   * vuelta como `evidencia_previsualizada` al confirmar.
+   */
+  async previsualizarCierre(
+    input: CerrarOperacionInput,
+  ): Promise<Result<PrevisualizacionCierre, OperationsError>> {
+    const tradeResult = await this.tradeGateway.obtenerOperacion(input.trade_id);
+    if (!tradeResult.ok) return tradeResult;
+    const trade = tradeResult.value;
+
+    if (trade.status !== "open") {
+      return err({ code: "INVALID_STATE_TRANSITION", from: trade.status, to: "closed" });
+    }
+
+    const partialsResult = await this.tradeGateway.listarParcialesEjecutados(input.trade_id);
+    if (!partialsResult.ok) return partialsResult;
+
+    const rFinalInput: RFinalInput = {
+      riesgo_eur: trade.risk_amount,
+      rr_objetivo: trade.rr_objective,
+      parciales_ejecutados: partialsResult.value,
+      r_max: input.r_max,
+      be_trigger: trade.be_trigger,
+      ...(input.cierre_manual_rr ? { cierre_manual_rr: input.cierre_manual_rr } : {}),
+    };
+
+    const resultado = this.riskEngineService.calcularResultado(rFinalInput);
+    if (!resultado.ok) return err({ code: "RISK_ENGINE_ERROR", error: resultado.error });
+
+    return ok({
+      r_final: resultado.value.r_final.value,
+      pnl_amount: resultado.value.beneficio_real.value,
+      evidencia_leida: partialsResult.value.length,
+    });
+  }
+
+  /**
    * Único camino de edición auditada (SPEC-002 §5.6). Recalcula vía Risk
    * Engine solo si el cambio puede afectar R_final/pnl_amount, y solo si la
    * Operación ya está Cerrada (si está Abierta, R_final todavía no existe).
@@ -150,10 +287,16 @@ export class OperationsEngineService {
     if (!tradeResult.ok) return tradeResult;
     const trade = tradeResult.value;
 
+    // Borrar `cierre_manual_rr` cambia la rama de `R_cierre_resto` que aplica
+    // la fórmula congelada, luego cambia R_final. Omitirlo aquí persistiría un
+    // desenlace calculado sobre una premisa recién borrada — y el trigger de
+    // 018 lo aceptaría, porque sería internamente coherente. Es el fallo más
+    // sutil que puede introducir este build, y tiene test propio.
     const touchesRFinal =
       input.r_max !== undefined ||
       input.closure_reason !== undefined ||
-      input.cierre_manual_rr !== undefined;
+      input.cierre_manual_rr !== undefined ||
+      input.borrar_cierre_manual_rr === true;
 
     if (!touchesRFinal || trade.status !== "closed") {
       const aplicado = await this.tradeGateway.aplicarEdicion(buildEdicionParams(input));
@@ -165,7 +308,11 @@ export class OperationsEngineService {
     if (rMax === null) {
       return err({ code: "GATEWAY_ERROR", detail: "una Operación Cerrada sin r_max es un estado inconsistente" });
     }
-    const cierreManualRr = input.cierre_manual_rr ?? trade.cierre_manual_rr ?? undefined;
+    // Cuando se borra, el recálculo NO puede arrastrar el valor anterior de la
+    // Operación: la premisa acaba de desaparecer.
+    const cierreManualRr = input.borrar_cierre_manual_rr
+      ? undefined
+      : (input.cierre_manual_rr ?? trade.cierre_manual_rr ?? undefined);
 
     const partialsResult = await this.tradeGateway.listarParcialesEjecutados(input.trade_id);
     if (!partialsResult.ok) return partialsResult;

@@ -42,6 +42,13 @@ export interface AplicarEdicionParams {
   readonly pnlAmount?: Money;
   readonly notes?: string;
   readonly comments?: string;
+  /**
+   * BUILD 019 — borrado explícito de `cierre_manual_rr`. `undefined`/`false`
+   * conservan la semántica `Partial` de siempre; sólo `true` vacía el campo.
+   * Enviarlo junto a `cierreManualRr` es un error de dominio: no existe
+   * precedencia entre fijar y borrar, y la RPC lo rechaza.
+   */
+  readonly borrarCierreManualRr?: boolean;
 }
 
 /**

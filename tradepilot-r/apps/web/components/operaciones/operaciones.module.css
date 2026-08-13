@@ -1,0 +1,153 @@
+/* Estilos de las pantallas de Operaciones. Deliberadamente sobrios: BUILD 019
+   prioriza funcionalidad y claridad sobre estética (§23 del contrato). */
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badgeOpen { background: #0f3d2e; color: #6ee7b7; }
+.badgeClosed { background: #1e293b; color: #94a3b8; }
+.badgeCancelled { background: #3f1d1d; color: #fca5a5; }
+
+/* Rejilla de hechos: etiqueta arriba, valor abajo. Los valores de identidad
+   se renderizan como TEXTO, nunca como <input>: no son editables y la pantalla
+   no debe sugerir que lo sean. */
+.hechos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem 1.5rem;
+  margin: 0;
+}
+.hecho { display: flex; flex-direction: column; gap: 0.15rem; }
+.hechoLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+.hechoValor { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.hechoValorGrande { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.positivo { color: #6ee7b7; }
+.negativo { color: #fca5a5; }
+
+.seccion { margin-bottom: 1.5rem; }
+.seccionTitulo {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin: 0 0 0.75rem;
+}
+
+.tabla { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tabla th {
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #1e293b;
+  font-weight: 500;
+}
+.tabla td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #111827; }
+.tablaTotal td { font-weight: 600; border-bottom: none; }
+.filaPlanificada { color: #64748b; }
+
+.acciones { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+
+/* Previsualización: tiene que ser inequívocamente distinta de un hecho
+   persistido. Borde punteado y encabezado explícito. */
+.previsualizacion {
+  border: 1px dashed #475569;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: #0b1220;
+}
+.previsualizacionTitulo {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fbbf24;
+  margin: 0 0 0.75rem;
+}
+.previsualizacionNota { font-size: 0.8rem; color: #94a3b8; margin: 0.75rem 0 0; }
+
+.aviso {
+  border-left: 3px solid #fbbf24;
+  background: #1c1917;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+.error {
+  border-left: 3px solid #f87171;
+  background: #1f1416;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+.errorCodigo {
+  display: block;
+  margin-top: 0.4rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.campoError { font-size: 0.8rem; color: #fca5a5; margin-top: 0.25rem; }
+
+.campo { margin-bottom: 1rem; }
+.campoLabel { display: block; font-size: 0.85rem; margin-bottom: 0.3rem; color: #cbd5e1; }
+.select {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: inherit;
+  font-size: 0.95rem;
+}
+.checkboxFila { display: flex; align-items: flex-start; gap: 0.5rem; margin: 1rem 0; }
+.checkboxTexto { font-size: 0.9rem; }
+.checkboxAyuda { font-size: 0.8rem; color: #94a3b8; margin: 0.2rem 0 0; }
+
+.listaOperaciones { display: flex; flex-direction: column; gap: 0.75rem; }
+.filaOperacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.filaOperacion:hover { border-color: #334155; background: #0f172a; }
+.filaIzquierda { display: flex; flex-direction: column; gap: 0.2rem; }
+.filaSimbolo { font-weight: 600; }
+.filaMeta { font-size: 0.8rem; color: #94a3b8; }
+.filaDerecha { text-align: right; font-variant-numeric: tabular-nums; }
+
+.auditEntry {
+  border-left: 2px solid #334155;
+  padding: 0.5rem 0 0.5rem 0.85rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+.auditMeta { color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.3rem; }
+.auditDiff {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cbd5e1;
+  margin: 0;
+}

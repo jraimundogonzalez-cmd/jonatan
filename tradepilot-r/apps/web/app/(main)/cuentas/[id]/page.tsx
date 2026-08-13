@@ -41,9 +41,17 @@ export default async function CuentaDetallePage({ params }: { params: Promise<{ 
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: "560px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h1 style={{ fontSize: "1.25rem", margin: 0 }}>{account.name}</h1>
-        <Link href={`/cuentas/${account.id}/eventos/nuevo`}>
-          <Button variant="primary">Registrar evento</Button>
-        </Link>
+        {/* Una sola acción primaria por vista (SPEC-012): operar es la acción
+            principal de una Cuenta; registrar un movimiento de capital es
+            secundaria. */}
+        <div style={{ display: "flex", gap: "var(--space-3)" }}>
+          <Link href={`/cuentas/${account.id}/eventos/nuevo`}>
+            <Button variant="secondary">Registrar evento</Button>
+          </Link>
+          <Link href={`/cuentas/${account.id}/operaciones`}>
+            <Button variant="primary">Operaciones</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>

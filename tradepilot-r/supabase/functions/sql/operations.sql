@@ -17,6 +17,45 @@
 -- editar_operacion desde packages/operations-engine. Todo lo de aquí es
 -- capital-neutral y estructural: abrir, registrar parciales, cancelar sin
 -- reversión, y el catálogo de lectura (SPEC-002 §1.4 punto 1).
+--
+-- ============================================================
+-- BUILD 019 — FIRMAS SUPERADAS: por qué este bloque de `drop` existe
+--
+-- `create or replace function` **no reemplaza** una función cuya lista de
+-- parámetros ha cambiado: crea una **sobrecarga** y deja viva la anterior.
+-- Este archivo no tenía un solo `drop`, así que cada parámetro añadido por un
+-- build dejaba atrás su firma antigua en cualquier base de datos ya existente.
+--
+-- No se detectó antes porque las suites construyen la base **desde cero** en
+-- cada ejecución: la firma vieja nunca llega a existir allí. Reproducido a
+-- mano sobre una base con la firma pre-018 viva:
+--
+--   aplicar_cierre_operacion(uuid,timestamptz,text,text,text,text,text)
+--   aplicar_cierre_operacion(uuid,timestamptz,text,text,text,text,text,integer,uuid)
+--   → ERROR: function aplicar_cierre_operacion(...) is not unique
+--     HINT: Could not choose a best candidate function.
+--
+-- Es decir: el primer entorno real que actualizase este archivo vería fallar
+-- **todos** los cierres por PostgREST, sin haber cambiado nada más. La firma
+-- antigua no es código muerto: es una trampa activa.
+--
+-- Se eliminan aquí, al principio y en un solo sitio, para que la regla sea
+-- visible y no haya que buscarla junto a cada función. `if exists` las hace
+-- inocuas sobre una base nueva. Verificado en `15_outcome_correction.sql`,
+-- que aplica este archivo dos veces sobre una base que ya tenía la firma
+-- antigua y comprueba que queda exactamente una.
+--
+-- Regla desde ahora: todo build que cambie la lista de parámetros de una
+-- función de este archivo añade aquí el `drop` de la firma que sustituye.
+-- ============================================================
+
+-- BUILD 018 añadió p_expected_partials y p_idempotency_key.
+drop function if exists public.aplicar_cierre_operacion(
+  uuid, timestamptz, text, text, text, text, text);
+
+-- BUILD 019 añade p_borrar_cierre_manual_rr.
+drop function if exists public.aplicar_edicion_operacion(
+  uuid, text, text, timestamptz, text, text, text, text, text, text, text, text, text, text, text);
 
 -- ============================================================
 -- validate_planned_partials — validación compartida de la "forma" de un
@@ -881,7 +920,31 @@ create or replace function public.aplicar_edicion_operacion(
   p_pnl_amount text default null,
   p_notes text default null,
   p_comments text default null,
-  p_risk_amount text default null
+  p_risk_amount text default null,
+  -- BUILD 019 — el borrado explícito de `cierre_manual_rr`.
+  --
+  -- Toda esta función interpreta `null` como "no tocar" (semántica `Partial`),
+  -- y esa semántica se conserva intacta. El problema que resuelve este
+  -- parámetro es que, sin él, `cierre_manual_rr` **no se puede vaciar por
+  -- ninguna vía de dominio** — y dos de las cuatro reglas de BUILD 018
+  -- (`TAKE_PROFIT_FULL` y `BREAK_EVEN`) exigen precisamente que esté vacío.
+  --
+  -- Consecuencia demostrada antes de este build: una Operación cerrada como
+  -- `MANUAL_CLOSE` no podía corregirse **jamás** a esos dos motivos. Y
+  -- corregirla a `STOP_LOSS` sí salía adelante, pero dejaba el nivel de cierre
+  -- manual como residuo, bloqueando para siempre cualquier corrección
+  -- posterior. Un trader que se equivocaba de motivo al cerrar se quedaba sin
+  -- vía de rectificación, contra la invariante de que el desenlace **sí** es
+  -- corregible mientras la identidad no lo sea.
+  --
+  -- Es el cruce de dos decisiones correctas tomadas por separado: la semántica
+  -- `coalesce` de BUILD 004 (cuya limitación quedó documentada entonces como
+  -- "no pedido todavía") y las reglas de BUILD 018. Ninguna era un error.
+  -- Juntas producían una corrección imposible.
+  --
+  -- Va al final de la lista, nunca en medio: ver el hallazgo de BUILD 004 en
+  -- la cabecera de esta función sobre argumentos posicionales desplazados.
+  p_borrar_cierre_manual_rr boolean default false
 )
 returns public.trades
 language plpgsql
@@ -940,6 +1003,14 @@ begin
     raise exception 'OPERATIONS_ERROR:IMMUTABLE_IDENTITY_FACT:be_trigger:la identidad de una Operación se fija al nacer y no se corrige';
   end if;
 
+  -- BUILD 019 — fijar y borrar a la vez no significa nada, y por eso se
+  -- rechaza. Elegir una precedencia («gana el borrado», «gana el valor»)
+  -- sería inventar semántica que el corpus no define: rechazar no atribuye
+  -- significado a la combinación, declara que no lo tiene.
+  if p_borrar_cierre_manual_rr and p_cierre_manual_rr is not null then
+    raise exception 'OPERATIONS_ERROR:VALIDATION_ERROR:cierre_manual_rr:no se puede fijar y borrar en la misma corrección';
+  end if;
+
   v_old_pnl := coalesce(v_trade.pnl_amount, 0);
 
   update public.trades set
@@ -952,7 +1023,15 @@ begin
     be_trigger = coalesce(p_be_trigger, be_trigger),
     r_max = coalesce(p_r_max::numeric(8,4), r_max),
     closure_reason = coalesce(p_closure_reason, closure_reason),
-    cierre_manual_rr = coalesce(p_cierre_manual_rr::numeric(8,4), cierre_manual_rr),
+    -- La única línea del SET que no es un `coalesce` puro. El borrado es un
+    -- acto declarado; ninguna omisión lo produce. Si vaciar el campo dejara la
+    -- Operación incoherente —quedarse en MANUAL_CLOSE sin nivel, por ejemplo—,
+    -- lo rechaza el trigger de coherencia de BUILD 018: aquí no se duplica ni
+    -- una sola de sus cuatro reglas.
+    cierre_manual_rr = case
+      when p_borrar_cierre_manual_rr then null
+      else coalesce(p_cierre_manual_rr::numeric(8,4), cierre_manual_rr)
+    end,
     r_final = coalesce(p_r_final::numeric(8,4), r_final),
     pnl_amount = coalesce(p_pnl_amount::numeric(18,4), pnl_amount),
     notes = coalesce(p_notes, notes),
@@ -1026,6 +1105,30 @@ $$;
 -- (procesarOperacionEditada, BUILD 003) — Risk Engine documenta
 -- explícitamente que nunca lee `trades` directamente, es Operations Engine
 -- quien se la entrega (packages/risk-engine/src/domain/events.ts).
+-- BUILD 019 — lectura de la auditoría de una Operación.
+--
+-- `audit_log` lo escribe un trigger SECURITY DEFINER desde BUILD 004 y es de
+-- sólo lectura para `authenticated`. Faltaba la vía de lectura: sin ella, la
+-- interfaz no puede enseñar que una corrección quedó registrada, que es
+-- precisamente la prueba de que el desenlace se corrige **con evidencia** y no
+-- en silencio (D2 de BUILD 016B).
+--
+-- `security invoker`, como el resto del catálogo de lectura: RLS decide. El
+-- join contra `trades` no es redundante — `audit_log` guarda `entity_id` sin
+-- clave foránea, así que es lo que garantiza que sólo se lea la auditoría de
+-- Operaciones propias.
+create or replace function public.listar_auditoria_operacion(p_trade_id uuid)
+returns setof public.audit_log
+language sql
+security invoker
+set search_path = public
+as $$
+  select a.* from public.audit_log a
+  join public.trades t on t.id = a.entity_id
+  where a.entity_type = 'trade' and a.entity_id = p_trade_id and t.user_id = auth.uid()
+  order by a.id desc;
+$$;
+
 create or replace function public.listar_r_final_vigente_por_cuenta(p_account_id uuid)
 returns table(r_final numeric(8,4))
 language sql

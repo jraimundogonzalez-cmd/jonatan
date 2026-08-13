@@ -1,8 +1,12 @@
 "use client";
 
-// Sidebar — un único destino real en MVP 0.1 (Cuentas); el resto del
-// catálogo de navegación (Analytics, Journal...) no existe todavía (§4 de
-// mvp-0.1.md) y no se anticipa aquí con enlaces muertos.
+// Sidebar — sólo destinos que existen. El resto del catálogo de navegación
+// (Analytics, Journal...) sigue sin construirse y no se anticipa aquí con
+// enlaces muertos.
+//
+// BUILD 019 no añade una entrada «Operaciones» de primer nivel: una Operación
+// pertenece siempre a una Cuenta, y no hay ninguna vista de Operaciones que no
+// esté acotada a una. Se llega a ellas desde el Detalle de Cuenta.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./Sidebar.module.css";

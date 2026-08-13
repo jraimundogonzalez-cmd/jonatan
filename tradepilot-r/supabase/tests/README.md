@@ -40,7 +40,11 @@ psql -d tradepilot_test -f 11_management_intent_creation.sql
 psql -d tradepilot_test -f 12_management_intent_binding.sql
 psql -d tradepilot_test -f 13_operations_integrity.sql
 psql -d tradepilot_test -f 14_operations_outcome.sql
+psql -d tradepilot_test -v operations_sql=../functions/sql/operations.sql -f 15_outcome_correction.sql
 ```
+
+La suite 15 necesita `-v operations_sql=...` porque **reaplica el propio
+fichero de funciones** para demostrar que las firmas superadas se eliminan.
 
 **No uses `-q`**: varias comprobaciones se leen en la etiqueta del comando
 (`UPDATE 0`, `DELETE 0`), que el modo silencioso suprime.
@@ -141,19 +145,19 @@ de B fueron `3.013`, `3.007`, `3.332`, `3.215`, `3.171` y `3.036` segundos.
 
 Cada script imprime lo que espera junto al resultado real (`\echo`) — se lee
 a mano, no hay corredor de aserciones automatizado todavía (deuda aceptada,
-bajo impacto: son 343 comprobaciones en total, revisables en unos minutos).
+bajo impacto: son 372 comprobaciones en total, revisables en unos minutos).
 
-Los catorce scripts corren contra la **misma** base de datos, uno
+Los quince scripts corren contra la **misma** base de datos, uno
 detrás del otro — por eso usan usuarios de prueba con UUIDs distintos entre
 sí (`1111.../2222...` en el primero, `3333.../4444...` en el segundo,
 `7777.../8888...` en el tercero, `9999.../aaaa...` en el cuarto,
 `bbbb.../cccc...` en el quinto, `dddd.../eeee...` en el sexto, `ffff...` en el séptimo, `1a1a.../2b2b.../3c3c...` en el octavo, `4d4d.../5e5e...` en el noveno, `6f6f.../7a7a...` en el décimo,
 `8b8b.../9c9c...` en el undécimo, `ad17.../be17...` en el duodécimo, `c016.../d016...` en el decimotercero,
-`c018.../d018...` en el decimocuarto, `e018...` en la siembra de sus carreras): si compartieran
+`c018.../d018...` en el decimocuarto, `e018...` en la siembra de sus carreras, `a019...` en el decimoquinto): si compartieran
 UUID, dos scripts llamarían a `crear_empresa('Personal', true)` para el mismo
 usuario y el `\gset` de `crear_cuenta` del segundo fallaría con "more than one
 row returned by a subquery" al encontrar dos empresas "Personal" para el mismo
-`user_id`. Ninguno de los catorce scripts es idempotente por sí mismo (todos
+`user_id`. Ninguno de los quince scripts es idempotente por sí mismo (todos
 insertan datos sin `on conflict`), así que repetir uno solo requiere volver
 a crear la base de datos desde cero, no solo relanzar el script.
 
@@ -544,3 +548,42 @@ es nuevo y existe para que eso no deje muerto al trigger de 017: ataca
 `instrument_key` por UPDATE crudo como propietario, que es el hecho que 017
 protege y 016B no. Si 018 lo hubiera dejado inalcanzable, `[28b]` pasaría a no
 dar error y el fallo sería visible ahí.
+
+`15_outcome_correction.sql` (BUILD 019) valida que la corrección del desenlace
+deje de tener un callejón sin salida.
+
+`aplicar_edicion_operacion` interpreta `null` como "no tocar" (semántica
+`Partial`, BUILD 004), y dos de las cuatro reglas de BUILD 018
+—`TAKE_PROFIT_FULL` y `BREAK_EVEN`— exigen que `cierre_manual_rr` esté
+**vacío**. Cruzando ambas cosas, una Operación cerrada como `MANUAL_CLOSE` **no
+podía corregirse jamás** a esos dos motivos: no existía forma de vaciar el campo
+por ninguna vía de dominio. Y corregirla a `STOP_LOSS` sí salía adelante, pero
+dejaba el nivel de cierre manual como residuo que bloqueaba para siempre
+cualquier corrección posterior. Ninguna de las dos decisiones era un error;
+juntas producían una corrección imposible.
+
+`[2]`-`[4]` son el núcleo: sin la bandera el rechazo se mantiene —`null` sigue
+significando *no tocar*, y ésa es la prueba de que el borrado **nunca es
+accidental**—, y con ella la corrección pasa. `[6]` cubre la decisión SEÑAL-1:
+fijar y borrar a la vez no significa nada y se rechaza; elegir una precedencia
+habría sido inventar semántica que el corpus no define.
+
+`[8]` es el contrapeso: borrar dejando el motivo en `MANUAL_CLOSE` se rechaza
+igual. **019 no relaja ninguna de las cuatro reglas** — sólo hace alcanzable un
+estado que antes no lo era. Va deliberadamente después del cierre, porque el
+trigger de coherencia sólo se dispara sobre una Operación Cerrada: la primera
+versión de esta suite lo probaba sobre una Abierta y pasaba sin proteger nada.
+
+`[10]`-`[12]` recorren la cadena completa `MANUAL_CLOSE → STOP_LOSS →
+TAKE_PROFIT_FULL`, que antes era imposible por el residuo. `[14]`-`[16]`
+comprueban la compatibilidad: ninguna llamada existente cambia de comportamiento.
+
+`[20]`-`[27]` son un defecto latente que 019 corrige, ajeno a la corrección del
+desenlace: `create or replace function` **no reemplaza** una función cuya lista
+de parámetros ha cambiado — crea una sobrecarga y deja viva la anterior. Las
+suites nunca lo detectaron porque construyen la base **desde cero**, así que la
+firma vieja no llega a existir. `[20]` la resucita a mano, `[22]` demuestra que
+la llamada se vuelve ambigua (`is not unique`), y `[23]`-`[26]` que reaplicar
+`operations.sql` —dos veces— deja exactamente una firma. El primer entorno real
+que hubiera actualizado ese fichero habría visto fallar **todos** los cierres
+por PostgREST sin haber cambiado nada más.
