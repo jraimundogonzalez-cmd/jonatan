@@ -1,0 +1,27 @@
+<!--
+  Plantilla del correo de acceso.
+
+  NO ES DECORATIVA — sin ella no se puede entrar en TradePilot.
+
+  La aplicación implementa el patrón oficial de Supabase para Next.js con
+  renderizado en servidor: la ruta `/auth/confirm` recibe `token_hash` + `type`
+  y llama a `verifyOtp`. Ese patrón exige que el correo emita
+  `{{ .TokenHash }}`. La plantilla por defecto de Supabase envía en su lugar un
+  enlace a `/verify`, que redirige sin esos parámetros y deja al usuario en
+  `/auth/auth-code-error`.
+
+  Descubierto en BUILD 023 al entrar por primera vez con un usuario nuevo: el
+  usuario se creaba, el correo llegaba, el enlace no abría sesión y no había
+  ningún error visible en los registros.
+
+  Contra un proyecto de Supabase en la nube hay que configurar exactamente lo
+  mismo en Authentication > Email Templates.
+
+  `{{ .RedirectTo }}` y no `{{ .SiteURL }}`: lleva el origen desde el que se
+  pidió el acceso y conserva el `next`, así que la sesión se crea en el mismo
+  origen que la pidió y el usuario vuelve a donde estaba.
+-->
+<h2>Entrar en TradePilot</h2>
+<p>Pulsa para acceder. El enlace caduca en una hora y sólo puede usarse una vez.</p>
+<p><a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email">Entrar en TradePilot</a></p>
+<p>Si no has pedido este acceso, ignora este mensaje.</p>

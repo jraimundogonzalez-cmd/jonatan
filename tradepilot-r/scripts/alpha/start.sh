@@ -37,7 +37,7 @@ if [ "${TP_ALPHA_RESET:-0}" = "1" ] || ! su postgres -c "psql -lqt" | cut -d'|' 
   echo "▸ creando base $DB desde cero"
   # Los servicios anteriores mantienen conexiones abiertas: sin cerrarlas,
   # `dropdb` falla y la base queda a medio construir.
-  pkill -f "postgrest $RUN" 2>/dev/null; pkill -f "$RUN/auth serve" 2>/dev/null; sleep 1
+  pkill -f "postgrest $RUN" 2>/dev/null; pkill -f "$RUN/auth serve" 2>/dev/null; pkill -f "$AQUI/gateway.mjs" 2>/dev/null; sleep 1
   su postgres -c "psql -qd postgres -c \"select pg_terminate_backend(pid) from pg_stat_activity where datname='$DB'\"" >/dev/null 2>&1
   su postgres -c "dropdb --if-exists $DB" || exit 1
   su postgres -c "createdb $DB" || exit 1
@@ -58,13 +58,27 @@ if [ "${TP_ALPHA_RESET:-0}" = "1" ] || ! su postgres -c "psql -lqt" | cut -d'|' 
   su postgres -c "psql -q -d $DB -c \"grant select, insert, update, delete on all tables in schema public to authenticated; grant execute on all functions in schema public to authenticated, anon; grant usage, select on all sequences in schema public to authenticated;\"" >/dev/null
 fi
 
-pkill -f "postgrest $RUN" 2>/dev/null; pkill -f "$RUN/auth serve" 2>/dev/null; pkill -f smtp-capture 2>/dev/null; sleep 1
+# El gateway se quedaba vivo entre reinicios (BUILD 020 no lo mataba): seguía
+# ocupando :54321 con su versión antigua y los cambios no tenían efecto.
+pkill -f "postgrest $RUN" 2>/dev/null; pkill -f "$RUN/auth serve" 2>/dev/null
+pkill -f "$AQUI/smtp-capture.mjs" 2>/dev/null; pkill -f "$AQUI/gateway.mjs" 2>/dev/null; sleep 1
 
 echo "▸ SMTP de captura (:2500)"
 (node "$AQUI/smtp-capture.mjs" > "$RUN/smtp.log" 2>&1 &)
 
+echo "▸ Gateway Supabase (:54321) — enruta /rest/v1, /auth/v1 y las plantillas"
+# Antes que Auth a propósito: Auth descarga de aquí sus plantillas de correo.
+(node "$AQUI/gateway.mjs" > "$RUN/gateway.log" 2>&1 &)
+sleep 1
+
 echo "▸ Auth (:54322)"
-( set -a; . "$AQUI/auth.env"; set +a; cd "$RUN" && "$RUN/auth" serve > "$RUN/auth.log" 2>&1 & )
+# Las plantillas de correo las sirve el gateway por HTTP: GoTrue sólo sabe
+# descargarlas así (una URL `file://` se ignora sin avisar). Ver
+# `plantillas/magic-link.html` para el porqué de la plantilla en sí.
+( set -a; . "$AQUI/auth.env"
+  GOTRUE_MAILER_TEMPLATES_MAGIC_LINK="http://127.0.0.1:54321/plantillas/magic-link.html"
+  GOTRUE_MAILER_TEMPLATES_CONFIRMATION="http://127.0.0.1:54321/plantillas/confirmacion.html"
+  set +a; cd "$RUN" && "$RUN/auth" serve > "$RUN/auth.log" 2>&1 & )
 
 echo "▸ PostgREST (:54321)"
 cat > "$RUN/postgrest.conf" <<CONF
@@ -77,9 +91,6 @@ server-host = "127.0.0.1"
 db-pool = 10
 CONF
 ("$RUN/postgrest" "$RUN/postgrest.conf" > "$RUN/postgrest.log" 2>&1 &)
-
-echo "▸ Gateway Supabase (:54321) — enruta /rest/v1 y /auth/v1"
-(node "$AQUI/gateway.mjs" > "$RUN/gateway.log" 2>&1 &)
 
 sleep 6
 echo
