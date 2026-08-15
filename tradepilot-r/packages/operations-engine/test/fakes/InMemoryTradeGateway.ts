@@ -34,6 +34,9 @@ export class InMemoryTradeGateway implements TradeGateway {
   /** BUILD 019 — para observar que el borrado explícito llega al puerto. */
   lastEdicionParams: AplicarEdicionParams | null = null;
 
+  /** BUILD 022 — `previsualizarCorreccion` debe dejarlo en 0: no escribe nada. */
+  edicionCallCount = 0;
+
   seedTrade(trade: Trade): void {
     this.trades.set(trade.id, trade);
   }
@@ -60,6 +63,11 @@ export class InMemoryTradeGateway implements TradeGateway {
     return ok(this.vigenteSampleByAccount.get(accountId) ?? []);
   }
 
+  /** BUILD 022 — sólo para contar estados; la muestra vigente sigue aparte. */
+  async listarOperacionesPorCuenta(accountId: string): Promise<Result<readonly Trade[], OperationsError>> {
+    return ok([...this.trades.values()].filter((t) => t.account_id === accountId));
+  }
+
   async aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>> {
     this.lastCierreParams = params;
     this.cierreCallCount += 1;
@@ -80,6 +88,7 @@ export class InMemoryTradeGateway implements TradeGateway {
 
   async aplicarEdicion(params: AplicarEdicionParams): Promise<Result<Trade, OperationsError>> {
     this.lastEdicionParams = params;
+    this.edicionCallCount += 1;
     const trade = this.trades.get(params.tradeId);
     if (!trade) return err({ code: "TRADE_NOT_FOUND", trade_id: params.tradeId });
     // BUILD 016B/018: `risk_amount` y `rr_objective` son identidad y ya no

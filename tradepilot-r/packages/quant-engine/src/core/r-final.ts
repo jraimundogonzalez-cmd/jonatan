@@ -37,17 +37,28 @@ export function echoInput(input: RFinalInput): Record<string, unknown> {
   };
 }
 
-/** Valida la forma estructural del input — nunca calcula sobre datos inconsistentes en silencio (SPEC-001 §1.3). */
-function validate(input: RFinalInput): QuantError | null {
-  if (isNegative(input.riesgo_eur) || isZero(input.riesgo_eur)) {
-    return { code: "OUT_OF_RANGE", field: "riesgo_eur", detail: "riesgo_eur debe ser > 0" };
-  }
-
+/**
+ * Valida la evidencia registrada — la parte de `validate` que NO necesita
+ * conocer `r_max`.
+ *
+ * BUILD 022 la separa porque «R realizado» se pregunta con la Operación
+ * todavía **abierta**, y entonces `r_max` no existe: es un hecho del
+ * desenlace, no de la evidencia. Las comprobaciones sobre `r_max` se aplican
+ * sólo cuando hay un `r_max` que comprobar; el resto —secuencia consecutiva,
+ * `rr_level` estrictamente creciente, `pct_close > 0`, Σp_i ≤ 100— son
+ * invariantes de la evidencia y rigen siempre.
+ *
+ * Sigue habiendo un único sitio donde se validan los parciales.
+ */
+function validarParciales(
+  parciales: RFinalInput["parciales_ejecutados"],
+  rMax: RValue | null,
+): QuantError | null {
   let prevSequence = 0;
   let prevRrLevel = ZERO;
   let sumPct = ZERO;
 
-  for (const p of input.parciales_ejecutados) {
+  for (const p of parciales) {
     if (p.sequence !== prevSequence + 1) {
       return {
         code: "INVALID_PARTIAL_SEQUENCE",
@@ -61,10 +72,10 @@ function validate(input: RFinalInput): QuantError | null {
         detail: `rr_level debe ser estrictamente creciente (parcial ${p.sequence})`,
       };
     }
-    if (rrLevel.gt(toDecimal(input.r_max))) {
+    if (rMax !== null && rrLevel.gt(toDecimal(rMax))) {
       return {
         code: "INCONSISTENT_TRIGGER_STATE",
-        detail: `el parcial ${p.sequence} está marcado como ejecutado con rr_level=${toDisplayString(p.rr_level)} pero r_max=${toDisplayString(input.r_max)} nunca lo alcanzó`,
+        detail: `el parcial ${p.sequence} está marcado como ejecutado con rr_level=${toDisplayString(p.rr_level)} pero r_max=${toDisplayString(rMax)} nunca lo alcanzó`,
       };
     }
     const pct = toDecimal(p.pct_close);
@@ -79,6 +90,18 @@ function validate(input: RFinalInput): QuantError | null {
   if (sumPct.gt(HUNDRED)) {
     return { code: "PARTIALS_EXCEED_100_PCT", detail: `Σp_i = ${sumPct.toFixed(2)}% > 100%` };
   }
+
+  return null;
+}
+
+/** Valida la forma estructural del input — nunca calcula sobre datos inconsistentes en silencio (SPEC-001 §1.3). */
+function validate(input: RFinalInput): QuantError | null {
+  if (isNegative(input.riesgo_eur) || isZero(input.riesgo_eur)) {
+    return { code: "OUT_OF_RANGE", field: "riesgo_eur", detail: "riesgo_eur debe ser > 0" };
+  }
+
+  const errorParciales = validarParciales(input.parciales_ejecutados, input.r_max);
+  if (errorParciales) return errorParciales;
 
   if (input.cierre_manual_rr && toDecimal(input.cierre_manual_rr).gt(toDecimal(input.r_max))) {
     return {
@@ -121,16 +144,35 @@ interface RFinalDecomposition {
 function decomposeRFinal(input: RFinalInput): RFinalDecomposition {
   const k = input.parciales_ejecutados.length;
   const rCierreResto = calcularRCierreResto(input, k);
+  const { parciales, sumPct } = decomposeParciales(input.parciales_ejecutados);
 
+  const resto = HUNDRED.minus(sumPct).div(HUNDRED).times(rCierreResto);
+  return { parciales, resto };
+}
+
+/**
+ * BUILD 022 — la mitad de la descomposición que **no depende del desenlace**:
+ * Σ_{i=1..k} p_i·RR_i, término a término, más el porcentaje acumulado.
+ *
+ * Se separa de `decomposeRFinal` porque «R realizado» se pregunta con la
+ * Operación todavía abierta, cuando `r_max` y `R_cierre_resto` aún no
+ * existen. Sigue siendo **la misma expresión** (`pct_close/100 × rr_level`)
+ * escrita una sola vez en todo el proyecto: `decomposeRFinal` la consume y le
+ * añade el término del resto. Si esta línea cambiase, cambiarían a la vez
+ * `R_final`, el impacto por parcial y `R realizado` — que es exactamente la
+ * propiedad que SPEC-001 §Riesgos #1 exige.
+ */
+function decomposeParciales(parciales: RFinalInput["parciales_ejecutados"]): {
+  readonly parciales: ReadonlyArray<{ readonly sequence: 1 | 2 | 3 | 4 | 5; readonly contribution: Decimal }>;
+  readonly sumPct: Decimal;
+} {
   let sumPct = ZERO;
-  const parciales = input.parciales_ejecutados.map((p) => {
+  const items = parciales.map((p) => {
     const contribution = toDecimal(p.pct_close).div(HUNDRED).times(toDecimal(p.rr_level));
     sumPct = sumPct.plus(toDecimal(p.pct_close));
     return { sequence: p.sequence, contribution };
   });
-
-  const resto = HUNDRED.minus(sumPct).div(HUNDRED).times(rCierreResto);
-  return { parciales, resto };
+  return { parciales: items, sumPct };
 }
 
 /**
@@ -221,5 +263,99 @@ export function calcularImpactoPorParcial(
       r_final: toDisplayString(rFinal),
       parciales_ejecutados: input.parciales_ejecutados.length,
     }),
+  );
+}
+
+/**
+ * BUILD 022 — **R realizado** (decisión E-2 del usuario, término nuevo del
+ * vocabulario del producto).
+ *
+ * R realizado = R ya materializado por los parciales ejecutados mientras la
+ * Operación permanece **abierta**:
+ *
+ *   R_realizado = Σ_{i=1..k} p_i·RR_i
+ *
+ * Es la mitad de `R_final` que ya ocurrió. Lo que le falta para ser `R_final`
+ * es el término del resto —(100% − Σp_i)·R_cierre_resto—, que **todavía no
+ * está determinado** porque depende del desenlace.
+ *
+ * Lo que NO es, dicho explícitamente porque el usuario lo exigió al autorizar
+ * el concepto:
+ *  · no es `R_final` ni lo anticipa;
+ *  · no es `r_max` (aquel es la cota que el precio alcanzó, éste el resultado
+ *    que se llevó a caja);
+ *  · no es una estimación del desenlace restante: no supone nada sobre el
+ *    porcentaje que sigue abierto.
+ *
+ * `pct_cerrado`/`pct_abierto` viajan con él porque son la lectura honesta del
+ * número: +1.0000 R realizado significa una cosa muy distinta con el 25% aún
+ * abierto que con el 90%. Y `r_maximo_evidenciado` es el mayor `rr_level`
+ * ejecutado — la misma cota que el trigger `enforce_trade_invariants` exige
+ * (`max(rr_level) ≤ r_max`), calculada aquí para que la interfaz no tenga que
+ * hacer un `Math.max` por su cuenta.
+ */
+export interface EvidenciaParciales {
+  readonly r_realizado: RValue;
+  readonly pct_cerrado: Percent;
+  readonly pct_abierto: Percent;
+  /** `null` cuando todavía no hay ningún parcial ejecutado. */
+  readonly r_maximo_evidenciado: RValue | null;
+}
+
+export function calcularEvidenciaParciales(
+  parciales: RFinalInput["parciales_ejecutados"],
+): Result<QuantResult<EvidenciaParciales>, QuantError> {
+  // Sin `r_max`: la evidencia se valida contra sus propias invariantes, no
+  // contra un desenlace que puede no existir todavía.
+  const validationError = validarParciales(parciales, null);
+  if (validationError) return err(validationError);
+
+  const { parciales: items, sumPct } = decomposeParciales(parciales);
+  const rRealizado = items.reduce((acc, p) => acc.plus(p.contribution), ZERO);
+
+  const maximo = parciales.reduce<Decimal | null>((acc, p) => {
+    const nivel = toDecimal(p.rr_level);
+    return acc === null || nivel.gt(acc) ? nivel : acc;
+  }, null);
+
+  return ok(
+    wrapExact(
+      {
+        r_realizado: rvalueFromDecimal(rRealizado),
+        pct_cerrado: percentFromDecimal(sumPct),
+        pct_abierto: percentFromDecimal(HUNDRED.minus(sumPct)),
+        r_maximo_evidenciado: maximo === null ? null : rvalueFromDecimal(maximo),
+      },
+      "calcularEvidenciaParciales",
+      {
+        parciales_ejecutados: parciales.map((p) => ({
+          sequence: p.sequence,
+          rr_level: toDisplayString(p.rr_level),
+          pct_close: toDisplayString(p.pct_close),
+        })),
+      },
+    ),
+  );
+}
+
+/**
+ * BUILD 022 — **R agregado** de una muestra de resultados (decisión E-1).
+ *
+ * Es la suma de los `R_final` vigentes que el llamador aporta. No mantiene
+ * estado, no persiste nada y no es un acumulador: se recalcula entera cada
+ * vez desde la muestra, que es exactamente lo que el usuario decidió en E-1
+ * («el valor mostrado debe ser exactamente reproducible a partir de los
+ * resultados vigentes»).
+ *
+ * Deliberadamente NO devuelve la media: la media de una muestra de R es la
+ * esperanza (`calcularEsperanza`, Grupo C), y BUILD 022 excluye
+ * explícitamente la esperanza de esta entrega.
+ */
+export function calcularRAgregado(
+  muestra: readonly RValue[],
+): Result<QuantResult<RValue>, QuantError> {
+  const total = muestra.reduce((acc, r) => acc.plus(toDecimal(r)), ZERO);
+  return ok(
+    wrapExact(rvalueFromDecimal(total), "calcularRAgregado", { operaciones: muestra.length }),
   );
 }

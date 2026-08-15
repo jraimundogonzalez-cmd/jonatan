@@ -5,19 +5,27 @@ import { listarEmpresas, listarEventosCapital, obtenerCuenta } from "@/lib/api/f
 import { formatMoney } from "@/lib/format/money";
 import { formatAccountStatus } from "@/lib/format/status";
 import { createClient } from "@/lib/supabase/server";
-import { fundingErrorMessage } from "@/types/funding";
+import { fundingErrorMessage, detalleTecnico } from "@/types/funding";
+import { leerResumenDeCuenta } from "@/lib/operations/lecturas";
+import { ResultadoEnR } from "@/components/cuentas/ResultadoEnR";
 
 export default async function CuentaDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const [cuentaResult, empresasResult, eventosResult] = await Promise.all([
+  const [cuentaResult, empresasResult, eventosResult, resumenResult] = await Promise.all([
     obtenerCuenta(supabase, id),
     listarEmpresas(supabase),
     listarEventosCapital(supabase, id),
+    // BUILD 022 (decisión E-1) — el R agregado lo calcula el motor desde la
+    // muestra vigente de resultados. Esta pantalla no suma nada.
+    leerResumenDeCuenta(supabase, id),
   ]);
 
   if (!cuentaResult.ok) {
+    // BUG-021-2: el detalle técnico se registra, nunca se pinta.
+    const detalle = detalleTecnico(cuentaResult.error);
+    if (detalle) console.error("[cuentas/:id] error no catalogado:", detalle);
     return (
       <EmptyState
         title="No se encuentra esta Cuenta"
@@ -36,6 +44,7 @@ export default async function CuentaDetallePage({ params }: { params: Promise<{ 
     ? (empresasResult.value.find((propFirm) => propFirm.id === account.prop_firm_id)?.name ?? "Empresa")
     : "Empresa";
   const events = eventosResult.ok ? eventosResult.value : [];
+  const resumen = resumenResult.ok ? resumenResult.value : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: "560px" }}>
@@ -53,6 +62,10 @@ export default async function CuentaDetallePage({ params }: { params: Promise<{ 
           </Link>
         </div>
       </div>
+
+      {/* BUILD 022 — TradePilot mide en R. El resultado de la Cuenta va
+          primero y en R; el capital sigue estando, como apoyo. */}
+      {resumen ? <ResultadoEnR resumen={resumen} /> : null}
 
       <Card>
         <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)", margin: 0 }}>

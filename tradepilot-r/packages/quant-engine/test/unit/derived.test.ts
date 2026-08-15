@@ -10,7 +10,10 @@ import {
   money,
   percent,
   rvalue,
+  restar,
   toDisplayString,
+  toMoneyDisplayString,
+  ESCALA_PRESENTACION_MONETARIA,
   type ParcialEjecutado,
   type RFinalInput,
 } from "../../src/index.js";
@@ -72,5 +75,50 @@ describe("calcularImpactoPorParcial — conservación de Σp_i (SPEC-001 §6.2.4
 
     const sum = impacto.value.value.reduce((acc, item) => acc + Number(toDisplayString(item.contribution)), 0);
     expect(sum.toFixed(4)).toBe(toDisplayString(rFinalResult.value.value));
+  });
+});
+
+// ── BUILD 022 — presentación monetaria (decisión E-3) y resta del kernel ──
+describe("toMoneyDisplayString — 2 decimales para mostrar, 4 para calcular", () => {
+  it("recorta a 2 decimales sin tocar el dato", () => {
+    const m = money("100.9800");
+    expect(toMoneyDisplayString(m)).toBe("100.98");
+    // El valor sigue teniendo su escala completa: esto es presentación.
+    expect(toDisplayString(m)).toBe("100.9800");
+  });
+
+  it("redondea con el HALF_EVEN del kernel, no con toFixed de JS", () => {
+    expect(toMoneyDisplayString(money("176.7150"))).toBe("176.72");
+    expect(toMoneyDisplayString(money("176.7250"))).toBe("176.72");
+    expect(toMoneyDisplayString(money("0.0050"))).toBe("0.00");
+    expect(toMoneyDisplayString(money("0.0150"))).toBe("0.02");
+  });
+
+  it("conserva el signo", () => {
+    expect(toMoneyDisplayString(money("-102.0000"))).toBe("-102.00");
+    expect(toMoneyDisplayString(money("-0.0049"))).toBe("-0.00");
+  });
+
+  it("no usa coma flotante: 0.1 + 0.2 no aparece por ninguna parte", () => {
+    expect(toMoneyDisplayString(money("2360.4550"))).toBe("2360.46");
+    expect(toMoneyDisplayString(money("1.0050"))).toBe("1.00");
+  });
+
+  it("la escala de presentación es 2 y está declarada, no repartida", () => {
+    expect(ESCALA_PRESENTACION_MONETARIA).toBe(2);
+  });
+});
+
+describe("restar — diferencias sin salir del kernel", () => {
+  it("resta valores de R conservando el brand y la escala", () => {
+    expect(toDisplayString(restar(rvalue("1.7500"), rvalue("1.0000")))).toBe("0.7500");
+  });
+
+  it("una diferencia negativa se conserva negativa", () => {
+    expect(toDisplayString(restar(rvalue("-1.0000"), rvalue("2.0000")))).toBe("-3.0000");
+  });
+
+  it("resta importes con la precisión del dominio", () => {
+    expect(toDisplayString(restar(money("176.7150"), money("100.9800")))).toBe("75.7350");
   });
 });

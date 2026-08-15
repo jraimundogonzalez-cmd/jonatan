@@ -14,9 +14,16 @@ import styles from "./operaciones.module.css";
 export function ParcialesTable({
   planificados,
   ejecutados,
+  pctAbierto = null,
 }: {
   planificados: readonly ParcialPlanificadoRow[];
   ejecutados: readonly ParcialEjecutadoRow[];
+  /**
+   * BUILD 022 — el porcentaje que sigue abierto, calculado por Quant Engine.
+   * `null` cuando no aplica (Operación ya cerrada, o sin evidencia).
+   * Nunca se deriva aquí restando de 100.
+   */
+  pctAbierto?: string | null;
 }) {
   const ejecutadosPorSeq = new Map(ejecutados.map((e) => [e.sequence, e]));
   const secuencias = [
@@ -27,13 +34,17 @@ export function ParcialesTable({
     return <p className={styles.hechoLabel}>Sin parciales planificados ni ejecutados.</p>;
   }
 
+  // BUILD 021 observó dos columnas de guiones cuando la Operación no nació de
+  // un Plan de Gestión. Si no hay plan que comparar, no hay nada que mostrar.
+  const hayPlan = planificados.length > 0;
+
   return (
     <table className={styles.tabla}>
       <thead>
         <tr>
           <th>#</th>
-          <th>Plan RR</th>
-          <th>Plan %</th>
+          {hayPlan ? <th>Plan RR</th> : null}
+          {hayPlan ? <th>Plan %</th> : null}
           <th>Ejecutado RR</th>
           <th>Ejecutado %</th>
           <th>Hora</th>
@@ -46,8 +57,8 @@ export function ParcialesTable({
           return (
             <tr key={seq} className={eje ? undefined : styles.filaPlanificada}>
               <td>{seq}</td>
-              <td>{plan ? formatR(plan.rr_level) : "—"}</td>
-              <td>{plan ? `${plan.pct_close} %` : "—"}</td>
+              {hayPlan ? <td>{plan ? formatR(plan.rr_level) : "—"}</td> : null}
+              {hayPlan ? <td>{plan ? `${plan.pct_close} %` : "—"}</td> : null}
               <td>{eje ? formatR(eje.rr_level) : "—"}</td>
               <td>{eje ? `${eje.pct_close} %` : "—"}</td>
               <td>{eje ? formatFecha(eje.executed_at) : "—"}</td>
@@ -55,9 +66,16 @@ export function ParcialesTable({
           );
         })}
         <tr className={styles.tablaTotal}>
-          <td colSpan={4}>Cerrado por parciales</td>
+          <td colSpan={hayPlan ? 4 : 2}>Cerrado por parciales</td>
           <td colSpan={2}>{sumaPctCerrado(ejecutados)} %</td>
         </tr>
+        {/* BUILD 021: el trader tenía que calcular 100 − 75 de cabeza. */}
+        {pctAbierto !== null ? (
+          <tr className={styles.tablaTotal}>
+            <td colSpan={hayPlan ? 4 : 2}>Sigue abierto</td>
+            <td colSpan={2}>{pctAbierto} %</td>
+          </tr>
+        ) : null}
       </tbody>
     </table>
   );

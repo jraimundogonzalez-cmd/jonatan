@@ -69,6 +69,18 @@ export interface TradeGateway {
    */
   listarRFinalVigentePorCuenta(accountId: string): Promise<Result<readonly RValue[], OperationsError>>;
 
+  /**
+   * BUILD 022 — todas las Operaciones de una Cuenta, en cualquier estado.
+   *
+   * Existe **sólo para contar**: cuántas cerradas, cuántas abiertas, cuántas
+   * canceladas. El R agregado NO sale de aquí, sale de
+   * `listarRFinalVigentePorCuenta`, que es donde el dominio define qué
+   * resultados están vigentes. Dos lecturas, cada una con una sola verdad:
+   * derivar la muestra desde este listado significaría escribir por segunda
+   * vez el criterio de «resultado vigente».
+   */
+  listarOperacionesPorCuenta(accountId: string): Promise<Result<readonly Trade[], OperationsError>>;
+
   aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>>;
   aplicarEdicion(params: AplicarEdicionParams): Promise<Result<Trade, OperationsError>>;
 }

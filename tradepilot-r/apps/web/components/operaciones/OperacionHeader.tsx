@@ -48,8 +48,15 @@ export function OperacionHeader({ operacion, currency }: { operacion: OperacionR
           </Hecho>
           <Hecho label="Riesgo %">{formatPct(operacion.risk_pct)}</Hecho>
           <Hecho label="Objetivo RR">{formatR(operacion.rr_objective)}</Hecho>
-          <Hecho label="BE trigger">{operacion.be_trigger}</Hecho>
-          <Hecho label="R máximo alcanzado">{formatR(operacion.r_max)}</Hecho>
+          {/* BUILD 022 — `be_trigger` sale de la vista de producto. La auditoría
+              de BUILD 021 comprobó que no participa en ninguna rama de la
+              fórmula de R_final: viaja en `RFinalInput` y sólo aparece en el
+              `echoInput` del envelope explicativo. Sigue en la base, en el
+              contrato y en el motor; deja de ocupar sitio en la pantalla de
+              quien opera, donde sólo generaba preguntas. */}
+          {operacion.r_max !== null ? (
+            <Hecho label="R máximo alcanzado">{formatR(operacion.r_max)}</Hecho>
+          ) : null}
         </div>
       </div>
     </>

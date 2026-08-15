@@ -34,7 +34,7 @@ export default async function CorregirPage({ params }: { params: Promise<{ id: s
       </Card>
 
       <Card>
-        <CorreccionForm operacion={operacion} />
+        <CorreccionForm operacion={operacion} currency={currency} />
       </Card>
     </main>
   );

@@ -76,7 +76,13 @@ export interface AuditEntryRow {
   readonly entity_id: string;
   readonly action: string;
   readonly diff: { before?: Record<string, unknown>; after?: Record<string, unknown> } | null;
-  readonly created_at: string;
+  /**
+   * BUILD 022 (BUG-021-1) — la columna de `audit_log` se llama `occurred_at`,
+   * no `created_at`. Este tipo declaraba un campo que la fila no traía nunca,
+   * así que `new Date(undefined)` pintaba literalmente «Invalid Date» en cada
+   * entrada de la auditoría: el único sitio donde la fecha ES el dato.
+   */
+  readonly occurred_at: string;
 }
 
 /** Destino de Intención disponible para materializar (`listar_destinos_disponibles`). */
@@ -155,6 +161,13 @@ export function mensajeDeError(error: OperationsError): string {
     case "EVIDENCE_CHANGED":
       return `La evidencia cambió mientras decidías: había ${error.esperados} parcial(es) y ahora hay ${error.actuales}. El resultado se ha vuelto a calcular.`;
     case "INVALID_STATE_TRANSITION":
+      // BUILD 022 — la cancelación reutiliza este código: el trigger rechaza
+      // `open → cancelled` cuando ya hay parciales ejecutados. Se distingue
+      // por el estado DESTINO, que ya viaja tipado en el error; no se parsea
+      // ningún mensaje ni se replica la regla del trigger.
+      if (error.to === "cancelled") {
+        return "Esta Operación ya tiene parciales ejecutados, así que no puede cancelarse: hubo operativa real. Ciérrala con el desenlace que corresponda.";
+      }
       return `Esta Operación ya está en estado «${error.to === "closed" ? "cerrada" : error.to}». Recarga para ver su desenlace actual.`;
     case "OUTCOME_EXCEEDS_R_MAX":
       return `El resultado no puede superar el R máximo que declaras haber alcanzado. ${error.detail}`;

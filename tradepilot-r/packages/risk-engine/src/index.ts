@@ -6,7 +6,26 @@
 // calcularResultado espera sin depender directamente de @tradepilot/quant-engine
 // en su propio package.json — un único canal aprobado, no una excepción.
 export type { RFinalInput, Money, RValue, Percent, ParcialEjecutado, Result, QuantError } from "@tradepilot/quant-engine";
-export { BETrigger, ok, err, money, rvalue, percent, toDisplayString, compare, toDecimal } from "@tradepilot/quant-engine";
+// BUILD 022 — el kernel de presentación monetaria y las dos capacidades nuevas
+// viajan por la misma puerta que el resto de Quant Engine: Operations Engine y
+// la interfaz no importan `@tradepilot/quant-engine` por su cuenta.
+export type { EvidenciaParciales, ImpactoPorParcialItem } from "@tradepilot/quant-engine";
+export {
+  BETrigger,
+  ok,
+  err,
+  money,
+  rvalue,
+  percent,
+  toDisplayString,
+  toMoneyDisplayString,
+  ESCALA_PRESENTACION_MONETARIA,
+  restar,
+  compare,
+  toDecimal,
+  calcularEvidenciaParciales,
+  calcularRAgregado,
+} from "@tradepilot/quant-engine";
 
 export type { AccountRiskState, CapitalFacts, DrawdownConfig, RiskEngineError } from "./domain/types.js";
 export type {

@@ -110,6 +110,25 @@ export function fundingErrorMessage(error: FundingError): string {
     case "UNAUTHORIZED":
       return "No tienes acceso a este recurso.";
     case "UNKNOWN":
-      return `Ha ocurrido un error inesperado: ${error.detail}`;
+      // BUILD 022 (BUG-021-2) — aquí se filtraba el mensaje crudo de
+      // PostgreSQL a la pantalla. Con un identificador malformado en la URL,
+      // el trader leía literalmente:
+      //
+      //   invalid input syntax for type uuid: "a486d4aa-…"
+      //
+      // El Trust Layer (SPEC-014) no dice que el error se oculte: dice que un
+      // bug no se disfraza de error de usuario y que el detalle técnico queda
+      // REGISTRADO. Sigue estando entero en `detalleTecnico`, para el log; lo
+      // que ya no hace es dominar la pantalla. Es el mismo criterio que
+      // `types/operations.ts` aplica desde BUILD 019.
+      return "Ha ocurrido un error inesperado y la operación no se ha completado. El detalle técnico queda registrado.";
   }
+}
+
+/**
+ * El detalle técnico exacto, para registro y depuración — nunca para pintarlo.
+ * Devuelve `null` cuando el error ya es de usuario y no esconde nada más.
+ */
+export function detalleTecnico(error: FundingError): string | null {
+  return error.code === "UNKNOWN" ? error.detail : null;
 }

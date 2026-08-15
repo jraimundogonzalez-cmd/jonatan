@@ -11,7 +11,12 @@
 
 import { revalidatePath } from "next/cache";
 import { rvalue, toDisplayString } from "@tradepilot/risk-engine";
-import type { ClosureReason, OperationsError } from "@tradepilot/operations-engine";
+import type {
+  ClosureReason,
+  EditarOperacionInput,
+  ImpactoPorParcialItem,
+  OperationsError,
+} from "@tradepilot/operations-engine";
 
 /**
  * BUILD 020 — la previsualización cruza a un Client Component, y una Server
@@ -30,6 +35,45 @@ export interface PrevisualizacionUI {
   readonly r_final: string;
   readonly pnl_amount: string;
   readonly evidencia_leida: number;
+  /** BUILD 022 — de dónde sale ese R, término a término. Lo calcula el motor. */
+  readonly impacto: readonly ImpactoUI[];
+}
+
+/**
+ * Una línea del desglose de R. `sequence` identifica el parcial; `null` es el
+ * término del resto de la posición.
+ */
+export interface ImpactoUI {
+  readonly sequence: number | null;
+  readonly contribucion: string;
+}
+
+/**
+ * BUILD 022 — lo que una corrección va a cambiar, antes de confirmarla.
+ * Todo viene calculado del servicio; aquí sólo se convierte a cadenas.
+ */
+export interface PrevisualizacionCorreccionUI {
+  readonly r_actual: string | null;
+  readonly r_nuevo: string;
+  readonly delta_r: string;
+  readonly pnl_actual: string | null;
+  readonly pnl_nuevo: string;
+  readonly delta_pnl: string;
+  readonly motivo_actual: ClosureReason | null;
+  readonly motivo_nuevo: ClosureReason | null;
+  readonly r_max_actual: string | null;
+  readonly r_max_nuevo: string;
+  readonly cierre_manual_actual: string | null;
+  readonly cierre_manual_nuevo: string | null;
+  readonly impacto: readonly ImpactoUI[];
+  readonly evidencia_leida: number;
+}
+
+function aImpactoUI(items: readonly ImpactoPorParcialItem[]): ImpactoUI[] {
+  return items.map((i) => ({
+    sequence: i.kind === "parcial" ? i.sequence : null,
+    contribucion: toDisplayString(i.contribution),
+  }));
 }
 import { createClient } from "@/lib/supabase/server";
 import { crearOperationsEngine } from "@/lib/operations/engine";
@@ -151,6 +195,7 @@ export async function previsualizarCierreAction(
       r_final: toDisplayString(result.value.r_final),
       pnl_amount: toDisplayString(result.value.pnl_amount),
       evidencia_leida: result.value.evidencia_leida,
+      impacto: aImpactoUI(result.value.impacto_por_parcial),
     },
   };
 }
@@ -219,9 +264,54 @@ export interface CorreccionFormInput {
   readonly comments?: string;
 }
 
-export async function corregirDesenlaceAction(
+/**
+ * BUILD 022 — enseña lo que la corrección va a hacer ANTES de hacerlo.
+ *
+ * No escribe. Llama a `previsualizarCorreccion`, que arma el mismo
+ * `RFinalInput` que la corrección real y llama al mismo Quant Engine: lo que
+ * el usuario ve aquí es exactamente lo que se persistirá si confirma.
+ */
+export async function previsualizarCorreccionAction(
   input: CorreccionFormInput,
-): Promise<OperationsResult<OperacionRow>> {
+): Promise<OperationsResult<PrevisualizacionCorreccionUI>> {
+  const entrada = await construirEntradaDeCorreccion(input);
+  if (!entrada.ok) return entrada;
+
+  const supabase = await createClient();
+  const engine = crearOperationsEngine(supabase);
+  const result = await engine.previsualizarCorreccion(entrada.value);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  const v = result.value;
+  return {
+    ok: true,
+    value: {
+      r_actual: v.r_actual === null ? null : toDisplayString(v.r_actual),
+      r_nuevo: toDisplayString(v.r_nuevo),
+      delta_r: toDisplayString(v.delta_r),
+      pnl_actual: v.pnl_actual === null ? null : toDisplayString(v.pnl_actual),
+      pnl_nuevo: toDisplayString(v.pnl_nuevo),
+      delta_pnl: toDisplayString(v.delta_pnl),
+      motivo_actual: v.motivo_actual,
+      motivo_nuevo: v.motivo_nuevo,
+      r_max_actual: v.r_max_actual === null ? null : toDisplayString(v.r_max_actual),
+      r_max_nuevo: toDisplayString(v.r_max_nuevo),
+      cierre_manual_actual: v.cierre_manual_actual === null ? null : toDisplayString(v.cierre_manual_actual),
+      cierre_manual_nuevo: v.cierre_manual_nuevo === null ? null : toDisplayString(v.cierre_manual_nuevo),
+      impacto: aImpactoUI(v.impacto_por_parcial),
+      evidencia_leida: v.evidencia_leida,
+    },
+  };
+}
+
+/**
+ * Traduce el formulario a la entrada del servicio. **Un solo sitio** para las
+ * dos vías —previsualizar y guardar—: si divergieran, la previsualización
+ * mostraría una corrección distinta de la que se aplica.
+ */
+function construirEntradaDeCorreccion(
+  input: CorreccionFormInput,
+): OperationsResult<EditarOperacionInput> {
   let rMaxValue: ReturnType<typeof rvalue> | undefined;
   if (input.r_max !== undefined && input.r_max.trim() !== "") {
     const parsed = aRValueSeguro(input.r_max);
@@ -238,17 +328,29 @@ export async function corregirDesenlaceAction(
     cierreManual = parsed.value;
   }
 
+  return {
+    ok: true,
+    value: {
+      trade_id: input.trade_id,
+      ...(rMaxValue ? { r_max: rMaxValue } : {}),
+      ...(input.closure_reason ? { closure_reason: input.closure_reason } : {}),
+      ...(cierreManual ? { cierre_manual_rr: cierreManual } : {}),
+      ...(input.borrar_cierre_manual_rr ? { borrar_cierre_manual_rr: true } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.comments !== undefined ? { comments: input.comments } : {}),
+    },
+  };
+}
+
+export async function corregirDesenlaceAction(
+  input: CorreccionFormInput,
+): Promise<OperationsResult<OperacionRow>> {
+  const entrada = construirEntradaDeCorreccion(input);
+  if (!entrada.ok) return entrada;
+
   const supabase = await createClient();
   const engine = crearOperationsEngine(supabase);
-  const result = await engine.editarOperacion({
-    trade_id: input.trade_id,
-    ...(rMaxValue ? { r_max: rMaxValue } : {}),
-    ...(input.closure_reason ? { closure_reason: input.closure_reason } : {}),
-    ...(cierreManual ? { cierre_manual_rr: cierreManual } : {}),
-    ...(input.borrar_cierre_manual_rr ? { borrar_cierre_manual_rr: true } : {}),
-    ...(input.notes !== undefined ? { notes: input.notes } : {}),
-    ...(input.comments !== undefined ? { comments: input.comments } : {}),
-  });
+  const result = await engine.editarOperacion(entrada.value);
 
   if (!result.ok) return { ok: false, error: result.error };
   revalidarOperacion(input.account_id, input.trade_id);
@@ -258,4 +360,32 @@ export async function corregirDesenlaceAction(
   // Saltársela devolvía `number` donde el resto del código espera cadenas.
   const supabaseRead = await createClient();
   return obtenerOperacion(supabaseRead, input.trade_id);
+}
+
+/**
+ * BUILD 022 — anotar una Operación SIN pasar por «Corregir desenlace».
+ *
+ * BUILD 021 observó que el único acceso a las notas estaba dentro de la
+ * pantalla de corrección: para escribir «entré tarde, la señal ya se había
+ * ido» había que entrar por una puerta que se llama «corregir un error».
+ *
+ * No hay capacidad nueva: `editarOperacion` ya distingue una edición que toca
+ * el desenlace de una que no (`touchesRFinal`). Una edición sólo-notas no
+ * invoca a Risk Engine, no recalcula nada, no mueve capital — y queda
+ * auditada, como cualquier otro cambio. Funciona con la Operación abierta,
+ * cerrada o cancelada.
+ */
+export async function guardarNotasAction(
+  tradeId: string,
+  accountId: string,
+  notes: string,
+): Promise<OperationsResult<OperacionRow>> {
+  const supabase = await createClient();
+  const engine = crearOperationsEngine(supabase);
+  const result = await engine.editarOperacion({ trade_id: tradeId, notes });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidarOperacion(accountId, tradeId);
+  const supabaseRead = await createClient();
+  return obtenerOperacion(supabaseRead, tradeId);
 }

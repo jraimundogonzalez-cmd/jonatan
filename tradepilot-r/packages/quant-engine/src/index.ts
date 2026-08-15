@@ -10,6 +10,9 @@ export {
   seconds,
   toDecimal,
   toDisplayString,
+  toMoneyDisplayString,
+  ESCALA_PRESENTACION_MONETARIA,
+  restar,
   compare,
   isNegative,
   isPositive,
@@ -27,6 +30,10 @@ export {
   calcularBeneficioSacrificado,
   calcularPorcentajeConservado,
   calcularImpactoPorParcial,
+  // BUILD 022 — «R realizado» y «R agregado» (decisiones E-2 y E-1).
+  calcularEvidenciaParciales,
+  calcularRAgregado,
+  type EvidenciaParciales,
 } from "./core/r-final.js";
 
 // Grupo C+G — stats (agregados de cartera)

@@ -22,6 +22,10 @@ export {
   type EditarOperacionInput,
   type EdicionOperacionResultado,
   type PrevisualizacionCierre,
+  // BUILD 022
+  type PrevisualizacionCorreccion,
+  type ResumenDeCuenta,
 } from "./services/OperationsEngineService.js";
+export type { EvidenciaParciales, ImpactoPorParcialItem } from "@tradepilot/risk-engine";
 
 export { SupabaseTradeGateway, parseOperationsError } from "./adapters/SupabaseTradeGateway.js";

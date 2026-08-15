@@ -230,6 +230,12 @@ export class SupabaseTradeGateway implements TradeGateway {
     return ok(rows.map((row) => rvalue(texto(row.r_final))));
   }
 
+  async listarOperacionesPorCuenta(accountId: string): Promise<Result<readonly Trade[], OperationsError>> {
+    const { data, error } = await this.client.rpc("listar_operaciones", { p_account_id: accountId });
+    if (error) return err(parseOperationsError(error.message));
+    return ok(((data ?? []) as TradeRow[]).map(rowToTrade));
+  }
+
   async aplicarCierre(params: AplicarCierreParams): Promise<Result<Trade, OperationsError>> {
     const { data, error } = await this.client.rpc("aplicar_cierre_operacion", {
       p_trade_id: params.tradeId,

@@ -16,13 +16,19 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OperationsError } from "@tradepilot/operations-engine";
 import { Button, Input } from "@/components/ui";
-import { corregirDesenlaceAction } from "@/actions/operaciones";
-import { MOTIVOS_DE_CIERRE } from "@/lib/format/operacion";
+import {
+  corregirDesenlaceAction,
+  previsualizarCorreccionAction,
+  type PrevisualizacionCorreccionUI,
+} from "@/actions/operaciones";
+import { DesgloseR } from "./DesgloseR";
+import { formatMoney } from "@/lib/format/money";
+import { MOTIVOS_DE_CIERRE, formatMotivoCierre, formatR } from "@/lib/format/operacion";
 import { campoDeError, categoriaDeError, codigoDeError, mensajeDeError } from "@/types/operations";
 import type { ClosureReason, OperacionRow } from "@/types/operations";
 import styles from "./operaciones.module.css";
 
-export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
+export function CorreccionForm({ operacion, currency }: { operacion: OperacionRow; currency: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -32,23 +38,51 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
   const [borrarCierreManual, setBorrarCierreManual] = useState(false);
   const [notes, setNotes] = useState(operacion.notes ?? "");
   const [error, setError] = useState<OperationsError | null>(null);
+  // BUILD 022 — nada se guarda sin haberse enseñado antes.
+  const [preview, setPreview] = useState<PrevisualizacionCorreccionUI | null>(null);
 
   const tieneCierreManual = operacion.cierre_manual_rr !== null;
 
-  function guardar() {
+  function datosFormulario() {
+    return {
+      trade_id: operacion.id,
+      account_id: operacion.account_id,
+      closure_reason: closureReason,
+      r_max: rMax,
+      // Fijar y borrar a la vez no significa nada y el dominio lo rechaza:
+      // por eso, si se marca el borrado, no se envía valor.
+      ...(borrarCierreManual ? {} : { cierre_manual_rr: cierreManualRr }),
+      ...(borrarCierreManual ? { borrar_cierre_manual_rr: true } : {}),
+      notes,
+    };
+  }
+
+  /** Invalida la previsualización: cualquier cambio la deja obsoleta. */
+  function cambio<T>(set: (v: T) => void) {
+    return (v: T) => {
+      setPreview(null);
+      set(v);
+    };
+  }
+
+  function previsualizar() {
     setError(null);
     startTransition(async () => {
-      const result = await corregirDesenlaceAction({
-        trade_id: operacion.id,
-        account_id: operacion.account_id,
-        closure_reason: closureReason,
-        r_max: rMax,
-        // Fijar y borrar a la vez no significa nada y el dominio lo rechaza:
-        // por eso, si se marca el borrado, no se envía valor.
-        ...(borrarCierreManual ? {} : { cierre_manual_rr: cierreManualRr }),
-        ...(borrarCierreManual ? { borrar_cierre_manual_rr: true } : {}),
-        notes,
-      });
+      const result = await previsualizarCorreccionAction(datosFormulario());
+      if (result.ok) {
+        setPreview(result.value);
+        return;
+      }
+      setPreview(null);
+      setError(result.error);
+    });
+  }
+
+  function guardar() {
+    if (preview === null) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await corregirDesenlaceAction(datosFormulario());
 
       if (result.ok) {
         router.refresh();
@@ -72,7 +106,7 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
           id="correccion_motivo"
           className={styles.select}
           value={closureReason}
-          onChange={(e) => setClosureReason(e.target.value as ClosureReason)}
+          onChange={(e) => cambio(setClosureReason)(e.target.value as ClosureReason)}
         >
           {MOTIVOS_DE_CIERRE.map((m) => (
             <option key={m.value} value={m.value}>
@@ -91,7 +125,7 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
         numeric
         helperText="Puede corregirse a la baja o al alza, mientras el desenlace resultante siga siendo coherente."
         value={rMax}
-        onChange={(e) => setRMax(e.target.value)}
+        onChange={(e) => cambio(setRMax)(e.target.value)}
         error={campoConError === "r_max" && error ? mensajeDeError(error) : undefined}
       />
 
@@ -101,7 +135,7 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
             id="borrar_cierre_manual"
             type="checkbox"
             checked={borrarCierreManual}
-            onChange={(e) => setBorrarCierreManual(e.target.checked)}
+            onChange={(e) => cambio(setBorrarCierreManual)(e.target.checked)}
           />
           <div>
             <label htmlFor="borrar_cierre_manual" className={styles.checkboxTexto}>
@@ -122,7 +156,7 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
           label="Cierre manual en (R)"
           numeric
           value={cierreManualRr}
-          onChange={(e) => setCierreManualRr(e.target.value)}
+          onChange={(e) => cambio(setCierreManualRr)(e.target.value)}
           error={campoConError === "cierre_manual_rr" && error ? mensajeDeError(error) : undefined}
         />
       ) : null}
@@ -134,7 +168,7 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
           numeric
           helperText="Un cierre manual exige indicar a qué nivel de R se cerró el resto."
           value={cierreManualRr}
-          onChange={(e) => setCierreManualRr(e.target.value)}
+          onChange={(e) => cambio(setCierreManualRr)(e.target.value)}
           error={campoConError === "cierre_manual_rr" && error ? mensajeDeError(error) : undefined}
         />
       ) : null}
@@ -156,14 +190,76 @@ export function CorreccionForm({ operacion }: { operacion: OperacionRow }) {
         </div>
       ) : null}
 
+      {preview ? (
+        <div className={styles.previsualizacion}>
+          <h3 className={styles.previsualizacionTitulo}>Esta corrección va a cambiar tu resultado</h3>
+          <table className={styles.tabla}>
+            <thead>
+              <tr>
+                <th />
+                <th>Ahora</th>
+                <th>Después</th>
+                <th>Cambio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>R final</td>
+                <td>{preview.r_actual === null ? "—" : formatR(preview.r_actual)}</td>
+                <td className={styles.hechoValorGrande}>{formatR(preview.r_nuevo)}</td>
+                <td className={preview.delta_r.startsWith("-") ? styles.negativo : styles.positivo}>
+                  {formatR(preview.delta_r)}
+                </td>
+              </tr>
+              <tr>
+                <td>P&amp;L y capital</td>
+                <td>{preview.pnl_actual === null ? "—" : formatMoney(preview.pnl_actual, currency)}</td>
+                <td className={styles.hechoValorGrande}>{formatMoney(preview.pnl_nuevo, currency)}</td>
+                <td className={preview.delta_pnl.startsWith("-") ? styles.negativo : styles.positivo}>
+                  {formatMoney(preview.delta_pnl, currency)}
+                </td>
+              </tr>
+              {preview.motivo_actual !== preview.motivo_nuevo ? (
+                <tr>
+                  <td>Motivo de cierre</td>
+                  <td>{formatMotivoCierre(preview.motivo_actual)}</td>
+                  <td>{formatMotivoCierre(preview.motivo_nuevo)}</td>
+                  <td>—</td>
+                </tr>
+              ) : null}
+              {preview.cierre_manual_actual !== preview.cierre_manual_nuevo ? (
+                <tr>
+                  <td>Cierre manual en</td>
+                  <td>{preview.cierre_manual_actual === null ? "—" : formatR(preview.cierre_manual_actual)}</td>
+                  <td>{preview.cierre_manual_nuevo === null ? "—" : formatR(preview.cierre_manual_nuevo)}</td>
+                  <td>—</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+
+          <h4 className={styles.seccionTitulo}>De dónde sale el R nuevo</h4>
+          <DesgloseR impacto={preview.impacto} total={preview.r_nuevo} />
+
+          <p className={styles.previsualizacionNota}>
+            {preview.delta_pnl.startsWith("-") ? "El capital de la Cuenta bajará" : "El capital de la Cuenta subirá"}{" "}
+            {formatMoney(preview.delta_pnl, currency)} al confirmar. Esto todavía no ha ocurrido: al
+            confirmar, el resultado se vuelve a calcular en el servidor con el mismo motor.
+          </p>
+        </div>
+      ) : null}
+
       <div className={styles.acciones}>
-        <Button onClick={guardar} loading={pending}>
-          Guardar corrección
+        <Button variant="secondary" onClick={previsualizar} loading={pending && preview === null}>
+          Ver qué va a cambiar
+        </Button>
+        <Button onClick={guardar} disabled={preview === null} loading={pending && preview !== null}>
+          Confirmar corrección
         </Button>
       </div>
       <p className={styles.previsualizacionNota}>
-        El resultado se recalcula en el servidor con el motor de cálculo y la corrección queda registrada
-        en la auditoría de la Operación.
+        Corregir un desenlace reescribe tu R, tu P&amp;L y mueve el capital de la Cuenta. Por eso hay que
+        ver el impacto antes de confirmarlo. La corrección queda registrada en el historial de la Operación.
       </p>
     </div>
   );

@@ -149,6 +149,45 @@ export function toDisplayString<Brand extends FixedDecimalBrand>(
   return fd.raw.toFixed(fd.scale);
 }
 
+/**
+ * BUILD 022 (decisión E-3) — escala con la que el DINERO se muestra a una
+ * persona. No es la escala con la que se guarda ni con la que se calcula:
+ * `Money` sigue siendo `numeric(18,4)` en la base, en el kernel y en todas
+ * las fronteras. Esto sólo afecta a lo que se pinta.
+ *
+ * Vive aquí y no en la capa web por una razón concreta: redondear es una
+ * decisión aritmética, y este fichero es el único punto del monorepo que
+ * puede importar `decimal.js` (regla de ESLint, mvp-0.1.md §6.4). Hacerlo
+ * arriba habría significado un `toFixed(2)` de JavaScript —coma flotante—
+ * o una regla de redondeo artesanal repetida en cada pantalla. El modo es
+ * el mismo HALF_EVEN que gobierna todo el kernel: no se introduce una
+ * segunda convención de redondeo en el proyecto.
+ *
+ * `100.9800` → `"100.98"` · `176.7150` → `"176.72"` · `-102.0000` → `"-102.00"`
+ */
+export const ESCALA_PRESENTACION_MONETARIA = 2;
+
+export function toMoneyDisplayString(fd: FixedDecimal<"Money">): string {
+  return fd.raw.toFixed(ESCALA_PRESENTACION_MONETARIA, Decimal.ROUND_HALF_EVEN);
+}
+
+/**
+ * BUILD 022 — diferencia entre dos valores del mismo brand.
+ *
+ * Existe porque la previsualización de una corrección tiene que decir *cuánto*
+ * cambia R y *cuánto* cambia el capital, y esa resta no puede hacerse fuera
+ * de aquí sin importar `decimal.js` en otro fichero. No es aritmética nueva
+ * del dominio: `aplicar_edicion_operacion` ya calcula exactamente este delta
+ * en SQL (`v_new_pnl - v_old_pnl`) para asentar el evento de capital. Esto
+ * permite ENSEÑARLO antes, sobre los mismos números.
+ */
+export function restar<Brand extends FixedDecimalBrand>(
+  a: FixedDecimal<Brand>,
+  b: FixedDecimal<Brand>,
+): FixedDecimal<Brand> {
+  return wrap(a.brand, a.raw.minus(b.raw));
+}
+
 export function compare<Brand extends FixedDecimalBrand>(
   a: FixedDecimal<Brand>,
   b: FixedDecimal<Brand>,

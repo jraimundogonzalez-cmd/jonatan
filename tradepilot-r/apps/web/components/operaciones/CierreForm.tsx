@@ -18,6 +18,7 @@ import type { OperationsError } from "@tradepilot/operations-engine";
 import { Button, Input } from "@/components/ui";
 import { cerrarOperacionAction, previsualizarCierreAction, type PrevisualizacionUI } from "@/actions/operaciones";
 import { MOTIVOS_DE_CIERRE, formatR } from "@/lib/format/operacion";
+import { DesgloseR } from "./DesgloseR";
 import { formatMoney } from "@/lib/format/money";
 import { campoDeError, categoriaDeError, codigoDeError, mensajeDeError } from "@/types/operations";
 import type { ClosureReason } from "@/types/operations";
@@ -27,10 +28,20 @@ export function CierreForm({
   tradeId,
   accountId,
   currency,
+  hayParciales,
+  rMaximoEvidenciado,
 }: {
   tradeId: string;
   accountId: string;
   currency: string;
+  /**
+   * BUILD 022 — si la Operación tiene evidencia registrada. Determina si la
+   * previsualización es obligatoria (ver `exigePrevisualizacion`). Es un dato,
+   * no una regla de dominio: lo aporta la página desde la lista de parciales.
+   */
+  hayParciales: boolean;
+  /** El mayor R ejecutado, calculado por Quant Engine. Cota inferior de `r_max`. */
+  rMaximoEvidenciado: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -44,13 +55,40 @@ export function CierreForm({
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const [closureReason, setClosureReason] = useState<ClosureReason>("STOP_LOSS");
-  const [rMax, setRMax] = useState("");
+  // BUILD 021 observó la contradicción: un parcial ejecutado a +2R y el campo
+  // «R máximo alcanzado» vacío. El precio alcanzó al menos ese nivel — lo
+  // exige el propio trigger (`max(rr_level) ≤ r_max`). Se parte de ahí, y
+  // sigue siendo editable: r_max es una cota que declara el trader, y el
+  // máximo evidenciado es sólo su suelo demostrable.
+  const [rMax, setRMax] = useState(rMaximoEvidenciado ?? "");
   const [cierreManualRr, setCierreManualRr] = useState("");
   const [preview, setPreview] = useState<PrevisualizacionUI | null>(null);
   const [error, setError] = useState<OperationsError | null>(null);
   const [evidenciaCambio, setEvidenciaCambio] = useState<string | null>(null);
 
   const exigeCierreManual = closureReason === "MANUAL_CLOSE";
+
+  /**
+   * BUILD 022 — la previsualización deja de ser obligatoria SIEMPRE.
+   *
+   * BUILD 021 midió el caso frecuente —cerrar sin parciales— y encontró un
+   * clic que devolvía el dato que el trader acababa de teclear: sin evidencia
+   * y sin premisa manual, R sale directo de lo que él mismo declaró. Se exige
+   * cuando el resultado depende de algo que el trader NO está mirando:
+   *
+   *  · con parciales → el R final sale de una suma ponderada de evidencia;
+   *  · en cierre manual → el resultado depende de una premisa explícita.
+   *
+   * Esto es política de UX, no de dominio: no se replica aquí ninguna de las
+   * cuatro reglas de BUILD 018, no se decide ninguna legalidad y no se toca
+   * ninguna protección. `EVIDENCE_CHANGED`, `p_expected_partials` y la
+   * idempotencia siguen intactos — y cuando se confirma sin previsualizar,
+   * `evidencia_previsualizada` sencillamente no se envía: el testigo de
+   * BUILD 018, que compara la lectura fresca del servicio contra la de la
+   * RPC, sigue cubriendo la ventana real de escritura.
+   */
+  const exigePrevisualizacion = hayParciales || exigeCierreManual;
+  const puedeConfirmar = preview !== null || !exigePrevisualizacion;
 
   function datosFormulario() {
     return {
@@ -76,13 +114,13 @@ export function CierreForm({
   }
 
   function confirmar() {
-    if (preview === null) return;
+    if (!puedeConfirmar) return;
     setError(null);
     startTransition(async () => {
       const result = await cerrarOperacionAction({
         ...datosFormulario(),
         idempotency_key: idempotencyKey,
-        evidencia_previsualizada: preview.evidencia_leida,
+        ...(preview !== null ? { evidencia_previsualizada: preview.evidencia_leida } : {}),
       });
 
       if (result.ok) {
@@ -198,11 +236,15 @@ export function CierreForm({
               <span className={styles.hechoLabel}>P&amp;L estimado</span>
               <span className={styles.hechoValorGrande}>{formatMoney(preview.pnl_amount, currency)}</span>
             </div>
-            <div className={styles.hecho}>
-              <span className={styles.hechoLabel}>Parciales usados</span>
-              <span className={styles.hechoValor}>{preview.evidencia_leida}</span>
-            </div>
+            {/* BUILD 022 — «Parciales usados: N» era el testigo de evidencia
+                asomando por la interfaz. En su lugar, de dónde sale el R. */}
           </div>
+          {preview.impacto.length > 1 ? (
+            <>
+              <h4 className={styles.seccionTitulo}>De dónde sale ese R</h4>
+              <DesgloseR impacto={preview.impacto} total={preview.r_final} />
+            </>
+          ) : null}
           <p className={styles.previsualizacionNota}>
             Esto todavía no ha ocurrido. Al confirmar, el resultado se vuelve a calcular en el servidor
             sobre la evidencia vigente en ese instante — nunca se guarda esta estimación.
@@ -211,10 +253,14 @@ export function CierreForm({
       ) : null}
 
       <div className={styles.acciones}>
-        <Button variant="secondary" onClick={previsualizar} loading={pending && preview === null}>
+        <Button
+          variant={exigePrevisualizacion ? "primary" : "secondary"}
+          onClick={previsualizar}
+          loading={pending && preview === null}
+        >
           Previsualizar resultado
         </Button>
-        <Button onClick={confirmar} disabled={preview === null} loading={pending && preview !== null}>
+        <Button onClick={confirmar} disabled={!puedeConfirmar} loading={pending && preview !== null}>
           Confirmar cierre
         </Button>
       </div>

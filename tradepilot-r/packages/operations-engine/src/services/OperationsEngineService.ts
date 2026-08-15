@@ -9,13 +9,18 @@
  */
 import { randomUUID } from "node:crypto";
 import {
+  calcularEvidenciaParciales,
+  calcularRAgregado,
   err,
   ok,
+  restar,
   RiskEngineService,
   type Money,
   type ProcesarEventoResultado,
   type Result,
   type RFinalInput,
+  type EvidenciaParciales,
+  type ImpactoPorParcialItem,
   type RiskEngineError,
   type RValue,
 } from "@tradepilot/risk-engine";
@@ -58,6 +63,55 @@ export interface PrevisualizacionCierre {
   readonly pnl_amount: Money;
   /** Los parciales sobre los que se calculó. Viaja de vuelta como `evidencia_previsualizada`. */
   readonly evidencia_leida: number;
+  /**
+   * BUILD 022 — de dónde sale ese R, término a término.
+   *
+   * `calcularResultado` ya lo calculaba desde BUILD 003 y esta previsualización
+   * lo tiraba a la basura antes de llegar a la pantalla. El trader veía el
+   * resultado y no podía ver su origen. Ahora viaja: no es una segunda cuenta,
+   * es la que ya se hacía.
+   */
+  readonly impacto_por_parcial: readonly ImpactoPorParcialItem[];
+}
+
+/**
+ * BUILD 022 — lo que una corrección va a cambiar, ANTES de cambiarlo.
+ *
+ * BUILD 021 encontró la asimetría que esto corrige: cerrar exigía
+ * previsualizar, y corregir —que reescribe R, reescribe P&L y mueve capital
+ * real— no avisaba de nada. La protección estaba en el lado equivocado.
+ *
+ * No hay una segunda calculadora: se arma el mismo `RFinalInput` que arma
+ * `editarOperacion` (misma función privada, `construirEntradaDeCorreccion`) y
+ * se llama al mismo `calcularResultado`. Lo único que esta vía NO hace es
+ * escribir.
+ */
+export interface PrevisualizacionCorreccion {
+  readonly r_actual: RValue | null;
+  readonly r_nuevo: RValue;
+  readonly delta_r: RValue;
+  readonly pnl_actual: Money | null;
+  readonly pnl_nuevo: Money;
+  readonly delta_pnl: Money;
+  readonly motivo_actual: ClosureReason | null;
+  readonly motivo_nuevo: ClosureReason | null;
+  readonly r_max_actual: RValue | null;
+  readonly r_max_nuevo: RValue;
+  readonly cierre_manual_actual: RValue | null;
+  readonly cierre_manual_nuevo: RValue | null;
+  /** El desglose que explica el R nuevo: qué aporta cada parcial y qué el resto. */
+  readonly impacto_por_parcial: readonly ImpactoPorParcialItem[];
+  readonly evidencia_leida: number;
+}
+
+/** BUILD 022 — resultado agregado de una Cuenta, en R (decisión E-1). */
+export interface ResumenDeCuenta {
+  readonly r_agregado: RValue;
+  /** Cuántos resultados vigentes componen `r_agregado`. Debe coincidir con `cerradas`. */
+  readonly operaciones_en_la_muestra: number;
+  readonly cerradas: number;
+  readonly abiertas: number;
+  readonly canceladas: number;
 }
 
 export interface CierreOperacionResultado {
@@ -274,6 +328,153 @@ export class OperationsEngineService {
       r_final: resultado.value.r_final.value,
       pnl_amount: resultado.value.beneficio_real.value,
       evidencia_leida: partialsResult.value.length,
+      impacto_por_parcial: resultado.value.impacto_por_parcial.value,
+    });
+  }
+
+  /**
+   * BUILD 022 — el estado de la evidencia de una Operación: **R realizado**,
+   * porcentaje cerrado, porcentaje abierto y el mayor R evidenciado.
+   *
+   * Sólo lee. Existe para que la pantalla de una Operación abierta pueda
+   * enseñar lo que el sistema ya sabe sin calcular ni una sola cifra: la
+   * aritmética entera vive en `calcularEvidenciaParciales` (Quant Engine), que
+   * comparte descomposición con `R_final`.
+   */
+  async resumenEvidencia(tradeId: string): Promise<Result<EvidenciaParciales, OperationsError>> {
+    const partialsResult = await this.tradeGateway.listarParcialesEjecutados(tradeId);
+    if (!partialsResult.ok) return partialsResult;
+
+    const evidencia = calcularEvidenciaParciales(partialsResult.value);
+    if (!evidencia.ok) {
+      return err({ code: "RISK_ENGINE_ERROR", error: { code: "QUANT_ENGINE_ERROR", error: evidencia.error } });
+    }
+    return ok(evidencia.value.value);
+  }
+
+  /**
+   * BUILD 022 — el resultado agregado de una Cuenta (decisión E-1 del usuario).
+   *
+   * `r_agregado` sale de la **muestra vigente** —la misma que Operations
+   * entrega a Risk Engine para reconstruir su acumulador— y se recalcula
+   * entera cada vez. No se lee `account_risk_state`: ese acumulador es
+   * eventualmente consistente por diseño (BUILD 003, su actualización es
+   * asíncrona y reintentable), así que podría mostrar una cifra que no
+   * coincidiera con la lista de Operaciones de la pantalla de al lado. Aquí
+   * el número siempre es reproducible a mano desde los resultados vigentes.
+   *
+   * Los conteos salen de un listado aparte porque cuentan estados, no
+   * resultados: una Cancelada no tiene `r_final` y por definición no está en
+   * la muestra.
+   */
+  async resumenDeCuenta(accountId: string): Promise<Result<ResumenDeCuenta, OperationsError>> {
+    const muestraResult = await this.tradeGateway.listarRFinalVigentePorCuenta(accountId);
+    if (!muestraResult.ok) return muestraResult;
+
+    const operacionesResult = await this.tradeGateway.listarOperacionesPorCuenta(accountId);
+    if (!operacionesResult.ok) return operacionesResult;
+
+    const agregado = calcularRAgregado(muestraResult.value);
+    if (!agregado.ok) {
+      return err({ code: "RISK_ENGINE_ERROR", error: { code: "QUANT_ENGINE_ERROR", error: agregado.error } });
+    }
+
+    const operaciones = operacionesResult.value;
+    return ok({
+      r_agregado: agregado.value.value,
+      operaciones_en_la_muestra: muestraResult.value.length,
+      cerradas: operaciones.filter((t) => t.status === "closed").length,
+      abiertas: operaciones.filter((t) => t.status === "open").length,
+      canceladas: operaciones.filter((t) => t.status === "cancelled").length,
+    });
+  }
+
+  /**
+   * BUILD 022 — construye el `RFinalInput` de una corrección. **Un solo sitio**
+   * para las dos vías: `previsualizarCorreccion` (que enseña) y
+   * `editarOperacion` (que aplica). Si divergieran, la pantalla mentiría.
+   *
+   * `riesgo_eur` y `rr_objetivo` salen SIEMPRE de la Operación: son identidad y
+   * no pueden llegar como entrada de la corrección.
+   */
+  private async construirEntradaDeCorreccion(
+    trade: Trade,
+    input: EditarOperacionInput,
+  ): Promise<Result<{ rFinalInput: RFinalInput; parciales: number }, OperationsError>> {
+    const rMax = input.r_max ?? trade.r_max;
+    if (rMax === null) {
+      return err({ code: "GATEWAY_ERROR", detail: "una Operación Cerrada sin r_max es un estado inconsistente" });
+    }
+    // Cuando se borra, el recálculo NO puede arrastrar el valor anterior de la
+    // Operación: la premisa acaba de desaparecer.
+    const cierreManualRr = input.borrar_cierre_manual_rr
+      ? undefined
+      : (input.cierre_manual_rr ?? trade.cierre_manual_rr ?? undefined);
+
+    const partialsResult = await this.tradeGateway.listarParcialesEjecutados(trade.id);
+    if (!partialsResult.ok) return partialsResult;
+
+    return ok({
+      rFinalInput: {
+        riesgo_eur: trade.risk_amount,
+        rr_objetivo: trade.rr_objective,
+        parciales_ejecutados: partialsResult.value,
+        r_max: rMax,
+        be_trigger: trade.be_trigger,
+        ...(cierreManualRr ? { cierre_manual_rr: cierreManualRr } : {}),
+      },
+      parciales: partialsResult.value.length,
+    });
+  }
+
+  /**
+   * BUILD 022 — qué va a cambiar una corrección, antes de aplicarla.
+   *
+   * No escribe nada. Reutiliza `construirEntradaDeCorreccion` y
+   * `calcularResultado`, exactamente los mismos que usa `editarOperacion`: lo
+   * que se enseña aquí es, literalmente, lo que se va a persistir si el usuario
+   * confirma sin cambiar nada más.
+   *
+   * Las diferencias (`delta_r`, `delta_pnl`) se calculan con el kernel decimal,
+   * nunca con aritmética de JavaScript. `delta_pnl` es además el importe exacto
+   * que `aplicar_edicion_operacion` asentará como evento de capital.
+   */
+  async previsualizarCorreccion(
+    input: EditarOperacionInput,
+  ): Promise<Result<PrevisualizacionCorreccion, OperationsError>> {
+    const tradeResult = await this.tradeGateway.obtenerOperacion(input.trade_id);
+    if (!tradeResult.ok) return tradeResult;
+    const trade = tradeResult.value;
+
+    if (trade.status !== "closed") {
+      return err({ code: "INVALID_STATE_TRANSITION", from: trade.status, to: "closed" });
+    }
+
+    const entrada = await this.construirEntradaDeCorreccion(trade, input);
+    if (!entrada.ok) return entrada;
+
+    const resultado = this.riskEngineService.calcularResultado(entrada.value.rFinalInput);
+    if (!resultado.ok) return err({ code: "RISK_ENGINE_ERROR", error: resultado.error });
+
+    const rNuevo = resultado.value.r_final.value;
+    const pnlNuevo = resultado.value.beneficio_real.value;
+    const cierreManualNuevo = entrada.value.rFinalInput.cierre_manual_rr ?? null;
+
+    return ok({
+      r_actual: trade.r_final,
+      r_nuevo: rNuevo,
+      delta_r: trade.r_final === null ? rNuevo : restar(rNuevo, trade.r_final),
+      pnl_actual: trade.pnl_amount,
+      pnl_nuevo: pnlNuevo,
+      delta_pnl: trade.pnl_amount === null ? pnlNuevo : restar(pnlNuevo, trade.pnl_amount),
+      motivo_actual: trade.closure_reason,
+      motivo_nuevo: input.closure_reason ?? trade.closure_reason,
+      r_max_actual: trade.r_max,
+      r_max_nuevo: entrada.value.rFinalInput.r_max,
+      cierre_manual_actual: trade.cierre_manual_rr,
+      cierre_manual_nuevo: cierreManualNuevo,
+      impacto_por_parcial: resultado.value.impacto_por_parcial.value,
+      evidencia_leida: entrada.value.parciales,
     });
   }
 
@@ -304,29 +505,9 @@ export class OperationsEngineService {
       return ok({ trade: aplicado.value, accumulator_update: null });
     }
 
-    const rMax = input.r_max ?? trade.r_max;
-    if (rMax === null) {
-      return err({ code: "GATEWAY_ERROR", detail: "una Operación Cerrada sin r_max es un estado inconsistente" });
-    }
-    // Cuando se borra, el recálculo NO puede arrastrar el valor anterior de la
-    // Operación: la premisa acaba de desaparecer.
-    const cierreManualRr = input.borrar_cierre_manual_rr
-      ? undefined
-      : (input.cierre_manual_rr ?? trade.cierre_manual_rr ?? undefined);
-
-    const partialsResult = await this.tradeGateway.listarParcialesEjecutados(input.trade_id);
-    if (!partialsResult.ok) return partialsResult;
-
-    // `riesgo_eur` y `rr_objetivo` salen **siempre** de la Operación: son
-    // identidad y no pueden llegar como entrada de la corrección.
-    const rFinalInput: RFinalInput = {
-      riesgo_eur: trade.risk_amount,
-      rr_objetivo: trade.rr_objective,
-      parciales_ejecutados: partialsResult.value,
-      r_max: rMax,
-      be_trigger: trade.be_trigger,
-      ...(cierreManualRr ? { cierre_manual_rr: cierreManualRr } : {}),
-    };
+    const entrada = await this.construirEntradaDeCorreccion(trade, input);
+    if (!entrada.ok) return entrada;
+    const { rFinalInput } = entrada.value;
 
     const resultado = this.riskEngineService.calcularResultado(rFinalInput);
     if (!resultado.ok) return err({ code: "RISK_ENGINE_ERROR", error: resultado.error });

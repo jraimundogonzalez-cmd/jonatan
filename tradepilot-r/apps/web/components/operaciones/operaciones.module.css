@@ -151,3 +151,26 @@
   color: #cbd5e1;
   margin: 0;
 }
+
+/* BUILD 022 — jerarquía de acciones: cerrar es la acción principal de una
+   Operación abierta; cancelar es destructiva y no puede parecer equivalente. */
+.accionesPrincipales {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+/* BUILD 022 — historial de cambios en lenguaje de producto. */
+.tablaAudit { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.tablaAudit td { padding: 0.2rem 0.5rem 0.2rem 0; vertical-align: baseline; }
+.auditCampo { color: #94a3b8; white-space: nowrap; }
+.auditAntes { color: #94a3b8; text-decoration: line-through; }
+.auditFlecha { color: #64748b; }
+.auditDespues { font-weight: 600; }
+.auditTecnico { margin-top: 0.5rem; }
+.auditTecnico summary {
+  color: #64748b;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
