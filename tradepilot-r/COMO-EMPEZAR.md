@@ -4,6 +4,21 @@ Esta guía es para **usarlo**, no para desarrollarlo. No hace falta leer código
 
 ---
 
+## 0. Descargar el proyecto a tu ordenador
+
+Sólo la primera vez. Abre el terminal y escribe:
+
+```bash
+git clone https://github.com/jraimundogonzalez-cmd/jonatan.git
+cd jonatan
+git checkout claude/tradepilot-r-position-manager-mwbovl
+cd tradepilot-r
+```
+
+Esa última carpeta, `tradepilot-r`, es desde donde se ejecuta todo lo demás.
+
+---
+
 ## 1. Qué necesitas antes de empezar
 
 | Necesitas | Para qué | Cómo saber si lo tienes |
