@@ -21,6 +21,11 @@ if /i "%~1"=="--esperar-y-abrir" goto esperar_y_abrir
 
 cd /d "%~dp0"
 
+REM  La ruta de este archivo se guarda una sola vez y se reutiliza mas abajo
+REM  a traves de !TP_YO!. Asi el valor se sustituye al ejecutar y no al
+REM  parsear, que es lo unico que sobrevive a una ruta con parentesis.
+set "TP_YO=%~f0"
+
 echo.
 echo   ================================================
 echo      TradePilot - arrancando entorno local
@@ -28,18 +33,28 @@ echo   ================================================
 echo.
 
 REM --- 1. Estamos donde debemos? -------------------------------------
-if not exist "package.json" (
-  echo   [X] No encuentro "package.json" en esta carpeta:
-  echo       %CD%
-  echo.
-  echo   Este archivo tiene que estar dentro de la carpeta "tradepilot-r".
-  goto fin_error
-)
-if not exist "apps\web\package.json" (
-  echo   [X] Esta carpeta no parece la de TradePilot: falta "apps\web".
-  goto fin_error
-)
-echo   [OK] Carpeta del proyecto: %CD%
+REM  Aqui NO se usan bloques `( ... )` a proposito. cmd.exe lee el bloque
+REM  entero y sustituye los %VAR% al parsearlo, antes de ejecutar nada: si la
+REM  ruta del proyecto trae parentesis, como cuando Windows renombra a
+REM  "carpeta 1 entre parentesis" un ZIP descargado dos veces, esos parentesis
+REM  entran en la expresion ya parseada y la descuadran. Fallaba aunque el
+REM  `if` fuese falso y el cuerpo no llegase a ejecutarse nunca.
+REM
+REM  Y se usa !CD! en vez de %CD%: la expansion retardada sustituye el valor
+REM  DESPUES de parsear la linea, asi que ni parentesis ni espacios ni `&` de
+REM  la ruta se reinterpretan como sintaxis.
+if exist "package.json" goto hay_package_json
+echo   [X] No encuentro "package.json" en esta carpeta:
+echo       !CD!
+echo.
+echo   Este archivo tiene que estar dentro de la carpeta "tradepilot-r".
+goto fin_error
+:hay_package_json
+if exist "apps\web\package.json" goto hay_apps_web
+echo   [X] Esta carpeta no parece la de TradePilot: falta "apps\web".
+goto fin_error
+:hay_apps_web
+echo   [OK] Carpeta del proyecto: !CD!
 
 REM --- 2. El puerto 3000 tiene que estar libre -------------------------
 REM  Si ya hay algo escuchando ahi, Next.js NO falla: se pasa solo al 3001.
@@ -218,7 +233,12 @@ if errorlevel 11 goto fin_puerto_ocupado
 REM --- 12. Abrir el navegador cuando la web este lista ------------------
 REM  Puede abrir el 3000 sin dudar: si hemos llegado aqui, el puerto estaba
 REM  libre y Next.js se va a quedar en el.
-start "TradePilot - abriendo navegador" /min cmd /c ""%~f0" --esperar-y-abrir"
+REM  Ojo con las comillas: `cmd /c ""%~f0" args"` parece proteger la ruta pero
+REM  no lo hace. cmd empareja las comillas de izquierda a derecha, asi que las
+REM  dos primeras forman una cadena VACIA y la ruta queda FUERA de comillas;
+REM  con parentesis en la ruta, se leen como agrupacion y revienta. Aqui va un
+REM  solo par de comillas, y ademas con expansion retardada.
+start "TradePilot - abriendo navegador" /min "!TP_YO!" --esperar-y-abrir
 
 REM --- 13. Arrancar la web (esta ventana se queda aqui) -----------------
 echo.
