@@ -1,10 +1,9 @@
 @echo off
 setlocal
-chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
 REM ===================================================================
-REM  TradePilot — apagado limpio.
+REM  TradePilot - apagado limpio.
 REM
 REM  NO BORRA NADA. `supabase stop` conserva la base de datos: la proxima
 REM  vez que abras TradePilot, tus cuentas y operaciones seguiran ahi.
@@ -14,7 +13,7 @@ REM ===================================================================
 
 echo.
 echo   ================================================
-echo      TradePilot — apagando
+echo      TradePilot - apagando
 echo   ================================================
 echo.
 

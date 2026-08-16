@@ -1,9 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-chcp 65001 >nul 2>&1
 
 REM ===================================================================
-REM  TradePilot — lanzador de DESARROLLO para Windows.
+REM  TradePilot - lanzador de DESARROLLO para Windows.
 REM
 REM  QUE ES: una comodidad para probar TradePilot en tu ordenador. NO es el
 REM  producto. TradePilot es y sera una aplicacion WEB: el usuario final
@@ -24,7 +23,7 @@ cd /d "%~dp0"
 
 echo.
 echo   ================================================
-echo      TradePilot — arrancando entorno local
+echo      TradePilot - arrancando entorno local
 echo   ================================================
 echo.
 
@@ -47,9 +46,25 @@ REM  Si ya hay algo escuchando ahi, Next.js NO falla: se pasa solo al 3001.
 REM  Eso rompe el acceso por correo, porque el enlace se emite para el origen
 REM  desde el que entras y el navegador se abre en el 3000, que es otra copia.
 REM  Antes de tocar nada mas, se comprueba y se para con un mensaje claro.
-call :comprobar_puerto_3000
-if /i "!TP_P3000!"=="OCUPADO" goto fin_puerto_ocupado
+REM
+REM  Se pregunta a .NET por los puertos en escucha en vez de leer `netstat`:
+REM  su salida esta traducida (en un Windows en castellano pone ESCUCHANDO,
+REM  no LISTENING), asi que filtrarla por texto valdria en unos ordenadores y
+REM  en otros no. Los numeros de puerto no se traducen.
+REM
+REM  Codigos de salida: 10 libre, 11 ocupado, 12 no se ha podido mirar. Si
+REM  PowerShell no esta o falla, el lanzador sigue: esto es una ayuda, no un
+REM  permiso.
+where powershell >nul 2>&1
+if errorlevel 1 goto puerto1_sin_mirar
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { if ([System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() | Where-Object { $_.Port -eq 3000 }) { exit 11 } else { exit 10 } } catch { exit 12 }"
+if errorlevel 12 goto puerto1_sin_mirar
+if errorlevel 11 goto fin_puerto_ocupado
 echo   [OK] Puerto 3000 libre
+goto puerto1_hecho
+:puerto1_sin_mirar
+echo   [!] No he podido comprobar el puerto 3000. Sigo de todas formas.
+:puerto1_hecho
 
 REM --- 3. Node y npm --------------------------------------------------
 where node >nul 2>&1
@@ -193,8 +208,12 @@ REM  `supabase start`, que puede tardar minutos, y en ese rato te da tiempo a
 REM  abrir una segunda copia de este lanzador. Este es el instante que decide
 REM  de verdad en que puerto se queda Next.js, asi que es donde tiene que
 REM  estar la comprobacion definitiva.
-call :comprobar_puerto_3000
-if /i "!TP_P3000!"=="OCUPADO" goto fin_puerto_ocupado
+where powershell >nul 2>&1
+if errorlevel 1 goto puerto2_hecho
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { if ([System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() | Where-Object { $_.Port -eq 3000 }) { exit 11 } else { exit 10 } } catch { exit 12 }"
+if errorlevel 12 goto puerto2_hecho
+if errorlevel 11 goto fin_puerto_ocupado
+:puerto2_hecho
 
 REM --- 12. Abrir el navegador cuando la web este lista ------------------
 REM  Puede abrir el 3000 sin dudar: si hemos llegado aqui, el puerto estaba
@@ -237,23 +256,6 @@ for /l %%i in (1,1,90) do (
   timeout /t 2 >nul 2>&1
 )
 exit /b 0
-
-REM ===================================================================
-:comprobar_puerto_3000
-REM  Deja TP_P3000 en "OCUPADO" si algo escucha ya en el 3000, y vacio si no.
-REM
-REM  Se pregunta a .NET en lugar de leer `netstat`: la salida de netstat esta
-REM  traducida (en un Windows en castellano pone ESCUCHANDO, no LISTENING),
-REM  asi que filtrarla por texto funcionaria en unos ordenadores y en otros no.
-REM  GetActiveTcpListeners() devuelve numeros de puerto, que no se traducen.
-REM
-REM  Si PowerShell no estuviera disponible, TP_P3000 se queda vacio y el
-REM  lanzador sigue como antes: esta comprobacion es una ayuda, no un permiso.
-set "TP_P3000="
-where powershell >nul 2>&1
-if errorlevel 1 goto :eof
-for /f "delims=" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() ^| Where-Object { $_.Port -eq 3000 }; if ($e) { 'OCUPADO' } else { 'LIBRE' }" 2^>nul') do set "TP_P3000=%%P"
-goto :eof
 
 REM ===================================================================
 :fin_puerto_ocupado
