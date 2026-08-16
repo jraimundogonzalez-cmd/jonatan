@@ -1,0 +1,240 @@
+@echo off
+setlocal enabledelayedexpansion
+chcp 65001 >nul 2>&1
+
+REM ===================================================================
+REM  TradePilot — lanzador de DESARROLLO para Windows.
+REM
+REM  QUE ES: una comodidad para probar TradePilot en tu ordenador. NO es el
+REM  producto. TradePilot es y sera una aplicacion WEB: el usuario final
+REM  entrara por su navegador a una direccion de internet, sin instalar nada.
+REM
+REM  QUE HACE: comprueba que tienes lo necesario, levanta la base de datos
+REM  local (Supabase), escribe la configuracion que la web necesita, arranca
+REM  la web y te abre el navegador.
+REM
+REM  QUE NO HACE: no toca la base de datos de dominio, no crea usuarios, no
+REM  inventa claves, y nunca escribe ni muestra la clave de administracion
+REM  (service_role).
+REM ===================================================================
+
+if /i "%~1"=="--esperar-y-abrir" goto esperar_y_abrir
+
+cd /d "%~dp0"
+
+echo.
+echo   ================================================
+echo      TradePilot — arrancando entorno local
+echo   ================================================
+echo.
+
+REM --- 1. Estamos donde debemos? -------------------------------------
+if not exist "package.json" (
+  echo   [X] No encuentro "package.json" en esta carpeta:
+  echo       %CD%
+  echo.
+  echo   Este archivo tiene que estar dentro de la carpeta "tradepilot-r".
+  goto fin_error
+)
+if not exist "apps\web\package.json" (
+  echo   [X] Esta carpeta no parece la de TradePilot: falta "apps\web".
+  goto fin_error
+)
+echo   [OK] Carpeta del proyecto: %CD%
+
+REM --- 2. Node y npm --------------------------------------------------
+where node >nul 2>&1
+if errorlevel 1 (
+  echo   [X] No tienes Node.js instalado.
+  echo.
+  echo       Descargalo en https://nodejs.org  ^(el boton grande, version LTS^),
+  echo       instalalo, cierra esta ventana y vuelve a empezar.
+  goto fin_error
+)
+where npm >nul 2>&1
+if errorlevel 1 (
+  echo   [X] Node.js esta instalado pero no encuentro "npm".
+  echo       Reinstala Node.js desde https://nodejs.org
+  goto fin_error
+)
+for /f "delims=" %%V in ('node -v') do set "NODEV=%%V"
+echo   [OK] Node.js !NODEV!
+
+REM --- 3. Docker Desktop ----------------------------------------------
+where docker >nul 2>&1
+if errorlevel 1 (
+  echo   [X] No tienes Docker Desktop instalado.
+  echo.
+  echo       Descargalo en https://www.docker.com/products/docker-desktop
+  echo       Instalalo, ABRELO, y espera a que el icono de la ballena deje
+  echo       de moverse. Luego vuelve a ejecutar este archivo.
+  goto fin_error
+)
+docker info >nul 2>&1
+if errorlevel 1 (
+  echo   [X] Docker Desktop esta instalado pero NO esta en marcha.
+  echo.
+  echo       Abrelo desde el menu de Inicio y espera a que el icono de la
+  echo       ballena deje de moverse. Luego vuelve a ejecutar este archivo.
+  goto fin_error
+)
+echo   [OK] Docker Desktop en marcha
+
+REM --- 4. CLI de Supabase ---------------------------------------------
+where supabase >nul 2>&1
+if errorlevel 1 (
+  echo   [X] Falta la herramienta de Supabase.
+  echo.
+  echo       Instalala escribiendo esto en una ventana de PowerShell:
+  echo           npm install -g supabase
+  echo.
+  echo       Luego vuelve a ejecutar este archivo.
+  goto fin_error
+)
+echo   [OK] Herramienta de Supabase disponible
+
+REM --- 5. Dependencias del proyecto -----------------------------------
+if not exist "node_modules" (
+  echo.
+  echo   [ ] Primera vez: instalando las piezas del proyecto.
+  echo       Esto tarda unos minutos. Vera mucho texto pasar: es normal.
+  echo.
+  call npm install
+  if errorlevel 1 (
+    echo.
+    echo   [X] La instalacion de dependencias ha fallado.
+    echo       Copia el error de arriba y enviaselo a quien te ayuda.
+    goto fin_error
+  )
+) else (
+  echo   [OK] Dependencias ya instaladas
+)
+
+REM --- 6. Base de datos local -----------------------------------------
+echo.
+echo   [ ] Levantando la base de datos local...
+echo       La PRIMERA vez descarga bastante y puede tardar varios minutos.
+echo.
+call supabase start
+REM  `supabase start` devuelve error si ya estaba arrancada. No es un fallo:
+REM  lo que decide es si `supabase status` responde, que se comprueba ahora.
+
+REM --- 7. Leer la configuracion que genera Supabase --------------------
+REM  Se usa la salida "-o env", pensada para maquinas, en vez de leer la
+REM  tabla bonita: si el formato cambiase, esto falla de forma visible en
+REM  lugar de escribir una configuracion a medias.
+REM
+REM  Los nombres API_URL y ANON_KEY estan verificados contra el binario de la
+REM  CLI de Supabase (v2.113), no supuestos. SERVICE_ROLE_KEY tambien viaja en
+REM  esa salida y NO se lee: ninguna linea de abajo la asigna a nada.
+echo.
+echo   [ ] Leyendo la configuracion de la base de datos...
+set "TP_URL="
+set "TP_ANON="
+for /f "usebackq tokens=1,* delims==" %%A in (`supabase status -o env 2^>nul`) do (
+  if /i "%%A"=="API_URL"  set "TP_URL=%%~B"
+  if /i "%%A"=="ANON_KEY" set "TP_ANON=%%~B"
+)
+
+if not defined TP_URL (
+  echo   [X] No he podido leer la direccion de la base de datos.
+  goto fin_sin_datos
+)
+if not defined TP_ANON (
+  echo   [X] No he podido leer la clave publica de la base de datos.
+  goto fin_sin_datos
+)
+echo   [OK] Configuracion leida correctamente
+
+REM --- 8. Escribir apps\web\.env.local ---------------------------------
+REM  SOLO dos variables. La clave de administracion (service_role) NUNCA se
+REM  lee, ni se escribe, ni se muestra: no aparece en ninguna linea de este
+REM  archivo a proposito.
+> "apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_URL=!TP_URL!
+>>"apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_ANON_KEY=!TP_ANON!
+echo   [OK] Configuracion local escrita en apps\web\.env.local
+
+REM --- 9. Comprobar que la base tiene las funciones del dominio --------
+REM  Un `supabase start` sin las funciones deja una base que parece bien y
+REM  falla en la primera accion. Se comprueba llamando a una funcion real.
+where curl >nul 2>&1
+if not errorlevel 1 (
+  set "TP_RPC="
+  for /f "delims=" %%C in ('curl -s -o nul -w "%%{http_code}" -X POST "!TP_URL!/rest/v1/rpc/listar_empresas" -H "apikey: !TP_ANON!" -H "Content-Type: application/json" -d "{}" 2^>nul') do set "TP_RPC=%%C"
+  if "!TP_RPC!"=="404" (
+    echo.
+    echo   [!] La base de datos esta en marcha pero le faltan las funciones
+    echo       de TradePilot. Suele pasar si la base se creo antes de la
+    echo       ultima actualizacion del proyecto.
+    echo.
+    echo       Para arreglarlo, escribe en PowerShell, en esta carpeta:
+    echo           supabase db reset
+    echo.
+    echo       AVISO: eso borra los datos de prueba que tengas guardados.
+    echo.
+    pause
+  ) else (
+    echo   [OK] Funciones de TradePilot disponibles
+  )
+)
+
+REM --- 10. Abrir el navegador cuando la web este lista ------------------
+start "TradePilot - abriendo navegador" /min cmd /c ""%~f0" --esperar-y-abrir"
+
+REM --- 11. Arrancar la web (esta ventana se queda aqui) -----------------
+echo.
+echo   ================================================
+echo      TradePilot esta arrancando
+echo.
+echo      Se abrira solo en:  http://localhost:3000
+echo      Buzon de correo:    http://localhost:54324
+echo.
+echo      NO CIERRES ESTA VENTANA mientras uses TradePilot.
+echo      Para apagarlo: ejecuta Cerrar_TradePilot.bat
+echo   ================================================
+echo.
+
+call npm run dev --workspace=@tradepilot/web
+
+echo.
+echo   La aplicacion web se ha detenido.
+echo   La base de datos sigue en marcha: ejecuta Cerrar_TradePilot.bat
+echo   para apagarla del todo.
+echo.
+pause
+exit /b 0
+
+REM ===================================================================
+:esperar_y_abrir
+REM  Espera a que la web responda y entonces abre el navegador. La primera
+REM  vez tarda mas porque compila.
+for /l %%i in (1,1,90) do (
+  curl -s -o nul --max-time 2 http://localhost:3000 >nul 2>&1
+  if not errorlevel 1 (
+    start "" http://localhost:3000
+    exit /b 0
+  )
+  timeout /t 2 >nul 2>&1
+)
+exit /b 0
+
+REM ===================================================================
+:fin_sin_datos
+echo.
+echo       La base de datos no ha devuelto su configuracion en el formato
+echo       esperado. NO he escrito ninguna configuracion a medias.
+echo.
+echo       Prueba a apagarla y volver a arrancar:
+echo           supabase stop
+echo           supabase start
+echo.
+echo       Si sigue fallando, copia lo que aparece arriba y enviaselo a
+echo       quien te ayuda.
+goto fin_error
+
+:fin_error
+echo.
+echo   TradePilot no se ha arrancado.
+echo.
+pause
+exit /b 1

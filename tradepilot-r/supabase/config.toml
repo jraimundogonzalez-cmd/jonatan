@@ -67,8 +67,20 @@ schema_paths = []
 # If enabled, seeds the database after migrations during a db reset.
 enabled = true
 # Specifies an ordered list of seed files to load during db reset.
-# Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed.sql"]
+#
+# TRADEPILOT — esto NO son datos de prueba. Son las FUNCIONES del dominio
+# (`crear_cuenta`, `registrar_operacion`, `aplicar_cierre_operacion`...), que
+# viven en `functions/sql/` y no en `migrations/`. Sin esta lista, un
+# `supabase start` deja la base con sus tablas, sus triggers y su RLS pero
+# SIN NINGUNA función: la aplicación arranca y falla en la primera acción.
+#
+# El orden importa: `operations.sql` referencia objetos que crea `funding.sql`.
+# Los ficheros no se tocan; sólo se declara aquí que hay que aplicarlos.
+sql_paths = [
+  "./functions/sql/funding.sql",
+  "./functions/sql/operations.sql",
+  "./functions/sql/management_intent.sql"
+]
 
 [db.network_restrictions]
 # Enable management of network restrictions.
@@ -160,7 +172,12 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# TRADEPILOT — `localhost` y `127.0.0.1` son la misma máquina pero distinto
+# origen para el navegador y para Auth. El enlace del correo se construye con
+# el origen desde el que se pidió; si ese origen no está aquí, Auth lo rechaza
+# y el acceso falla en silencio. Se permiten los dos para que dé igual cuál
+# escriba el usuario en la barra de direcciones.
+additional_redirect_urls = ["http://localhost:3000", "http://127.0.0.1:3000"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.

@@ -33,7 +33,31 @@ Si te falta la CLI de Supabase: `npm install -g supabase`.
 
 ---
 
-## 2. Arrancar (dos comandos)
+## 2. Arrancar — la forma fácil (Windows)
+
+Dentro de la carpeta `tradepilot-r` hay dos archivos:
+
+| Archivo | Qué hace |
+|---|---|
+| **`Abrir_TradePilot.bat`** | Doble clic y arranca todo |
+| **`Cerrar_TradePilot.bat`** | Doble clic y lo apaga |
+
+**Doble clic en `Abrir_TradePilot.bat`.** Él solo comprueba que tienes lo necesario,
+levanta la base de datos, escribe la configuración, arranca la web y te abre el navegador
+en <http://localhost:3000>.
+
+La primera vez tarda varios minutos (descarga la base de datos). Las siguientes, menos de uno.
+
+**No cierres la ventana negra** mientras uses TradePilot: ahí es donde está funcionando.
+
+Si te falta algo (Node, Docker o la herramienta de Supabase), el propio lanzador te lo dice
+en castellano y se para. No rompe nada.
+
+Para apagar: doble clic en **`Cerrar_TradePilot.bat`**. Tus datos se conservan.
+
+---
+
+## 2-bis. Arrancar a mano (Mac, Linux, o si prefieres el terminal)
 
 Abre un terminal **en la carpeta `tradepilot-r`** del proyecto.
 
@@ -80,10 +104,11 @@ npm run dev --workspace=@tradepilot/web
 
 ### Abrir
 
-Navega a **<http://127.0.0.1:3000>** en Chrome, Firefox o Safari. Cualquiera vale.
+Navega a **<http://localhost:3000>** en Chrome, Firefox o Safari. Cualquiera vale.
 
-> Usa `127.0.0.1`, no `localhost`. Son la misma máquina pero el navegador las trata
-> como sitios distintos, y la sesión se guarda en una de las dos.
+> `localhost` y `127.0.0.1` son la misma máquina, pero el navegador las trata como sitios
+> distintos y la sesión se guarda en una de las dos. Los dos funcionan; **elige uno y
+> quédate con él**. El lanzador abre siempre `localhost`.
 
 ---
 
@@ -92,9 +117,9 @@ Navega a **<http://127.0.0.1:3000>** en Chrome, Firefox o Safari. Cualquiera val
 **No hay usuarios de prueba y no hay contraseñas.** Te creas la cuenta tú, con tu correo,
 la primera vez que entras. Es el mismo formulario para entrar y para darse de alta.
 
-1. En <http://127.0.0.1:3000> escribe tu correo (vale cualquiera, no sale de tu ordenador).
+1. En <http://localhost:3000> escribe tu correo (vale cualquiera, no sale de tu ordenador).
 2. Pulsa **Entrar**.
-3. Abre **<http://127.0.0.1:54324>** — es el buzón de correo local que trae Supabase.
+3. Abre **<http://localhost:54324>** — es el buzón de correo local que trae Supabase.
 4. Verás el mensaje «Entrar en TradePilot». Ábrelo y pulsa el enlace.
 5. Ya estás dentro.
 
@@ -153,11 +178,11 @@ capital.
 
 | Lo que ves | Qué pasa | Qué hacer |
 |---|---|---|
-| El navegador no carga nada | La aplicación no está arrancada | Mira el Terminal 2 |
+| El navegador no carga nada | La aplicación no está arrancada | Mira la ventana negra del lanzador |
 | «Failed to fetch» o pantallas vacías | La base de datos no está arrancada | Mira el Terminal 1, o `supabase start` |
 | El enlace del correo no te deja entrar | Falta la plantilla de correo | Comprueba que existe `supabase/templates/magic-link.html` y reinicia con `supabase stop && supabase start` |
-| No llega ningún correo | El buzón local | Ábrelo en <http://127.0.0.1:54324> |
-| Entras y no ves tus datos | Estás en `localhost` en vez de `127.0.0.1` | Usa siempre `127.0.0.1:3000` |
+| No llega ningún correo | El buzón local | Ábrelo en <http://localhost:54324> |
+| Entras y no ves tus datos | Has mezclado `localhost` y `127.0.0.1` | Quédate siempre con `localhost:3000` |
 
 ---
 
