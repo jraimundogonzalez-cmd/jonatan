@@ -42,7 +42,16 @@ if not exist "apps\web\package.json" (
 )
 echo   [OK] Carpeta del proyecto: %CD%
 
-REM --- 2. Node y npm --------------------------------------------------
+REM --- 2. El puerto 3000 tiene que estar libre -------------------------
+REM  Si ya hay algo escuchando ahi, Next.js NO falla: se pasa solo al 3001.
+REM  Eso rompe el acceso por correo, porque el enlace se emite para el origen
+REM  desde el que entras y el navegador se abre en el 3000, que es otra copia.
+REM  Antes de tocar nada mas, se comprueba y se para con un mensaje claro.
+call :comprobar_puerto_3000
+if /i "!TP_P3000!"=="OCUPADO" goto fin_puerto_ocupado
+echo   [OK] Puerto 3000 libre
+
+REM --- 3. Node y npm --------------------------------------------------
 where node >nul 2>&1
 if errorlevel 1 (
   echo   [X] No tienes Node.js instalado.
@@ -60,7 +69,7 @@ if errorlevel 1 (
 for /f "delims=" %%V in ('node -v') do set "NODEV=%%V"
 echo   [OK] Node.js !NODEV!
 
-REM --- 3. Docker Desktop ----------------------------------------------
+REM --- 4. Docker Desktop ----------------------------------------------
 where docker >nul 2>&1
 if errorlevel 1 (
   echo   [X] No tienes Docker Desktop instalado.
@@ -80,7 +89,7 @@ if errorlevel 1 (
 )
 echo   [OK] Docker Desktop en marcha
 
-REM --- 4. CLI de Supabase ---------------------------------------------
+REM --- 5. CLI de Supabase ---------------------------------------------
 where supabase >nul 2>&1
 if errorlevel 1 (
   echo   [X] Falta la herramienta de Supabase.
@@ -93,7 +102,7 @@ if errorlevel 1 (
 )
 echo   [OK] Herramienta de Supabase disponible
 
-REM --- 5. Dependencias del proyecto -----------------------------------
+REM --- 6. Dependencias del proyecto -----------------------------------
 if not exist "node_modules" (
   echo.
   echo   [ ] Primera vez: instalando las piezas del proyecto.
@@ -110,7 +119,7 @@ if not exist "node_modules" (
   echo   [OK] Dependencias ya instaladas
 )
 
-REM --- 6. Base de datos local -----------------------------------------
+REM --- 7. Base de datos local -----------------------------------------
 echo.
 echo   [ ] Levantando la base de datos local...
 echo       La PRIMERA vez descarga bastante y puede tardar varios minutos.
@@ -119,7 +128,7 @@ call supabase start
 REM  `supabase start` devuelve error si ya estaba arrancada. No es un fallo:
 REM  lo que decide es si `supabase status` responde, que se comprueba ahora.
 
-REM --- 7. Leer la configuracion que genera Supabase --------------------
+REM --- 8. Leer la configuracion que genera Supabase --------------------
 REM  Se usa la salida "-o env", pensada para maquinas, en vez de leer la
 REM  tabla bonita: si el formato cambiase, esto falla de forma visible en
 REM  lugar de escribir una configuracion a medias.
@@ -146,7 +155,7 @@ if not defined TP_ANON (
 )
 echo   [OK] Configuracion leida correctamente
 
-REM --- 8. Escribir apps\web\.env.local ---------------------------------
+REM --- 9. Escribir apps\web\.env.local ---------------------------------
 REM  SOLO dos variables. La clave de administracion (service_role) NUNCA se
 REM  lee, ni se escribe, ni se muestra: no aparece en ninguna linea de este
 REM  archivo a proposito.
@@ -154,7 +163,7 @@ REM  archivo a proposito.
 >>"apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_ANON_KEY=!TP_ANON!
 echo   [OK] Configuracion local escrita en apps\web\.env.local
 
-REM --- 9. Comprobar que la base tiene las funciones del dominio --------
+REM --- 10. Comprobar que la base tiene las funciones del dominio --------
 REM  Un `supabase start` sin las funciones deja una base que parece bien y
 REM  falla en la primera accion. Se comprueba llamando a una funcion real.
 where curl >nul 2>&1
@@ -178,10 +187,21 @@ if not errorlevel 1 (
   )
 )
 
-REM --- 10. Abrir el navegador cuando la web este lista ------------------
+REM --- 11. Ultima comprobacion del puerto ------------------------------
+REM  Se repite la comprobacion del paso 2 a proposito: entre medias ha pasado
+REM  `supabase start`, que puede tardar minutos, y en ese rato te da tiempo a
+REM  abrir una segunda copia de este lanzador. Este es el instante que decide
+REM  de verdad en que puerto se queda Next.js, asi que es donde tiene que
+REM  estar la comprobacion definitiva.
+call :comprobar_puerto_3000
+if /i "!TP_P3000!"=="OCUPADO" goto fin_puerto_ocupado
+
+REM --- 12. Abrir el navegador cuando la web este lista ------------------
+REM  Puede abrir el 3000 sin dudar: si hemos llegado aqui, el puerto estaba
+REM  libre y Next.js se va a quedar en el.
 start "TradePilot - abriendo navegador" /min cmd /c ""%~f0" --esperar-y-abrir"
 
-REM --- 11. Arrancar la web (esta ventana se queda aqui) -----------------
+REM --- 13. Arrancar la web (esta ventana se queda aqui) -----------------
 echo.
 echo   ================================================
 echo      TradePilot esta arrancando
@@ -217,6 +237,40 @@ for /l %%i in (1,1,90) do (
   timeout /t 2 >nul 2>&1
 )
 exit /b 0
+
+REM ===================================================================
+:comprobar_puerto_3000
+REM  Deja TP_P3000 en "OCUPADO" si algo escucha ya en el 3000, y vacio si no.
+REM
+REM  Se pregunta a .NET en lugar de leer `netstat`: la salida de netstat esta
+REM  traducida (en un Windows en castellano pone ESCUCHANDO, no LISTENING),
+REM  asi que filtrarla por texto funcionaria en unos ordenadores y en otros no.
+REM  GetActiveTcpListeners() devuelve numeros de puerto, que no se traducen.
+REM
+REM  Si PowerShell no estuviera disponible, TP_P3000 se queda vacio y el
+REM  lanzador sigue como antes: esta comprobacion es una ayuda, no un permiso.
+set "TP_P3000="
+where powershell >nul 2>&1
+if errorlevel 1 goto :eof
+for /f "delims=" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() ^| Where-Object { $_.Port -eq 3000 }; if ($e) { 'OCUPADO' } else { 'LIBRE' }" 2^>nul') do set "TP_P3000=%%P"
+goto :eof
+
+REM ===================================================================
+:fin_puerto_ocupado
+echo.
+echo   [X] El puerto 3000 ya esta ocupado.
+echo.
+echo       Casi siempre significa que TradePilot ya esta abierto en otra
+echo       ventana. Si arrancase igualmente, se iria al puerto 3001 y el
+echo       enlace de acceso que llega por correo dejaria de funcionar.
+echo.
+echo       Que hacer:
+echo         1. Mira si ya tienes TradePilot abierto en http://localhost:3000
+echo            Si es asi, usalo y cierra esta ventana.
+echo         2. Si no lo usas, ejecuta Cerrar_TradePilot.bat y vuelve a
+echo            intentarlo.
+echo.
+goto fin_error
 
 REM ===================================================================
 :fin_sin_datos

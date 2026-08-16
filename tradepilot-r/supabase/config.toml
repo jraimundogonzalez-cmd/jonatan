@@ -168,7 +168,25 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# TRADEPILOT — aquí lo que decide es el NOMBRE, no el puerto. Auth acepta la
+# URL de vuelta con cualquier puerto siempre que el nombre de host coincida con
+# el de esta línea (`IsRedirectURLValid`: `base.Hostname() == refurl.Hostname()
+# && ... || isLocalhost(...)`), y si no la acepta NO avisa: la sustituye por
+# ésta en silencio (`GetReferrer` → `return config.SiteURL`). El correo salía
+# entonces con un enlace sin `?`, que el navegador lee entero como nombre de
+# servidor y no abre nada.
+#
+# Con `127.0.0.1` aquí, entrar por `localhost` no funcionaba en NINGÚN puerto,
+# tampoco en el 3000: las entradas de `additional_redirect_urls` de abajo son
+# orígenes sin ruta y se comparan contra la URL completa, que sí la lleva
+# (`/auth/confirm?next=...`), así que nunca casaban. Lo único que funcionaba
+# era `127.0.0.1`. Con `localhost` aquí valen los dos nombres y cualquier
+# puerto local — comprobado contra el binario de Auth, no supuesto.
+#
+# Es una relajación sólo del entorno local —GoTrue la contempla para puertos
+# variables, RFC 8252 §7.3—; en un proyecto en la nube este valor es el dominio
+# real y nada de esto aplica.
+site_url = "http://localhost:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
