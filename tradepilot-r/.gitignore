@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.next/
+next-env.d.ts
+
+# Salida de error de `supabase status` que captura el lanzador de Windows
+# para poder ensenarla. Es diagnostico efimero, nunca contenido del proyecto.
+supabase-status.err
