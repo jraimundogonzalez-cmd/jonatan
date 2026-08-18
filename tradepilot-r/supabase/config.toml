@@ -97,7 +97,14 @@ allowed_cidrs_v6 = ["::/0"]
 # enabled = true
 
 [realtime]
-enabled = true
+# TRADEPILOT — desactivado por la misma razón, y con la misma evidencia:
+# el proyecto no abre ni una suscripción (`.channel(` / `.subscribe(` no
+# aparecen en ninguna parte del código) y ninguna migración publica una tabla
+# en `supabase_realtime`. Un contenedor que nadie usa solo puede aportar
+# fallos de arranque como el de `supabase_realtime_...` que se observó.
+#
+# Reactivarlo es una línea, el día que exista una pantalla que lo necesite.
+enabled = false
 # Bind realtime via either IPv4 or IPv6. (default: IPv4)
 # ip_version = "IPv6"
 # The maximum length in bytes of HTTP request headers. (default: 4096)
@@ -433,7 +440,21 @@ deno_version = 2
 # secret_key = "env(SECRET_VALUE)"
 
 [analytics]
-enabled = true
+# TRADEPILOT — desactivado a proposito, y es la corrección permanente al
+# arranque que exigía `--ignore-health-check`.
+#
+# Analytics (Logflare + su contenedor Vector) necesita en Windows que el daemon
+# de Docker esté publicado en tcp://localhost:2375. Sin eso, sus contenedores
+# no superan la comprobación de salud y `supabase start` falla — de ahí el
+# aviso «Analytics on Windows requires Docker daemon exposed on
+# tcp://localhost:2375» y la tentación de silenciarlo con el flag.
+#
+# Se desactiva en lugar de ignorar la comprobación porque TradePilot no
+# consume analítica de Supabase por ningún camino: no hay lectura de logs ni
+# dependencia de Logflare en el código. Apagar un servicio que no se usa
+# elimina el fallo; el flag solo lo esconde y deja el resto de comprobaciones
+# de salud desarmadas, incluidas las que sí importan.
+enabled = false
 port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"

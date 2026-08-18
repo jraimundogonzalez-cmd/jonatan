@@ -170,7 +170,13 @@ echo.
 echo   [ ] Leyendo la configuracion de la base de datos...
 set "TP_URL="
 set "TP_ANON="
-for /f "usebackq tokens=1,* delims==" %%A in (`supabase status -o env 2^>nul`) do (
+REM  El error de Supabase se GUARDA, no se tira. Cuando este comando falla no
+REM  escribe nada por la salida normal: el motivo entero viaja por la salida de
+REM  error. Mandarla a nul dejaba al lanzador con cero lineas que leer y un
+REM  mensaje generico que no distinguia "falta un contenedor" de "la carpeta es
+REM  la equivocada". Ahora se ensena tal cual.
+del "supabase-status.err" >nul 2>&1
+for /f "usebackq tokens=1,* delims==" %%A in (`supabase status -o env 2^>supabase-status.err`) do (
   if /i "%%A"=="API_URL"  set "TP_URL=%%~B"
   if /i "%%A"=="ANON_KEY" set "TP_ANON=%%~B"
 )
@@ -300,6 +306,22 @@ echo.
 echo       La base de datos no ha devuelto su configuracion en el formato
 echo       esperado. NO he escrito ninguna configuracion a medias.
 echo.
+if not exist "supabase-status.err" goto sin_detalle_supabase
+echo       Esto es lo que ha respondido Supabase:
+echo.
+type "supabase-status.err"
+echo.
+findstr /c:"Stopped services" "supabase-status.err" >nul 2>&1
+if errorlevel 1 goto sin_detalle_supabase
+echo       ^>^> Hay contenedores parados. Ejecuta EN ESTA CARPETA:
+echo              supabase stop
+echo              supabase start
+echo          Eso NO borra tus datos: el borrado exige --no-backup, que no se usa.
+echo          No lo ejecutes desde tu carpeta personal: alli no hay proyecto y
+echo          Supabase crearia uno fantasma con el nombre de esa carpeta.
+echo.
+goto fin_error
+:sin_detalle_supabase
 echo       Prueba a apagarla y volver a arrancar:
 echo           supabase stop
 echo           supabase start
