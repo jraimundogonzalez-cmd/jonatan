@@ -6,6 +6,34 @@ Detecta el modelo CRT (rango HTF -> manipulación -> alineación en TF
 intermedio -> power of three en el TF de entrada) y marca señales LONG/SHORT
 con SL y TP calculados. No ejecuta operaciones — solo señal visual.
 
+## Activar la alarma sonora con precios (Entrada / SL / TP)
+
+El indicador dispara internamente `alert(...)` con un mensaje dinámico tipo
+`COMPRA EURUSD | Entrada 1.16895 | SL 1.16595 | TP 1.16700 | Calidad A+`
+en la misma vela cerrada donde se confirma la señal. Para recibirlo con
+sonido en TradingView:
+
+1. Con el indicador ya cargado en el gráfico, pulsa el icono de **reloj de
+   alarma** (o clic derecho en el gráfico → "Añadir alerta").
+2. En **Condición**, elige el indicador `CRT Multi-TF Power of Three` y,
+   dentro de él, selecciona **"Cualquier llamada de función alert()"**
+   (en inglés: "Any alert() function call"). No elijas `CRT LONG` / `CRT
+   SHORT` si quieres el mensaje con los precios — esas dos son alertas
+   fijas de texto estático, sin precios.
+3. En **Frecuencia**, deja "Solo una vez por barra al cierre" (así coincide
+   con el diseño no-repaint del indicador).
+4. En **Acciones al activarse la alerta**, marca "Reproducir sonido" y
+   elige el sonido/volumen que quieras (y "Notificación en la app" /
+   "push" si usas el móvil).
+5. Guarda. A partir de ahí, cada señal LONG o SHORT sonará con un mensaje
+   que ya trae el precio de entrada, SL, TP (y TP parcial si está
+   activado) listos para leer, sin tener que interpretar la tabla ni las
+   líneas del gráfico.
+
+Como la alerta se crea una vez y queda "viva" escuchando al indicador, no
+hace falta recrearla en cada señal — sonará automáticamente cada vez que
+se confirme una nueva.
+
 ## Cómo probarlo
 
 1. Copia el contenido del `.pine` en el Pine Editor de TradingView.

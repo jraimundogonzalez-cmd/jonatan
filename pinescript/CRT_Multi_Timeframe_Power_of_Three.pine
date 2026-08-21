@@ -232,6 +232,21 @@ if barstate.isconfirmed
             quality := (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
             swingLowUsed := true
 
+// ------------------------------- Alerta sonora con mensaje dinamico -----------
+// alertcondition() solo admite texto fijo, así que para incluir el precio
+// real de entrada/SL/TP en el mensaje usamos alert(): al crear la alerta en
+// TradingView, elige como condición "Cualquier llamada de función alert()"
+// y activa el sonido/notificación que quieras (ver README).
+
+if longTrigger or shortTrigger
+    string alertMsg = (longTrigger ? "COMPRA" : "VENTA") + " " + syminfo.ticker +
+         " | Entrada " + str.tostring(entryPrice, format.mintick) +
+         " | SL " + str.tostring(slPrice, format.mintick) +
+         " | TP " + str.tostring(tpPrice, format.mintick) +
+         (usePartialTP and not na(partialPrice) ? " | TP parcial " + str.tostring(partialPrice, format.mintick) : "") +
+         " | Calidad " + quality
+    alert(alertMsg, alert.freq_once_per_bar_close)
+
 // ------------------------------- Visual: etiquetas y niveles ------------------
 
 if longTrigger
