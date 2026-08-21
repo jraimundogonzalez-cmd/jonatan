@@ -1,0 +1,296 @@
+//@version=6
+// =============================================================================
+// CRT Multi-TF Power of Three — Swing/Sniper v3 (STRATEGY)
+//
+// Misma logica de deteccion que el indicador v3 (CRT_MultiTF_Swing_Sniper_v3.pine)
+// — manipulacion HTF, alineacion con TF intermedio, ruptura de pivote en el TF
+// de entrada, filtro de calidad A+, y la misma validacion dura de que
+// HTF > intermedio > entrada — pero envuelta en strategy() para poder usar
+// el Strategy Tester nativo (Profit Factor, Sharpe, drawdown, R:R, equity
+// curve) en vez de contar manualmente aciertos/fallos.
+//
+// Gestion de la posicion:
+//  - Una sola posicion abierta a la vez (no piramide): una señal nueva no
+//    hace nada si ya hay una operacion en curso.
+//  - Salida en 3 tramos 33% / 33% / 34% del tamaño ORIGINAL en TP1/TP2/TP3,
+//    con el mismo SL (por ATR del pullback) en los tres tramos. Los
+//    porcentajes se pasan en cascada (33 / 33÷67·100 / 100) porque
+//    strategy.exit(qty_percent=...) calcula sobre la posicion RESTANTE en
+//    cada momento, no sobre el tamaño original — con 33/33/34 "planos" el
+//    2º y 3er tramo cerrarian menos de lo esperado tras el primer TP.
+//
+// El indicator() original (v3) se mantiene intacto como script aparte para
+// verlo en vivo; este strategy() es solo para testear con el Strategy Tester.
+// =============================================================================
+strategy("CRT Multi-TF Swing/Sniper v3 - Strategy",
+     overlay = true,
+     initial_capital = input.float(10000, "Capital inicial", group = "Cuenta"),
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 100,
+     commission_type = strategy.commission.percent,
+     commission_value = input.float(0.02, "Comision por operacion (%)", minval = 0.0, step = 0.01, group = "Cuenta"),
+     slippage = input.int(1, "Slippage (ticks)", minval = 0, group = "Cuenta"),
+     calc_on_every_tick = false,
+     max_lines_count = 200, max_labels_count = 200, max_boxes_count = 20)
+
+// ------------------------------- INPUTS -------------------------------------
+grpTF = "Timeframes"
+htfTF = input.timeframe("D", "HTF (rango madre / sesgo)", group = grpTF, tooltip = "SWING: 1D (con entrada 1h). SNIPER: 4h (con entrada 15m).")
+midTF = input.timeframe("240", "TF intermedio (estructura)", group = grpTF, tooltip = "Debe ser menor que el HTF y mayor que el TF de entrada (el del grafico) — si no, la estrategia no abre ninguna operacion.")
+swingLen = input.int(2, "Pivote de entrada: velas a cada lado", minval = 1, group = grpTF)
+
+grpManip = "Manipulacion / ATR"
+atrLen = input.int(14, "Longitud ATR", minval = 1, group = grpManip)
+manipMinATR_HTF = input.float(0.30, "Penetracion minima HTF (x ATR HTF)", minval = 0.0, step = 0.05, group = grpManip)
+manipMinATR_Mid = input.float(0.30, "Penetracion minima TF intermedio (x ATR intermedio)", minval = 0.0, step = 0.05, group = grpManip)
+qualityMult = input.float(1.5, "Umbral para calidad A+ (x del minimo exigido)", minval = 1.0, step = 0.1, group = grpManip)
+qualityOnly = input.bool(true, "Descartar señales B (solo A+)", group = grpManip)
+
+grpRisk = "Gestion (SL / TP escalonado)"
+slBufferMult = input.float(0.25, "Buffer de SL (x ATR entrada)", minval = 0.0, step = 0.05, group = grpRisk)
+tp1TF = input.timeframe("240", "TP1 - rango de", group = grpRisk)
+tp2TF = input.timeframe("360", "TP2 - rango de", group = grpRisk)
+tp3TF = input.timeframe("480", "TP3 - rango de", group = grpRisk)
+
+grpVis = "Visual"
+showStats = input.bool(true, "Mostrar panel de estado", group = grpVis)
+
+// ------------------------------- Paleta -------------------------------------
+colLong  = color.rgb(39, 208, 147)
+colShort = color.rgb(255, 92, 108)
+colWarn  = color.rgb(245, 166, 35)
+
+// ------------------------------- Validacion dura de la escalera TF -----------
+htfSeconds   = timeframe.in_seconds(htfTF)
+midSeconds   = timeframe.in_seconds(midTF)
+entrySeconds = timeframe.in_seconds(timeframe.period)
+bool validTFStack = htfSeconds > midSeconds and midSeconds > entrySeconds
+
+// ------------------------------- HTF: rango y sesgo --------------------------
+[htfHighC, htfLowC, htfCloseC, htfHighP, htfLowP, htfTimeC, htfATR] = request.security(
+     syminfo.tickerid, htfTF,
+     [high[1], low[1], close[1], high[2], low[2], time[1], ta.atr(atrLen)[1]],
+     lookahead = barmerge.lookahead_off)
+
+newHTFBar = ta.change(htfTimeC) != 0
+
+var int   htfBias          = 0
+var float htfManipExtreme  = na
+var float htfTargetExtreme = na
+var float htfManipStrength = na
+
+// ------------------------------- TF intermedio: rango y sesgo ----------------
+[midHighC, midLowC, midCloseC, midHighP, midLowP, midTimeC, midATR] = request.security(
+     syminfo.tickerid, midTF,
+     [high[1], low[1], close[1], high[2], low[2], time[1], ta.atr(atrLen)[1]],
+     lookahead = barmerge.lookahead_off)
+
+newMidBar = ta.change(midTimeC) != 0
+
+var int   midBias          = 0
+var float midManipStrength = na
+
+var int alignedSinceBar = na
+
+// ------------------------------- Objetivos escalonados (4h/6h/8h) ------------
+[tp1HighP, tp1LowP] = request.security(syminfo.tickerid, tp1TF, [high[1], low[1]], lookahead = barmerge.lookahead_off)
+[tp2HighP, tp2LowP] = request.security(syminfo.tickerid, tp2TF, [high[1], low[1]], lookahead = barmerge.lookahead_off)
+[tp3HighP, tp3LowP] = request.security(syminfo.tickerid, tp3TF, [high[1], low[1]], lookahead = barmerge.lookahead_off)
+
+// ------------------------------- Entrada (TF de grafico) ---------------------
+var float lastSwingHigh    = na
+var int   lastSwingHighBar = na
+var bool  swingHighUsed    = true
+var float pullbackLow      = na
+
+var float lastSwingLow     = na
+var int   lastSwingLowBar  = na
+var bool  swingLowUsed     = true
+var float pullbackHigh     = na
+
+atrEntry = ta.atr(atrLen)
+
+// -------- 1) Nuevo cierre HTF: recalcular sesgo, RESET SOLO SI CAMBIA -------
+if newHTFBar
+    bool bullSweepHTF = (htfLowC < htfLowP - manipMinATR_HTF * htfATR) and (htfCloseC > htfLowP)
+    bool bearSweepHTF = (htfHighC > htfHighP + manipMinATR_HTF * htfATR) and (htfCloseC < htfHighP)
+    int detectedHtfBias = bullSweepHTF and not bearSweepHTF ? 1 : (bearSweepHTF and not bullSweepHTF ? -1 : 0)
+
+    if detectedHtfBias != 0 and detectedHtfBias != htfBias
+        htfBias := detectedHtfBias
+        htfManipExtreme := detectedHtfBias == 1 ? htfLowC : htfHighC
+        htfTargetExtreme := detectedHtfBias == 1 ? htfHighP : htfLowP
+        htfManipStrength := detectedHtfBias == 1 ? (htfLowP - htfLowC) / (manipMinATR_HTF * htfATR) : (htfHighC - htfHighP) / (manipMinATR_HTF * htfATR)
+        midBias := 0
+        alignedSinceBar := na
+        lastSwingHigh := na
+        lastSwingLow := na
+        swingHighUsed := true
+        swingLowUsed := true
+    else if detectedHtfBias != 0 and detectedHtfBias == htfBias
+        float newManipExtreme = detectedHtfBias == 1 ? htfLowC : htfHighC
+        float newManipStrength = detectedHtfBias == 1 ? (htfLowP - htfLowC) / (manipMinATR_HTF * htfATR) : (htfHighC - htfHighP) / (manipMinATR_HTF * htfATR)
+        htfTargetExtreme := detectedHtfBias == 1 ? htfHighP : htfLowP
+        if newManipStrength > htfManipStrength
+            htfManipExtreme := newManipExtreme
+            htfManipStrength := newManipStrength
+
+// -------- 2) Nuevo cierre TF intermedio: mismo criterio, y alineacion --------
+if newMidBar
+    bool bullSweepMid = (midLowC < midLowP - manipMinATR_Mid * midATR) and (midCloseC > midLowP)
+    bool bearSweepMid = (midHighC > midHighP + manipMinATR_Mid * midATR) and (midCloseC < midHighP)
+    int detectedMidBias = bullSweepMid and not bearSweepMid ? 1 : (bearSweepMid and not bullSweepMid ? -1 : 0)
+
+    if detectedMidBias != 0 and detectedMidBias != midBias
+        midBias := detectedMidBias
+        midManipStrength := detectedMidBias == 1 ? (midLowP - midLowC) / (manipMinATR_Mid * midATR) : (midHighC - midHighP) / (manipMinATR_Mid * midATR)
+    else if detectedMidBias != 0 and detectedMidBias == midBias
+        float newMidManipStrength = detectedMidBias == 1 ? (midLowP - midLowC) / (manipMinATR_Mid * midATR) : (midHighC - midHighP) / (manipMinATR_Mid * midATR)
+        if newMidManipStrength > midManipStrength
+            midManipStrength := newMidManipStrength
+
+    bool alignedNowRaw = validTFStack and htfBias != 0 and midBias == htfBias
+    if alignedNowRaw and na(alignedSinceBar)
+        alignedSinceBar := bar_index
+        lastSwingHigh := na
+        lastSwingLow := na
+        swingHighUsed := true
+        swingLowUsed := true
+    else if not alignedNowRaw
+        alignedSinceBar := na
+
+// candado unico: sin escalera de TF valida, jamas hay alineacion
+bool aligned = validTFStack and htfBias != 0 and midBias == htfBias and not na(alignedSinceBar)
+
+// -------- 3) Pivotes de entrada (objetivos, N velas a cada lado) -------------
+ph = ta.pivothigh(swingLen, swingLen)
+pl = ta.pivotlow(swingLen, swingLen)
+
+bool justArmedHigh = false
+if not na(ph)
+    int peakBar = bar_index - swingLen
+    if aligned and htfBias == 1 and peakBar >= alignedSinceBar
+        lastSwingHigh := ph
+        lastSwingHighBar := peakBar
+        swingHighUsed := false
+        pullbackLow := ta.lowest(low, swingLen)
+        justArmedHigh := true
+if not justArmedHigh and not na(lastSwingHigh) and not swingHighUsed
+    pullbackLow := math.min(pullbackLow, low)
+
+bool justArmedLow = false
+if not na(pl)
+    int troughBar = bar_index - swingLen
+    if aligned and htfBias == -1 and troughBar >= alignedSinceBar
+        lastSwingLow := pl
+        lastSwingLowBar := troughBar
+        swingLowUsed := false
+        pullbackHigh := ta.highest(high, swingLen)
+        justArmedLow := true
+if not justArmedLow and not na(lastSwingLow) and not swingLowUsed
+    pullbackHigh := math.max(pullbackHigh, high)
+
+// -------- 4) Gatillo de entrada: ruptura del swing, solo en vela cerrada -----
+bool longTrigger  = false
+bool shortTrigger = false
+float slPrice = na
+float tp1Price = na
+float tp2Price = na
+float tp3Price = na
+
+if barstate.isconfirmed
+    if aligned and htfBias == 1 and not swingHighUsed and not na(lastSwingHigh) and lastSwingHighBar >= alignedSinceBar
+        if close > lastSwingHigh and not na(htfManipExtreme) and pullbackLow > htfManipExtreme
+            string qLong = (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
+            bool passesLong = not qualityOnly or qLong == "A+"
+            swingHighUsed := true
+            if passesLong
+                longTrigger := true
+                slPrice := pullbackLow - atrEntry * slBufferMult
+                tp1Price := tp1HighP
+                tp2Price := tp2HighP
+                tp3Price := tp3HighP
+    if aligned and htfBias == -1 and not swingLowUsed and not na(lastSwingLow) and lastSwingLowBar >= alignedSinceBar
+        if close < lastSwingLow and not na(htfManipExtreme) and pullbackHigh < htfManipExtreme
+            string qShort = (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
+            bool passesShort = not qualityOnly or qShort == "A+"
+            swingLowUsed := true
+            if passesShort
+                shortTrigger := true
+                slPrice := pullbackHigh + atrEntry * slBufferMult
+                tp1Price := tp1LowP
+                tp2Price := tp2LowP
+                tp3Price := tp3LowP
+
+// ------------------------------- Entrada/salida de la estrategia -------------
+// Una sola posicion a la vez: una señal nueva no hace nada si ya hay una
+// operacion abierta (strategy.position_size distinto de 0).
+bool wasFlat = strategy.position_size == 0
+
+var float activeSL  = na
+var float activeTP1 = na
+var float activeTP2 = na
+var float activeTP3 = na
+
+if longTrigger and wasFlat
+    strategy.entry("Long", strategy.long)
+    activeSL  := slPrice
+    activeTP1 := tp1Price
+    activeTP2 := tp2Price
+    activeTP3 := tp3Price
+
+if shortTrigger and wasFlat
+    strategy.entry("Short", strategy.short)
+    activeSL  := slPrice
+    activeTP1 := tp1Price
+    activeTP2 := tp2Price
+    activeTP3 := tp3Price
+
+// 33% / 33% / 34% del tamaño ORIGINAL, en cascada sobre el restante:
+// leg1 33% -> queda 67% del original; leg2 33/67=49.2537% de ESO -> cierra
+// otro 33% del original, queda 34%; leg3 100% del resto -> cierra el 34%
+// final exacto, sin arrastre de redondeo.
+float leg1Pct = 33.0
+float leg2Pct = 33.0 / (100.0 - leg1Pct) * 100.0
+float leg3Pct = 100.0
+
+if strategy.position_size > 0
+    strategy.exit("TP1 Long", from_entry = "Long", limit = activeTP1, stop = activeSL, qty_percent = leg1Pct)
+    strategy.exit("TP2 Long", from_entry = "Long", limit = activeTP2, stop = activeSL, qty_percent = leg2Pct)
+    strategy.exit("TP3 Long", from_entry = "Long", limit = activeTP3, stop = activeSL, qty_percent = leg3Pct)
+
+if strategy.position_size < 0
+    strategy.exit("TP1 Short", from_entry = "Short", limit = activeTP1, stop = activeSL, qty_percent = leg1Pct)
+    strategy.exit("TP2 Short", from_entry = "Short", limit = activeTP2, stop = activeSL, qty_percent = leg2Pct)
+    strategy.exit("TP3 Short", from_entry = "Short", limit = activeTP3, stop = activeSL, qty_percent = leg3Pct)
+
+// ------------------------------- Panel de estado -------------------------------
+if showStats and barstate.islast
+    var table statsTable = table.new(position.top_right, 2, 3, bgcolor = color.new(color.black, 70), border_width = 1)
+    string htfTxt = htfBias == 1 ? "ALCISTA" : htfBias == -1 ? "BAJISTA" : "NEUTRO - NO OPERAR"
+    color  htfBg  = htfBias == 1 ? color.new(colLong, 65) : htfBias == -1 ? color.new(colShort, 65) : color.new(colWarn, 55)
+    string midTxt = midBias == 1 ? "ALCISTA" : midBias == -1 ? "BAJISTA" : "NEUTRO"
+    color  midBg  = midBias == 1 ? color.new(colLong, 65) : midBias == -1 ? color.new(colShort, 65) : color.new(colWarn, 55)
+    string alTxt  = aligned ? "SI" : "NO"
+    color  alBg   = aligned ? color.new(colLong, 65) : color.new(colWarn, 55)
+
+    table.cell(statsTable, 0, 0, "HTF", text_color = color.white, text_size = size.small)
+    table.cell(statsTable, 1, 0, htfTxt, text_color = color.white, bgcolor = htfBg, text_size = size.small)
+    table.cell(statsTable, 0, 1, "Intermedio", text_color = color.white, text_size = size.small)
+    table.cell(statsTable, 1, 1, midTxt, text_color = color.white, bgcolor = midBg, text_size = size.small)
+    table.cell(statsTable, 0, 2, "Alineado", text_color = color.white, text_size = size.small)
+    table.cell(statsTable, 1, 2, alTxt, text_color = color.white, bgcolor = alBg, text_size = size.small)
+
+// Aviso grande si la escalera de TF no tiene sentido (misma regla dura que
+// el indicador: sin esto valido, "aligned" nunca es true y no se puede
+// abrir ninguna operacion).
+var label tfWarnLabel = na
+if barstate.islast
+    if not validTFStack
+        if na(tfWarnLabel)
+            tfWarnLabel := label.new(bar_index, high, "", style = label.style_label_down, color = color.new(colWarn, 5), textcolor = color.black, size = size.normal)
+        label.set_xy(tfWarnLabel, bar_index, high)
+        label.set_text(tfWarnLabel, "⚠ CONFIG TF INVALIDA: intermedio debe ser < HTF y > TF de entrada")
+    else if not na(tfWarnLabel)
+        label.delete(tfWarnLabel)
+        tfWarnLabel := na
