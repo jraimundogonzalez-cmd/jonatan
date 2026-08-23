@@ -42,15 +42,23 @@
 //|     (OnDeinit) — asi el proximo test dice exactamente donde se     |
 //|     pierden las operaciones en vez de tener que adivinarlo.        |
 //|                                                                    |
-//|  6) TP = htf2TargetExtreme (extremo del rango H4, capa intermedia),|
-//|     NO htf1 (D1). Cambio hecho tras el primer test real: con TP en |
-//|     el rango D1 completo, el 71% de las rupturas validas se        |
-//|     rechazaban por no llegar a R:R>=1.5 (objetivo demasiado lejos),|
-//|     y de las que sí pasaban, el win rate (14%) era demasiado bajo  |
-//|     para compensar aunque las ganancias fueran ~3.85x las perdidas |
-//|     (Profit Factor 0.64). Un rango H4 se completa con mas          |
-//|     frecuencia que uno D1 — sigue siendo un nivel estructural real |
-//|     del propio CRT, no un numero inventado.                        |
+//|  6) TP = htf3TargetExtreme (extremo del rango H1, la capa mas      |
+//|     cercana al rango de trabajo). Historial de este ajuste, con     |
+//|     datos reales de cada test:                                     |
+//|       - TP en HTF1 (D1, el mas ancho): PF 0.64, win rate 14.4%,    |
+//|         drawdown 64%. El 71% de las rupturas validas se rechazaban |
+//|         por no llegar a R:R>=1.5 (objetivo demasiado lejos).       |
+//|       - TP en HTF2 (H4, intermedio): PF 0.86, win rate 24.6%,      |
+//|         drawdown 34%. Mejora clara en todo, pero PF sigue <1.      |
+//|       - TP en HTF3 (H1, mas cercano, ESTA VERSION): a probar — la  |
+//|         hipotesis es que sigue subiendo el win rate lo suficiente  |
+//|         para cruzar PF=1, pero con el objetivo tan cerca el filtro |
+//|         de R:R>=1.5 puede volverse el cuello de botella dominante  |
+//|         y dejar muy pocas señales. Es el experimento, no una       |
+//|         certeza — por eso hay que remedir, no asumir que mas cerca |
+//|         siempre es mejor.                                          |
+//|     En los tres casos, el nivel usado es una estructura CRT real   |
+//|     (extremo de rango de esa capa), no un numero inventado.        |
 //|                                                                    |
 //| Ejecutar en el grafico del TF de entrada (M15 en los ejemplos de   |
 //| arriba). Sigue siendo SOLO PARA BACKTESTING y cuenta netting,      |
@@ -82,7 +90,7 @@ input bool   InpQualityOnly     = false; // Exigir calidad en las 3 capas (ver n
 
 input group "Gestion (SL / TP unico)"
 input double InpSLBufferMult = 0.25;  // Buffer de SL (x ATR entrada)
-input double InpMinRR        = 1.5;   // R:R minimo hacia htf2TargetExtreme (rango H4); si no se alcanza, NO TRADE
+input double InpMinRR        = 1.5;   // R:R minimo hacia htf3TargetExtreme (rango H1); si no se alcanza, NO TRADE
 
 input group "Cuenta"
 input double InpRiskPercent = 1.0;
@@ -97,7 +105,7 @@ datetime lastHTF1Time = 0, lastHTF2Time = 0, lastHTF3Time = 0, lastEntryTime = 0
 
 int    htf1Bias = 0; double htf1ManipExtreme = 0, htf1TargetExtreme = 0, htf1ManipStrength = 0;
 int    htf2Bias = 0; double htf2TargetExtreme = 0, htf2ManipStrength = 0;
-int    htf3Bias = 0; double htf3ManipExtreme = 0, htf3ManipStrength = 0;
+int    htf3Bias = 0; double htf3ManipExtreme = 0, htf3TargetExtreme = 0, htf3ManipStrength = 0;
 
 datetime alignedSinceTime = 0; // 0 = sin alinear
 
@@ -290,11 +298,13 @@ void UpdateHTF3()
     {
         htf3Bias = detected;
         htf3ManipExtreme  = me;
+        htf3TargetExtreme = te;
         htf3ManipStrength = ms;
         ResetSwingsAndAlignment();
     }
     else if (detected != 0 && detected == htf3Bias)
     {
+        htf3TargetExtreme = te;
         if (ms > htf3ManipStrength) { htf3ManipExtreme = me; htf3ManipStrength = ms; }
     }
     CheckAlignment();
@@ -413,11 +423,11 @@ void OnNewEntryBar()
                 {
                     double sl   = pullbackLow - GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
                     double risk = closeLast - sl;
-                    double dist = htf2TargetExtreme - closeLast;
+                    double dist = htf3TargetExtreme - closeLast;
                     if (risk <= 0 || dist <= 0 || dist / risk < InpMinRR)
                         cntFailRR++;
                     else
-                        OpenLong(sl, htf2TargetExtreme);
+                        OpenLong(sl, htf3TargetExtreme);
                 }
             }
         }
@@ -448,11 +458,11 @@ void OnNewEntryBar()
                 {
                     double sl   = pullbackHigh + GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
                     double risk = sl - closeLast;
-                    double dist = closeLast - htf2TargetExtreme;
+                    double dist = closeLast - htf3TargetExtreme;
                     if (risk <= 0 || dist <= 0 || dist / risk < InpMinRR)
                         cntFailRR++;
                     else
-                        OpenShort(sl, htf2TargetExtreme);
+                        OpenShort(sl, htf3TargetExtreme);
                 }
             }
         }
