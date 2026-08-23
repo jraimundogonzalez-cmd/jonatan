@@ -48,9 +48,8 @@ qualityOnly = input.bool(true, "Descartar señales B (solo A+)", group = grpMani
 
 grpRisk = "Gestion (SL / TP escalonado)"
 slBufferMult = input.float(0.25, "Buffer de SL (x ATR entrada)", minval = 0.0, step = 0.05, group = grpRisk)
-tp1TF = input.timeframe("240", "TP1 - rango de", group = grpRisk)
-tp2TF = input.timeframe("360", "TP2 - rango de", group = grpRisk)
-tp3TF = input.timeframe("480", "TP3 - rango de", group = grpRisk)
+tp1Split = input.float(0.33, "TP1 (fraccion de la distancia al extremo HTF)", minval = 0.05, maxval = 0.95, step = 0.01, group = grpRisk, tooltip = "TP1/TP2/TP3 son fracciones de la distancia entre la entrada y el extremo opuesto del rango HTF, no tres timeframes sueltos: garantiza TP1 < TP2 < TP3 y que los tres esten por delante del precio.")
+tp2Split = input.float(0.66, "TP2 (fraccion de la distancia al extremo HTF)", minval = 0.06, maxval = 0.98, step = 0.01, group = grpRisk)
 
 grpVis = "Visual"
 showStats = input.bool(true, "Mostrar panel de estado", group = grpVis)
@@ -91,11 +90,6 @@ var int   midBias          = 0
 var float midManipStrength = na
 
 var int alignedSinceBar = na
-
-// ------------------------------- Objetivos escalonados (4h/6h/8h) ------------
-[tp1HighP, tp1LowP] = request.security(syminfo.tickerid, tp1TF, [high[1], low[1]], lookahead = barmerge.lookahead_off)
-[tp2HighP, tp2LowP] = request.security(syminfo.tickerid, tp2TF, [high[1], low[1]], lookahead = barmerge.lookahead_off)
-[tp3HighP, tp3LowP] = request.security(syminfo.tickerid, tp3TF, [high[1], low[1]], lookahead = barmerge.lookahead_off)
 
 // ------------------------------- Entrada (TF de grafico) ---------------------
 var float lastSwingHigh    = na
@@ -204,29 +198,31 @@ if barstate.isconfirmed
             string qLong = (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
             bool passesLong = not qualityOnly or qLong == "A+"
             swingHighUsed := true
-            // TP1/TP2/TP3 son el maximo de la ultima vela cerrada en cada TF:
-            // si el precio ya rompio por encima antes de disparar la entrada,
-            // el objetivo queda por detras del precio y la operacion se
-            // cerraria sola al instante. Se descarta la señal en ese caso.
-            bool tpValidLong = tp1HighP > close and tp2HighP > tp1HighP and tp3HighP > tp2HighP
+            // TP1/TP2/TP3 son fracciones de la distancia entre la entrada y
+            // htfTargetExtreme: garantiza TP1 < TP2 < TP3 y que los tres
+            // esten por delante del precio (salvo que el precio ya haya
+            // superado el rango HTF entero, caso raro que se descarta).
+            float distLong = htfTargetExtreme - close
+            bool tpValidLong = distLong > 0
             if passesLong and tpValidLong
                 longTrigger := true
                 slPrice := pullbackLow - atrEntry * slBufferMult
-                tp1Price := tp1HighP
-                tp2Price := tp2HighP
-                tp3Price := tp3HighP
+                tp1Price := close + distLong * tp1Split
+                tp2Price := close + distLong * tp2Split
+                tp3Price := htfTargetExtreme
     if aligned and htfBias == -1 and not swingLowUsed and not na(lastSwingLow) and lastSwingLowBar >= alignedSinceBar
         if close < lastSwingLow and not na(htfManipExtreme) and pullbackHigh < htfManipExtreme
             string qShort = (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
             bool passesShort = not qualityOnly or qShort == "A+"
             swingLowUsed := true
-            bool tpValidShort = tp1LowP < close and tp2LowP < tp1LowP and tp3LowP < tp2LowP
+            float distShort = close - htfTargetExtreme
+            bool tpValidShort = distShort > 0
             if passesShort and tpValidShort
                 shortTrigger := true
                 slPrice := pullbackHigh + atrEntry * slBufferMult
-                tp1Price := tp1LowP
-                tp2Price := tp2LowP
-                tp3Price := tp3LowP
+                tp1Price := close - distShort * tp1Split
+                tp2Price := close - distShort * tp2Split
+                tp3Price := htfTargetExtreme
 
 // ------------------------------- Entrada/salida de la estrategia -------------
 // Una sola posicion a la vez: una señal nueva no hace nada si ya hay una

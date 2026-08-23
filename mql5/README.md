@@ -24,6 +24,25 @@ corrijo.
   - Para comprobarlo: en tu terminal MT5, Herramientas → Opciones →
     pestaña de la cuenta, o pregúntaselo directamente a tu prop firm/bróker.
 
+## Corrección: TP1/TP2/TP3 rediseñados (bug real encontrado en tu propio test)
+
+Tu primer test en MT5 (8 meses) dio 8 operaciones que se autocerraban en
+1-3 segundos. Causa: TP1/TP2/TP3 salían de tres timeframes sueltos
+(H4/H6/H8) sin relación garantizada entre ellos — como la entrada dispara
+justo tras una ruptura fuerte, el precio ya solía haber superado esos
+máximos recientes, así que el "objetivo" quedaba detrás del precio en vez
+de delante. Con el segundo test (varios años) el fallo se hizo aún más
+visible: 0 operaciones en todo el histórico, porque el candado que añadí
+para bloquear TPs inválidos casi nunca se cumplía con ese diseño.
+
+Ahora TP1/TP2/TP3 son **fracciones de la distancia entre la entrada y
+`htfTargetExtreme`** (extremo opuesto del rango HTF): TP1 = entrada + 33%
+de esa distancia, TP2 = 66%, TP3 = el extremo completo. Por construcción
+quedan ordenados y siempre por delante del precio. Los inputs
+`InpTP1TF`/`InpTP2TF`/`InpTP3TF` desaparecen; ahora son
+`InpTP1Split`/`InpTP2Split` (0.33/0.66 por defecto). Tienes que
+**recompilar** (F7) con el archivo actualizado antes de volver a testear.
+
 ## Diferencia importante de tamaño de posición
 
 La versión de TradingView usaba 100% del equity por operación (una

@@ -43,10 +43,15 @@ input double InpQualityMult      = 1.5;   // Umbral para calidad A+
 input bool   InpQualityOnly      = true;  // Descartar señales B (solo A+)
 
 input group "Gestion (SL / TP escalonado)"
-input double         InpSLBufferMult = 0.25;      // Buffer de SL (x ATR entrada)
-input ENUM_TIMEFRAMES InpTP1TF       = PERIOD_H4; // TP1 - rango de
-input ENUM_TIMEFRAMES InpTP2TF       = PERIOD_H6; // TP2 - rango de
-input ENUM_TIMEFRAMES InpTP3TF       = PERIOD_H8; // TP3 - rango de
+input double InpSLBufferMult = 0.25;  // Buffer de SL (x ATR entrada)
+input double InpTP1Split     = 0.33;  // TP1 (fraccion de la distancia al extremo HTF)
+input double InpTP2Split     = 0.66;  // TP2 (fraccion de la distancia al extremo HTF)
+// TP1/TP2/TP3 ya no salen de tres timeframes sueltos (podian no tener
+// relacion entre si y quedar por detras del precio, causando que la
+// operacion se autocerrara al instante). Ahora son fracciones de la
+// distancia entre la entrada y htfTargetExtreme (extremo opuesto del
+// rango HTF) — por construccion TP1 < TP2 < TP3 y los tres quedan
+// siempre por delante del precio. TP3 = 1.0 = htfTargetExtreme.
 
 input group "Cuenta"
 input double InpRiskPercent = 1.0;      // % de equity arriesgado por operacion
@@ -58,7 +63,7 @@ int    htfATRHandle, midATRHandle, entryATRHandle;
 datetime lastHTFTime = 0, lastMidTime = 0, lastEntryTime = 0;
 
 int    htfBias = 0;
-double htfManipExtreme = 0, htfManipStrength = 0;
+double htfManipExtreme = 0, htfManipStrength = 0, htfTargetExtreme = 0;
 
 int    midBias = 0;
 double midManipStrength = 0;
@@ -263,6 +268,7 @@ void UpdateHTFBias()
     {
         htfBias = detected;
         htfManipExtreme  = (detected == 1) ? htfLowC : htfHighC;
+        htfTargetExtreme = (detected == 1) ? htfHighP : htfLowP;
         htfManipStrength = (detected == 1) ? (htfLowP - htfLowC) / (InpManipMinATR_HTF * htfATR)
                                             : (htfHighC - htfHighP) / (InpManipMinATR_HTF * htfATR);
         midBias = 0;
@@ -277,6 +283,7 @@ void UpdateHTFBias()
         double newManipExtreme  = (detected == 1) ? htfLowC : htfHighC;
         double newManipStrength = (detected == 1) ? (htfLowP - htfLowC) / (InpManipMinATR_HTF * htfATR)
                                                     : (htfHighC - htfHighP) / (InpManipMinATR_HTF * htfATR);
+        htfTargetExtreme = (detected == 1) ? htfHighP : htfLowP;
         if (newManipStrength > htfManipStrength)
         {
             htfManipExtreme  = newManipExtreme;
@@ -408,19 +415,15 @@ void OnNewEntryBar()
             swingHighUsed = true;
             if (passes && posDir == 0)
             {
-                double sl  = pullbackLow - GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
-                double tp1 = iHigh(_Symbol, InpTP1TF, 1);
-                double tp2 = iHigh(_Symbol, InpTP2TF, 1);
-                double tp3 = iHigh(_Symbol, InpTP3TF, 1);
-                double refPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-                // TP1/TP2/TP3 son el maximo de la ultima vela cerrada en cada
-                // TF: si el precio ya rompio por encima de ese maximo antes de
-                // que dispare la entrada (algo tipico justo tras una ruptura
-                // fuerte), el "objetivo" queda por detras del precio y la
-                // operacion se cerraria sola al instante. Se descarta la señal
-                // en vez de abrir una operacion con objetivos invalidos.
-                if (tp1 > refPrice && tp2 > tp1 && tp3 > tp2)
+                double sl   = pullbackLow - GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
+                double dist = htfTargetExtreme - closeLast;
+                if (dist > 0)
+                {
+                    double tp1 = closeLast + dist * InpTP1Split;
+                    double tp2 = closeLast + dist * InpTP2Split;
+                    double tp3 = htfTargetExtreme;
                     OpenLong(sl, tp1, tp2, tp3);
+                }
             }
         }
     }
@@ -434,13 +437,15 @@ void OnNewEntryBar()
             swingLowUsed = true;
             if (passes && posDir == 0)
             {
-                double sl  = pullbackHigh + GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
-                double tp1 = iLow(_Symbol, InpTP1TF, 1);
-                double tp2 = iLow(_Symbol, InpTP2TF, 1);
-                double tp3 = iLow(_Symbol, InpTP3TF, 1);
-                double refPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-                if (tp1 < refPrice && tp2 < tp1 && tp3 < tp2)
+                double sl   = pullbackHigh + GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
+                double dist = closeLast - htfTargetExtreme;
+                if (dist > 0)
+                {
+                    double tp1 = closeLast - dist * InpTP1Split;
+                    double tp2 = closeLast - dist * InpTP2Split;
+                    double tp3 = htfTargetExtreme;
                     OpenShort(sl, tp1, tp2, tp3);
+                }
             }
         }
     }

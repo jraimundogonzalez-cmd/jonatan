@@ -34,6 +34,24 @@ de 0.20 a 0.30 como punto de partida más exigente — **sin haberlo
 backtesteado yo**, es una hipótesis de partida para que la compares contra
 0.20/0.40 con el Strategy Tester del punto 1, no la des por buena a ciegas.
 
+## Corrección posterior: TP1/TP2/TP3 rediseñados
+
+Backtesteando en MT5 sobre varios años apareció un fallo de diseño: TP1/TP2/TP3
+salían de tres timeframes sueltos (H4/H6/H8), sin ninguna relación
+garantizada entre ellos. Como el modelo dispara la entrada justo tras una
+ruptura fuerte, en la práctica el precio ya solía haber superado esos
+máximos recientes — el "objetivo" quedaba detrás del precio y la operación
+se autocerraba al instante (0 operaciones útiles en años de histórico).
+
+Ahora TP1/TP2/TP3 son **fracciones de la distancia entre la entrada y
+`htfTargetExtreme`** (el extremo opuesto del rango HTF, el mismo nivel que
+ya usaba tu v1 original): TP1 = entrada + 33% de esa distancia, TP2 = 66%,
+TP3 = el extremo completo. Por construcción TP1 < TP2 < TP3 y los tres
+quedan siempre por delante del precio — ya no depende de que tres
+timeframes distintos casualmente se alineen bien. Los inputs
+`tp1TF`/`tp2TF`/`tp3TF` desaparecen; ahora son `tp1Split`/`tp2Split`
+(0.33/0.66 por defecto).
+
 ## Punto 1: la versión `strategy()`
 
 Misma detección exacta que el indicador v3 (manipulación, alineación,
