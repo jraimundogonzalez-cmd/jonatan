@@ -204,7 +204,12 @@ if barstate.isconfirmed
             string qLong = (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
             bool passesLong = not qualityOnly or qLong == "A+"
             swingHighUsed := true
-            if passesLong
+            // TP1/TP2/TP3 son el maximo de la ultima vela cerrada en cada TF:
+            // si el precio ya rompio por encima antes de disparar la entrada,
+            // el objetivo queda por detras del precio y la operacion se
+            // cerraria sola al instante. Se descarta la señal en ese caso.
+            bool tpValidLong = tp1HighP > close and tp2HighP > tp1HighP and tp3HighP > tp2HighP
+            if passesLong and tpValidLong
                 longTrigger := true
                 slPrice := pullbackLow - atrEntry * slBufferMult
                 tp1Price := tp1HighP
@@ -215,7 +220,8 @@ if barstate.isconfirmed
             string qShort = (htfManipStrength >= qualityMult and midManipStrength >= qualityMult) ? "A+" : "B"
             bool passesShort = not qualityOnly or qShort == "A+"
             swingLowUsed := true
-            if passesShort
+            bool tpValidShort = tp1LowP < close and tp2LowP < tp1LowP and tp3LowP < tp2LowP
+            if passesShort and tpValidShort
                 shortTrigger := true
                 slPrice := pullbackHigh + atrEntry * slBufferMult
                 tp1Price := tp1LowP

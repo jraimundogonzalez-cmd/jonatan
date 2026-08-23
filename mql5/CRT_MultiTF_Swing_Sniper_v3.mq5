@@ -412,7 +412,15 @@ void OnNewEntryBar()
                 double tp1 = iHigh(_Symbol, InpTP1TF, 1);
                 double tp2 = iHigh(_Symbol, InpTP2TF, 1);
                 double tp3 = iHigh(_Symbol, InpTP3TF, 1);
-                OpenLong(sl, tp1, tp2, tp3);
+                double refPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+                // TP1/TP2/TP3 son el maximo de la ultima vela cerrada en cada
+                // TF: si el precio ya rompio por encima de ese maximo antes de
+                // que dispare la entrada (algo tipico justo tras una ruptura
+                // fuerte), el "objetivo" queda por detras del precio y la
+                // operacion se cerraria sola al instante. Se descarta la señal
+                // en vez de abrir una operacion con objetivos invalidos.
+                if (tp1 > refPrice && tp2 > tp1 && tp3 > tp2)
+                    OpenLong(sl, tp1, tp2, tp3);
             }
         }
     }
@@ -430,7 +438,9 @@ void OnNewEntryBar()
                 double tp1 = iLow(_Symbol, InpTP1TF, 1);
                 double tp2 = iLow(_Symbol, InpTP2TF, 1);
                 double tp3 = iLow(_Symbol, InpTP3TF, 1);
-                OpenShort(sl, tp1, tp2, tp3);
+                double refPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+                if (tp1 < refPrice && tp2 < tp1 && tp3 < tp2)
+                    OpenShort(sl, tp1, tp2, tp3);
             }
         }
     }
