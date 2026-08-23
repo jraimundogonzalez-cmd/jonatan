@@ -494,11 +494,38 @@ void OnDeinit(const int reason)
     if (entryATRHandle != INVALID_HANDLE) IndicatorRelease(entryATRHandle);
     Comment("");
 
-    PrintFormat("=== AUDITORIA CRT v4 === Barridos HTF1=%d HTF2=%d HTF3=%d | Alineaciones-3-capas iniciadas=%d | Swings armados=%d | Rupturas=%d | Rechazadas por guarda-manipulacion=%d | Rechazadas por calidad=%d | Ignoradas (ya en posicion)=%d | Rechazadas por R:R<%.2f=%d | OPERACIONES ABIERTAS=%d",
+    string summary = StringFormat(
+        "=== AUDITORIA CRT v4 ===\r\n"
+        "Simbolo/TF entrada: %s / %s\r\n"
+        "Barridos HTF1=%d HTF2=%d HTF3=%d\r\n"
+        "Alineaciones-3-capas iniciadas=%d\r\n"
+        "Swings armados=%d\r\n"
+        "Rupturas=%d\r\n"
+        "Rechazadas por guarda-manipulacion=%d\r\n"
+        "Rechazadas por calidad=%d\r\n"
+        "Ignoradas (ya en posicion)=%d\r\n"
+        "Rechazadas por R:R<%.2f=%d\r\n"
+        "OPERACIONES ABIERTAS=%d\r\n",
+        _Symbol, EnumToString(_Period),
         (int)cntHTF1Sweep, (int)cntHTF2Sweep, (int)cntHTF3Sweep,
         (int)cntAlignStart, (int)cntSwingArmed, (int)cntBreakout,
         (int)cntFailManipGuard, (int)cntFailQuality, (int)cntSkippedInPosition,
         InpMinRR, (int)cntFailRR, (int)cntTradesOpened);
+
+    // El Print/PrintFormat normal no siempre llega a tiempo al panel Diario
+    // del Tester antes de que se cierre la conexion del agente. Para que
+    // sea imposible de perder, se escribe TAMBIEN en un archivo de texto
+    // en la carpeta COMUN de MT5 (misma ruta pase lo que pase, sin
+    // depender de en que agente del Tester corrio el test):
+    // %APPDATA%\MetaQuotes\Terminal\Common\Files\crt_v4_audit.txt
+    int fh = FileOpen("crt_v4_audit.txt", FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
+    if (fh != INVALID_HANDLE)
+    {
+        FileWriteString(fh, summary);
+        FileClose(fh);
+    }
+
+    Print(summary);
 }
 
 void OnTick()
