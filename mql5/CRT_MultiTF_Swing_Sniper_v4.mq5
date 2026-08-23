@@ -20,14 +20,12 @@
 //|     sistema (rango -> barrido -> cierre dentro -> sesgo), NO son   |
 //|     "vela verde = alcista". Solo se opera si las tres coinciden en |
 //|     direccion.                                                     |
-//|     - TP = htf1TargetExtreme (extremo opuesto del rango de la      |
-//|       capa mas ancha: mas recorrido disponible).                   |
 //|     - Guarda de invalidacion del pullback = htf3ManipExtreme (la   |
 //|       capa mas cercana al rango de trabajo: la referencia local    |
 //|       relevante para la entrada en M15).                           |
 //|                                                                    |
 //|  3) SIN TP FORZADO: antes de abrir, se calcula el R:R real hacia   |
-//|     htf1TargetExtreme. Si no llega a InpMinRR (1.5 por defecto),   |
+//|     el objetivo. Si no llega a InpMinRR (1.5 por defecto),         |
 //|     NO TRADE — no se estira el objetivo artificialmente.           |
 //|                                                                    |
 //|  4) InpQualityOnly = false POR DEFECTO en esta version (antes      |
@@ -39,10 +37,20 @@
 //|                                                                    |
 //|  5) AUDITORIA INTEGRADA: contadores en cada etapa del embudo       |
 //|     (barridos por capa, alineaciones logradas, swings armados,     |
-//|     rupturas, y el motivo exacto de cada rechazo). Se imprime un   |
-//|     resumen en el Diario al terminar el test (OnDeinit) — asi el   |
-//|     proximo test dice exactamente donde se pierden las operaciones |
-//|     en vez de tener que adivinarlo.                                |
+//|     rupturas, y el motivo exacto de cada rechazo). Se escribe un   |
+//|     resumen en Common\Files\crt_v4_audit.txt al terminar el test   |
+//|     (OnDeinit) — asi el proximo test dice exactamente donde se     |
+//|     pierden las operaciones en vez de tener que adivinarlo.        |
+//|                                                                    |
+//|  6) TP = htf2TargetExtreme (extremo del rango H4, capa intermedia),|
+//|     NO htf1 (D1). Cambio hecho tras el primer test real: con TP en |
+//|     el rango D1 completo, el 71% de las rupturas validas se        |
+//|     rechazaban por no llegar a R:R>=1.5 (objetivo demasiado lejos),|
+//|     y de las que sí pasaban, el win rate (14%) era demasiado bajo  |
+//|     para compensar aunque las ganancias fueran ~3.85x las perdidas |
+//|     (Profit Factor 0.64). Un rango H4 se completa con mas          |
+//|     frecuencia que uno D1 — sigue siendo un nivel estructural real |
+//|     del propio CRT, no un numero inventado.                        |
 //|                                                                    |
 //| Ejecutar en el grafico del TF de entrada (M15 en los ejemplos de   |
 //| arriba). Sigue siendo SOLO PARA BACKTESTING y cuenta netting,      |
@@ -74,7 +82,7 @@ input bool   InpQualityOnly     = false; // Exigir calidad en las 3 capas (ver n
 
 input group "Gestion (SL / TP unico)"
 input double InpSLBufferMult = 0.25;  // Buffer de SL (x ATR entrada)
-input double InpMinRR        = 1.5;   // R:R minimo hacia htf1TargetExtreme; si no se alcanza, NO TRADE
+input double InpMinRR        = 1.5;   // R:R minimo hacia htf2TargetExtreme (rango H4); si no se alcanza, NO TRADE
 
 input group "Cuenta"
 input double InpRiskPercent = 1.0;
@@ -88,7 +96,7 @@ int    htf1ATRHandle, htf2ATRHandle, htf3ATRHandle, entryATRHandle;
 datetime lastHTF1Time = 0, lastHTF2Time = 0, lastHTF3Time = 0, lastEntryTime = 0;
 
 int    htf1Bias = 0; double htf1ManipExtreme = 0, htf1TargetExtreme = 0, htf1ManipStrength = 0;
-int    htf2Bias = 0; double htf2ManipStrength = 0;
+int    htf2Bias = 0; double htf2TargetExtreme = 0, htf2ManipStrength = 0;
 int    htf3Bias = 0; double htf3ManipExtreme = 0, htf3ManipStrength = 0;
 
 datetime alignedSinceTime = 0; // 0 = sin alinear
@@ -258,12 +266,14 @@ void UpdateHTF2()
     if (detected != 0 && detected != htf2Bias)
     {
         htf2Bias = detected;
+        htf2TargetExtreme = te;
         htf2ManipStrength = ms;
         htf3Bias = 0;
         ResetSwingsAndAlignment();
     }
     else if (detected != 0 && detected == htf2Bias)
     {
+        htf2TargetExtreme = te;
         if (ms > htf2ManipStrength) htf2ManipStrength = ms;
     }
     CheckAlignment();
@@ -403,11 +413,11 @@ void OnNewEntryBar()
                 {
                     double sl   = pullbackLow - GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
                     double risk = closeLast - sl;
-                    double dist = htf1TargetExtreme - closeLast;
+                    double dist = htf2TargetExtreme - closeLast;
                     if (risk <= 0 || dist <= 0 || dist / risk < InpMinRR)
                         cntFailRR++;
                     else
-                        OpenLong(sl, htf1TargetExtreme);
+                        OpenLong(sl, htf2TargetExtreme);
                 }
             }
         }
@@ -438,11 +448,11 @@ void OnNewEntryBar()
                 {
                     double sl   = pullbackHigh + GetATRValue(entryATRHandle, 1) * InpSLBufferMult;
                     double risk = sl - closeLast;
-                    double dist = closeLast - htf1TargetExtreme;
+                    double dist = closeLast - htf2TargetExtreme;
                     if (risk <= 0 || dist <= 0 || dist / risk < InpMinRR)
                         cntFailRR++;
                     else
-                        OpenShort(sl, htf1TargetExtreme);
+                        OpenShort(sl, htf2TargetExtreme);
                 }
             }
         }
