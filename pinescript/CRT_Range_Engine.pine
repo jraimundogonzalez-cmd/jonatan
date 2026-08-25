@@ -1,0 +1,219 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0
+//@version=6
+//
+// CRT Range Engine — Price Map (Fase 1: mapa mecanico de niveles)
+// ------------------------------------------------------------------
+// Indicador NUEVO e independiente del indicador de entradas CRT.
+// No detecta entradas, SL, TP ni sesgo — solo dibuja, para cada duracion
+// configurada (horaria/diaria/semanal/mensual), el maximo y el minimo de
+// esa ventana de tiempo exacta, tal como se dibuja a mano en las capturas
+// de referencia: azul = nivel por encima del precio actual, rojo = nivel
+// por debajo. Es la Capa 1 (mapa mecanico, sin interpretacion) acordada
+// antes de construir la Capa 2 (rangos con estado FORMING/CONFIRMED/
+// MANIPULATED/...), que queda para una iteracion posterior.
+//
+// Decisiones de diseno, explicitas para no dar nada por hecho:
+//
+// 1) "N horas/dias/semanas/meses" = el maximo/minimo de las ultimas N
+//    velas YA CERRADAS del timeframe base correspondiente (H1/D1/W1/M1),
+//    alineadas a los limites de esas velas — no una ventana deslizante
+//    minuto a minuto. Es el patron estandar y eficiente en Pine; si
+//    necesitas una ventana de reloj deslizante real, es un cambio
+//    posterior y lo hablamos.
+// 2) Solo se usan velas cerradas (`high[1]`/`low[1]` en el contexto del
+//    timeframe base, con `lookahead_off`) — sin repintado ni look-ahead.
+// 3) El filtro de distancia maxima esta en UNIDADES DE PRECIO del propio
+//    instrumento (no en "pips"), porque un pip no significa lo mismo en
+//    EURUSD, XAUUSD o NAS100 — ajusta el numero segun el simbolo.
+// 4) Las lineas se dibujan con una longitud visual FIJA hacia atras
+//    (input configurable), no desde el inicio exacto de la ventana —
+//    simplificacion deliberada para la v1.
+// 5) Los niveles que coinciden en precio NO se fusionan automaticamente
+//    en una sola etiqueta combinada (tipo "8h 7h 5h" de tus capturas) —
+//    cada duracion tiene su propia etiqueta. Si varias coinciden, sus
+//    etiquetas quedan una encima/cerca de otra. Fusion automatica queda
+//    pendiente para una segunda iteracion si hace falta.
+// 6) Solo 4 llamadas a request.security() en total (H1/D1/W1/M1) —
+//    imprescindible porque Pine limita a 40 llamadas por script y no
+//    caben 148 llamadas (una por duracion). Cada duracion se calcula
+//    localmente con arrays acumulados, no con una llamada propia.
+
+indicator("CRT Range Engine — Price Map", overlay = true, max_lines_count = 500, max_labels_count = 500)
+
+// ------------------------------- Inputs -----------------------------------
+grpVis = "Visibilidad por categoria"
+showHourly  = input.bool(true,  "Mostrar Horarios (1h-24h)",       group = grpVis)
+showDaily   = input.bool(true,  "Mostrar Diarios (1D-60D)",        group = grpVis)
+showWeekly  = input.bool(true,  "Mostrar Semanales (1-52 semanas)", group = grpVis)
+showMonthly = input.bool(true,  "Mostrar Mensuales (1-12 meses)",  group = grpVis)
+
+grpFilter = "Filtros"
+maxDistPoints  = input.float(500.0, "Distancia maxima visible (precio, 0 = sin limite)", minval = 0.0, group = grpFilter)
+lineLenBars    = input.int(60, "Longitud visual de las lineas (barras hacia atras)", minval = 5, group = grpFilter)
+
+grpStyle = "Estilo"
+colorUp     = input.color(color.new(color.blue, 0), "Color objetivo alcista (por encima del precio)", group = grpStyle)
+colorDown   = input.color(color.new(color.red, 0),  "Color objetivo bajista (por debajo del precio)", group = grpStyle)
+lineWidthIn = input.int(1, "Grosor de linea", minval = 1, maxval = 4, group = grpStyle)
+showLabels  = input.bool(true, "Mostrar etiquetas de duracion", group = grpStyle)
+labelSize   = input.string(size.tiny, "Tamano de etiqueta", options = [size.tiny, size.small, size.normal], group = grpStyle)
+
+// ------------------------------- Tamanos de escalera ------------------------
+N_HOURLY  = 24
+N_DAILY   = 60
+N_WEEKLY  = 52
+N_MONTHLY = 12
+
+// ------------------------------- Datos base (4 llamadas, no mas) -----------
+[h1H, h1L, h1T] = request.security(syminfo.tickerid, "60", [high[1], low[1], time], lookahead = barmerge.lookahead_off)
+[d1H, d1L, d1T] = request.security(syminfo.tickerid, "D",  [high[1], low[1], time], lookahead = barmerge.lookahead_off)
+[w1H, w1L, w1T] = request.security(syminfo.tickerid, "W",  [high[1], low[1], time], lookahead = barmerge.lookahead_off)
+[m1H, m1L, m1T] = request.security(syminfo.tickerid, "M",  [high[1], low[1], time], lookahead = barmerge.lookahead_off)
+
+// ------------------------------- Acumulacion de historicos cerrados --------
+var array<float> hHighArr = array.new<float>()
+var array<float> hLowArr  = array.new<float>()
+var float hLastT = na
+if not na(h1T) and h1T != hLastT
+    if not na(h1H)
+        array.push(hHighArr, h1H)
+        array.push(hLowArr, h1L)
+        if array.size(hHighArr) > N_HOURLY
+            array.shift(hHighArr)
+            array.shift(hLowArr)
+    hLastT := h1T
+
+var array<float> dHighArr = array.new<float>()
+var array<float> dLowArr  = array.new<float>()
+var float dLastT = na
+if not na(d1T) and d1T != dLastT
+    if not na(d1H)
+        array.push(dHighArr, d1H)
+        array.push(dLowArr, d1L)
+        if array.size(dHighArr) > N_DAILY
+            array.shift(dHighArr)
+            array.shift(dLowArr)
+    dLastT := d1T
+
+var array<float> wHighArr = array.new<float>()
+var array<float> wLowArr  = array.new<float>()
+var float wLastT = na
+if not na(w1T) and w1T != wLastT
+    if not na(w1H)
+        array.push(wHighArr, w1H)
+        array.push(wLowArr, w1L)
+        if array.size(wHighArr) > N_WEEKLY
+            array.shift(wHighArr)
+            array.shift(wLowArr)
+    wLastT := w1T
+
+var array<float> mHighArr = array.new<float>()
+var array<float> mLowArr  = array.new<float>()
+var float mLastT = na
+if not na(m1T) and m1T != mLastT
+    if not na(m1H)
+        array.push(mHighArr, m1H)
+        array.push(mLowArr, m1L)
+        if array.size(mHighArr) > N_MONTHLY
+            array.shift(mHighArr)
+            array.shift(mLowArr)
+    mLastT := m1T
+
+// ------------------------------- Objetos persistentes (creados 1 sola vez) -
+var array<line>  hHighLines = array.new<line>(N_HOURLY)
+var array<line>  hLowLines  = array.new<line>(N_HOURLY)
+var array<label> hHighLbls  = array.new<label>(N_HOURLY)
+var array<label> hLowLbls   = array.new<label>(N_HOURLY)
+
+var array<line>  dHighLines = array.new<line>(N_DAILY)
+var array<line>  dLowLines  = array.new<line>(N_DAILY)
+var array<label> dHighLbls  = array.new<label>(N_DAILY)
+var array<label> dLowLbls   = array.new<label>(N_DAILY)
+
+var array<line>  wHighLines = array.new<line>(N_WEEKLY)
+var array<line>  wLowLines  = array.new<line>(N_WEEKLY)
+var array<label> wHighLbls  = array.new<label>(N_WEEKLY)
+var array<label> wLowLbls   = array.new<label>(N_WEEKLY)
+
+var array<line>  mHighLines = array.new<line>(N_MONTHLY)
+var array<line>  mLowLines  = array.new<line>(N_MONTHLY)
+var array<label> mHighLbls  = array.new<label>(N_MONTHLY)
+var array<label> mLowLbls   = array.new<label>(N_MONTHLY)
+
+if barstate.isfirst
+    for i = 0 to N_HOURLY - 1
+        array.set(hHighLines, i, line.new(na, na, na, na))
+        array.set(hLowLines,  i, line.new(na, na, na, na))
+        array.set(hHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+        array.set(hLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+    for i = 0 to N_DAILY - 1
+        array.set(dHighLines, i, line.new(na, na, na, na))
+        array.set(dLowLines,  i, line.new(na, na, na, na))
+        array.set(dHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+        array.set(dLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+    for i = 0 to N_WEEKLY - 1
+        array.set(wHighLines, i, line.new(na, na, na, na))
+        array.set(wLowLines,  i, line.new(na, na, na, na))
+        array.set(wHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+        array.set(wLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+    for i = 0 to N_MONTHLY - 1
+        array.set(mHighLines, i, line.new(na, na, na, na))
+        array.set(mLowLines,  i, line.new(na, na, na, na))
+        array.set(mHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+        array.set(mLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
+
+// ------------------------------- Actualizacion de niveles (funcion compartida)
+updateLevels(array<float> highArr, array<float> lowArr, array<line> highLines, array<line> lowLines, array<label> highLbls, array<label> lowLbls, int maxN, bool categoryOn, string unitSuffix) =>
+    for n = 1 to maxN
+        idx = n - 1
+        lnHi = array.get(highLines, idx)
+        lnLo = array.get(lowLines, idx)
+        lbHi = array.get(highLbls, idx)
+        lbLo = array.get(lowLbls, idx)
+        sz = array.size(highArr)
+        haveData = sz >= n
+        hiVal = haveData ? array.max(array.slice(highArr, sz - n, sz)) : na
+        loVal = haveData ? array.min(array.slice(lowArr, sz - n, sz)) : na
+        distHi = na(hiVal) ? na : math.abs(hiVal - close)
+        distLo = na(loVal) ? na : math.abs(close - loVal)
+        visHi = categoryOn and not na(hiVal) and hiVal > close and (maxDistPoints <= 0 or distHi <= maxDistPoints)
+        visLo = categoryOn and not na(loVal) and loVal < close and (maxDistPoints <= 0 or distLo <= maxDistPoints)
+
+        if visHi
+            line.set_xy1(lnHi, bar_index - lineLenBars, hiVal)
+            line.set_xy2(lnHi, bar_index, hiVal)
+            line.set_color(lnHi, colorUp)
+            line.set_width(lnHi, lineWidthIn)
+            if showLabels
+                label.set_xy(lbHi, bar_index, hiVal)
+                label.set_text(lbHi, str.tostring(n) + unitSuffix)
+                label.set_textcolor(lbHi, colorUp)
+                label.set_color(lbHi, color.new(color.white, 100))
+            else
+                label.set_text(lbHi, "")
+        else
+            line.set_color(lnHi, color(na))
+            label.set_text(lbHi, "")
+
+        if visLo
+            line.set_xy1(lnLo, bar_index - lineLenBars, loVal)
+            line.set_xy2(lnLo, bar_index, loVal)
+            line.set_color(lnLo, colorDown)
+            line.set_width(lnLo, lineWidthIn)
+            if showLabels
+                label.set_xy(lbLo, bar_index, loVal)
+                label.set_text(lbLo, str.tostring(n) + unitSuffix)
+                label.set_textcolor(lbLo, colorDown)
+                label.set_color(lbLo, color.new(color.white, 100))
+            else
+                label.set_text(lbLo, "")
+        else
+            line.set_color(lnLo, color(na))
+            label.set_text(lbLo, "")
+
+// ------------------------------- Solo se redibuja en la ultima barra -------
+if barstate.islast
+    updateLevels(hHighArr, hLowArr, hHighLines, hLowLines, hHighLbls, hLowLbls, N_HOURLY,  showHourly,  "h")
+    updateLevels(dHighArr, dLowArr, dHighLines, dLowLines, dHighLbls, dLowLbls, N_DAILY,   showDaily,   "D")
+    updateLevels(wHighArr, wLowArr, wHighLines, wLowLines, wHighLbls, wLowLbls, N_WEEKLY,  showWeekly,  "W")
+    updateLevels(mHighArr, mLowArr, mHighLines, mLowLines, mHighLbls, mLowLbls, N_MONTHLY, showMonthly, "M")
