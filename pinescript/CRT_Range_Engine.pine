@@ -4,57 +4,55 @@
 // CRT Range Engine — Price Map (Fase 1: mapa mecanico de niveles)
 // ------------------------------------------------------------------
 // Indicador NUEVO e independiente del indicador de entradas CRT.
-// No detecta entradas, SL, TP ni sesgo — solo dibuja, para cada duracion
-// configurada (horaria/diaria/semanal/mensual), el maximo y el minimo de
-// esa ventana de tiempo exacta, tal como se dibuja a mano en las capturas
-// de referencia: azul = nivel por encima del precio actual, rojo = nivel
-// por debajo. Es la Capa 1 (mapa mecanico, sin interpretacion) acordada
-// antes de construir la Capa 2 (rangos con estado FORMING/CONFIRMED/
-// MANIPULATED/...), que queda para una iteracion posterior.
+// Para cada duracion configurada (horaria/diaria/semanal/mensual) dibuja
+// el maximo y el minimo de esa ventana ya cerrada: azul = nivel por
+// encima del precio actual, rojo = nivel por debajo. Es la Capa 1 (mapa
+// mecanico, sin interpretacion) — copia exacta del concepto de tus
+// capturas, SIN filtro de distancia: se marca todo, tu decides despues
+// que categorias apagar con las casillas.
 //
-// Decisiones de diseno, explicitas para no dar nada por hecho:
+// Reescritura respecto a la version anterior: la primera version usaba
+// objetos de linea/etiqueta pre-creados y mutados por referencia dentro
+// de una funcion compartida — no pude compilarla yo mismo en este
+// entorno (no tengo MetaEditor/Pine Editor aqui) y no dibujaba nada en
+// tu grafico. Esta version usa el patron mas simple y mas probado en
+// Pine: en cada recalculo de la ultima barra, borra los objetos del
+// ciclo anterior y crea los nuevos desde cero — sin funcion compartida,
+// sin pre-alocacion, cada categoria con su propio codigo plano. Es mas
+// facil de verificar leyendolo y es el patron que usan la mayoria de
+// indicadores de niveles publicados en Pine.
 //
-// 1) "N horas/dias/semanas/meses" = el maximo/minimo de las ultimas N
-//    velas YA CERRADAS del timeframe base correspondiente (H1/D1/W1/M1),
-//    alineadas a los limites de esas velas — no una ventana deslizante
-//    minuto a minuto. Es el patron estandar y eficiente en Pine; si
-//    necesitas una ventana de reloj deslizante real, es un cambio
-//    posterior y lo hablamos.
-// 2) Solo se usan velas cerradas (`high[1]`/`low[1]` en el contexto del
-//    timeframe base, con `lookahead_off`) — sin repintado ni look-ahead.
-// 3) El filtro de distancia maxima esta en UNIDADES DE PRECIO del propio
-//    instrumento (no en "pips"), porque un pip no significa lo mismo en
-//    EURUSD, XAUUSD o NAS100 — ajusta el numero segun el simbolo.
-// 4) Las lineas se dibujan con una longitud visual FIJA hacia atras
-//    (input configurable), no desde el inicio exacto de la ventana —
-//    simplificacion deliberada para la v1.
-// 5) Los niveles que coinciden en precio NO se fusionan automaticamente
-//    en una sola etiqueta combinada (tipo "8h 7h 5h" de tus capturas) —
-//    cada duracion tiene su propia etiqueta. Si varias coinciden, sus
-//    etiquetas quedan una encima/cerca de otra. Fusion automatica queda
-//    pendiente para una segunda iteracion si hace falta.
-// 6) Solo 4 llamadas a request.security() en total (H1/D1/W1/M1) —
-//    imprescindible porque Pine limita a 40 llamadas por script y no
-//    caben 148 llamadas (una por duracion). Cada duracion se calcula
-//    localmente con arrays acumulados, no con una llamada propia.
+// Si TAMPOCO aparece nada con esta version: abre el script en el Pine
+// Editor (no solo "Añadir al grafico") y mirame exactamente que dice la
+// pestaña de errores/consola — sin eso no puedo diagnosticar a ciegas
+// mas alla de lo que ya he corregido aqui.
+//
+// Decisiones que se mantienen:
+// 1) "N horas/dias/semanas/meses" = maximo/minimo de las ultimas N velas
+//    YA CERRADAS del timeframe base (H1/D1/W1/M1) — no repinta, no usa
+//    informacion futura.
+// 2) Solo 4 llamadas a request.security() en total (H1/D1/W1/M1) — Pine
+//    limita a 40 llamadas por script, no caben 148 (una por duracion).
+// 3) Las lineas tienen una longitud visual fija hacia atras (input), no
+//    nacen exactamente en el origen real de la ventana — simplificacion
+//    deliberada para esta v1.
+// 4) SIN fusion automatica de niveles coincidentes en una sola etiqueta
+//    combinada todavia — cada duracion tiene su propia etiqueta.
 
 indicator("CRT Range Engine — Price Map", overlay = true, max_lines_count = 500, max_labels_count = 500)
 
 // ------------------------------- Inputs -----------------------------------
 grpVis = "Visibilidad por categoria"
-showHourly  = input.bool(true,  "Mostrar Horarios (1h-24h)",       group = grpVis)
-showDaily   = input.bool(true,  "Mostrar Diarios (1D-60D)",        group = grpVis)
+showHourly  = input.bool(true,  "Mostrar Horarios (1h-24h)",        group = grpVis)
+showDaily   = input.bool(true,  "Mostrar Diarios (1D-60D)",         group = grpVis)
 showWeekly  = input.bool(true,  "Mostrar Semanales (1-52 semanas)", group = grpVis)
-showMonthly = input.bool(true,  "Mostrar Mensuales (1-12 meses)",  group = grpVis)
-
-grpFilter = "Filtros"
-maxDistPoints  = input.float(500.0, "Distancia maxima visible (precio, 0 = sin limite)", minval = 0.0, group = grpFilter)
-lineLenBars    = input.int(60, "Longitud visual de las lineas (barras hacia atras)", minval = 5, group = grpFilter)
+showMonthly = input.bool(true,  "Mostrar Mensuales (1-12 meses)",   group = grpVis)
 
 grpStyle = "Estilo"
 colorUp     = input.color(color.new(color.blue, 0), "Color objetivo alcista (por encima del precio)", group = grpStyle)
 colorDown   = input.color(color.new(color.red, 0),  "Color objetivo bajista (por debajo del precio)", group = grpStyle)
 lineWidthIn = input.int(1, "Grosor de linea", minval = 1, maxval = 4, group = grpStyle)
+lineLenBars = input.int(60, "Longitud visual de las lineas (barras hacia atras)", minval = 5, group = grpStyle)
 showLabels  = input.bool(true, "Mostrar etiquetas de duracion", group = grpStyle)
 labelSize   = input.string(size.tiny, "Tamano de etiqueta", options = [size.tiny, size.small, size.normal], group = grpStyle)
 
@@ -74,7 +72,7 @@ N_MONTHLY = 12
 var array<float> hHighArr = array.new<float>()
 var array<float> hLowArr  = array.new<float>()
 var float hLastT = na
-if not na(h1T) and h1T != hLastT
+if not na(h1T) and (na(hLastT) or h1T != hLastT)
     if not na(h1H)
         array.push(hHighArr, h1H)
         array.push(hLowArr, h1L)
@@ -86,7 +84,7 @@ if not na(h1T) and h1T != hLastT
 var array<float> dHighArr = array.new<float>()
 var array<float> dLowArr  = array.new<float>()
 var float dLastT = na
-if not na(d1T) and d1T != dLastT
+if not na(d1T) and (na(dLastT) or d1T != dLastT)
     if not na(d1H)
         array.push(dHighArr, d1H)
         array.push(dLowArr, d1L)
@@ -98,7 +96,7 @@ if not na(d1T) and d1T != dLastT
 var array<float> wHighArr = array.new<float>()
 var array<float> wLowArr  = array.new<float>()
 var float wLastT = na
-if not na(w1T) and w1T != wLastT
+if not na(w1T) and (na(wLastT) or w1T != wLastT)
     if not na(w1H)
         array.push(wHighArr, w1H)
         array.push(wLowArr, w1L)
@@ -110,7 +108,7 @@ if not na(w1T) and w1T != wLastT
 var array<float> mHighArr = array.new<float>()
 var array<float> mLowArr  = array.new<float>()
 var float mLastT = na
-if not na(m1T) and m1T != mLastT
+if not na(m1T) and (na(mLastT) or m1T != mLastT)
     if not na(m1H)
         array.push(mHighArr, m1H)
         array.push(mLowArr, m1L)
@@ -119,101 +117,107 @@ if not na(m1T) and m1T != mLastT
             array.shift(mLowArr)
     mLastT := m1T
 
-// ------------------------------- Objetos persistentes (creados 1 sola vez) -
-var array<line>  hHighLines = array.new<line>(N_HOURLY)
-var array<line>  hLowLines  = array.new<line>(N_HOURLY)
-var array<label> hHighLbls  = array.new<label>(N_HOURLY)
-var array<label> hLowLbls   = array.new<label>(N_HOURLY)
+// ------------------------------- Handles de dibujo (se borran y recrean) ---
+var array<line>  hLines = array.new<line>()
+var array<label> hLbls  = array.new<label>()
+var array<line>  dLines = array.new<line>()
+var array<label> dLbls  = array.new<label>()
+var array<line>  wLines = array.new<line>()
+var array<label> wLbls  = array.new<label>()
+var array<line>  mLines = array.new<line>()
+var array<label> mLbls  = array.new<label>()
 
-var array<line>  dHighLines = array.new<line>(N_DAILY)
-var array<line>  dLowLines  = array.new<line>(N_DAILY)
-var array<label> dHighLbls  = array.new<label>(N_DAILY)
-var array<label> dLowLbls   = array.new<label>(N_DAILY)
-
-var array<line>  wHighLines = array.new<line>(N_WEEKLY)
-var array<line>  wLowLines  = array.new<line>(N_WEEKLY)
-var array<label> wHighLbls  = array.new<label>(N_WEEKLY)
-var array<label> wLowLbls   = array.new<label>(N_WEEKLY)
-
-var array<line>  mHighLines = array.new<line>(N_MONTHLY)
-var array<line>  mLowLines  = array.new<line>(N_MONTHLY)
-var array<label> mHighLbls  = array.new<label>(N_MONTHLY)
-var array<label> mLowLbls   = array.new<label>(N_MONTHLY)
-
-if barstate.isfirst
-    for i = 0 to N_HOURLY - 1
-        array.set(hHighLines, i, line.new(na, na, na, na))
-        array.set(hLowLines,  i, line.new(na, na, na, na))
-        array.set(hHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-        array.set(hLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-    for i = 0 to N_DAILY - 1
-        array.set(dHighLines, i, line.new(na, na, na, na))
-        array.set(dLowLines,  i, line.new(na, na, na, na))
-        array.set(dHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-        array.set(dLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-    for i = 0 to N_WEEKLY - 1
-        array.set(wHighLines, i, line.new(na, na, na, na))
-        array.set(wLowLines,  i, line.new(na, na, na, na))
-        array.set(wHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-        array.set(wLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-    for i = 0 to N_MONTHLY - 1
-        array.set(mHighLines, i, line.new(na, na, na, na))
-        array.set(mLowLines,  i, line.new(na, na, na, na))
-        array.set(mHighLbls,  i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-        array.set(mLowLbls,   i, label.new(na, na, "", style = label.style_label_left, size = labelSize))
-
-// ------------------------------- Actualizacion de niveles (funcion compartida)
-updateLevels(array<float> highArr, array<float> lowArr, array<line> highLines, array<line> lowLines, array<label> highLbls, array<label> lowLbls, int maxN, bool categoryOn, string unitSuffix) =>
-    for n = 1 to maxN
-        idx = n - 1
-        lnHi = array.get(highLines, idx)
-        lnLo = array.get(lowLines, idx)
-        lbHi = array.get(highLbls, idx)
-        lbLo = array.get(lowLbls, idx)
-        sz = array.size(highArr)
-        haveData = sz >= n
-        hiVal = haveData ? array.max(array.slice(highArr, sz - n, sz)) : na
-        loVal = haveData ? array.min(array.slice(lowArr, sz - n, sz)) : na
-        distHi = na(hiVal) ? na : math.abs(hiVal - close)
-        distLo = na(loVal) ? na : math.abs(close - loVal)
-        visHi = categoryOn and not na(hiVal) and hiVal > close and (maxDistPoints <= 0 or distHi <= maxDistPoints)
-        visLo = categoryOn and not na(loVal) and loVal < close and (maxDistPoints <= 0 or distLo <= maxDistPoints)
-
-        if visHi
-            line.set_xy1(lnHi, bar_index - lineLenBars, hiVal)
-            line.set_xy2(lnHi, bar_index, hiVal)
-            line.set_color(lnHi, colorUp)
-            line.set_width(lnHi, lineWidthIn)
-            if showLabels
-                label.set_xy(lbHi, bar_index, hiVal)
-                label.set_text(lbHi, str.tostring(n) + unitSuffix)
-                label.set_textcolor(lbHi, colorUp)
-                label.set_color(lbHi, color.new(color.white, 100))
-            else
-                label.set_text(lbHi, "")
-        else
-            line.set_color(lnHi, color(na))
-            label.set_text(lbHi, "")
-
-        if visLo
-            line.set_xy1(lnLo, bar_index - lineLenBars, loVal)
-            line.set_xy2(lnLo, bar_index, loVal)
-            line.set_color(lnLo, colorDown)
-            line.set_width(lnLo, lineWidthIn)
-            if showLabels
-                label.set_xy(lbLo, bar_index, loVal)
-                label.set_text(lbLo, str.tostring(n) + unitSuffix)
-                label.set_textcolor(lbLo, colorDown)
-                label.set_color(lbLo, color.new(color.white, 100))
-            else
-                label.set_text(lbLo, "")
-        else
-            line.set_color(lnLo, color(na))
-            label.set_text(lbLo, "")
-
-// ------------------------------- Solo se redibuja en la ultima barra -------
+// ------------------------------- Dibujo: solo en la ultima barra -----------
 if barstate.islast
-    updateLevels(hHighArr, hLowArr, hHighLines, hLowLines, hHighLbls, hLowLbls, N_HOURLY,  showHourly,  "h")
-    updateLevels(dHighArr, dLowArr, dHighLines, dLowLines, dHighLbls, dLowLbls, N_DAILY,   showDaily,   "D")
-    updateLevels(wHighArr, wLowArr, wHighLines, wLowLines, wHighLbls, wLowLbls, N_WEEKLY,  showWeekly,  "W")
-    updateLevels(mHighArr, mLowArr, mHighLines, mLowLines, mHighLbls, mLowLbls, N_MONTHLY, showMonthly, "M")
+    // --- borrar todo lo dibujado en el recalculo anterior ---
+    for i = 0 to array.size(hLines) - 1
+        line.delete(array.get(hLines, i))
+    for i = 0 to array.size(hLbls) - 1
+        label.delete(array.get(hLbls, i))
+    array.clear(hLines)
+    array.clear(hLbls)
+
+    for i = 0 to array.size(dLines) - 1
+        line.delete(array.get(dLines, i))
+    for i = 0 to array.size(dLbls) - 1
+        label.delete(array.get(dLbls, i))
+    array.clear(dLines)
+    array.clear(dLbls)
+
+    for i = 0 to array.size(wLines) - 1
+        line.delete(array.get(wLines, i))
+    for i = 0 to array.size(wLbls) - 1
+        label.delete(array.get(wLbls, i))
+    array.clear(wLines)
+    array.clear(wLbls)
+
+    for i = 0 to array.size(mLines) - 1
+        line.delete(array.get(mLines, i))
+    for i = 0 to array.size(mLbls) - 1
+        label.delete(array.get(mLbls, i))
+    array.clear(mLines)
+    array.clear(mLbls)
+
+    // --- Horarios ---
+    if showHourly
+        hSz = array.size(hHighArr)
+        for n = 1 to N_HOURLY
+            if hSz >= n
+                hiVal = array.max(array.slice(hHighArr, hSz - n, hSz))
+                loVal = array.min(array.slice(hLowArr,  hSz - n, hSz))
+                if hiVal > close
+                    array.push(hLines, line.new(bar_index - lineLenBars, hiVal, bar_index, hiVal, color = colorUp, width = lineWidthIn))
+                    if showLabels
+                        array.push(hLbls, label.new(bar_index, hiVal, str.tostring(n) + "h", style = label.style_label_left, size = labelSize, textcolor = colorUp, color = color.new(color.white, 100)))
+                if loVal < close
+                    array.push(hLines, line.new(bar_index - lineLenBars, loVal, bar_index, loVal, color = colorDown, width = lineWidthIn))
+                    if showLabels
+                        array.push(hLbls, label.new(bar_index, loVal, str.tostring(n) + "h", style = label.style_label_left, size = labelSize, textcolor = colorDown, color = color.new(color.white, 100)))
+
+    // --- Diarios ---
+    if showDaily
+        dSz = array.size(dHighArr)
+        for n = 1 to N_DAILY
+            if dSz >= n
+                hiVal = array.max(array.slice(dHighArr, dSz - n, dSz))
+                loVal = array.min(array.slice(dLowArr,  dSz - n, dSz))
+                if hiVal > close
+                    array.push(dLines, line.new(bar_index - lineLenBars, hiVal, bar_index, hiVal, color = colorUp, width = lineWidthIn))
+                    if showLabels
+                        array.push(dLbls, label.new(bar_index, hiVal, str.tostring(n) + "D", style = label.style_label_left, size = labelSize, textcolor = colorUp, color = color.new(color.white, 100)))
+                if loVal < close
+                    array.push(dLines, line.new(bar_index - lineLenBars, loVal, bar_index, loVal, color = colorDown, width = lineWidthIn))
+                    if showLabels
+                        array.push(dLbls, label.new(bar_index, loVal, str.tostring(n) + "D", style = label.style_label_left, size = labelSize, textcolor = colorDown, color = color.new(color.white, 100)))
+
+    // --- Semanales ---
+    if showWeekly
+        wSz = array.size(wHighArr)
+        for n = 1 to N_WEEKLY
+            if wSz >= n
+                hiVal = array.max(array.slice(wHighArr, wSz - n, wSz))
+                loVal = array.min(array.slice(wLowArr,  wSz - n, wSz))
+                if hiVal > close
+                    array.push(wLines, line.new(bar_index - lineLenBars, hiVal, bar_index, hiVal, color = colorUp, width = lineWidthIn))
+                    if showLabels
+                        array.push(wLbls, label.new(bar_index, hiVal, str.tostring(n) + "W", style = label.style_label_left, size = labelSize, textcolor = colorUp, color = color.new(color.white, 100)))
+                if loVal < close
+                    array.push(wLines, line.new(bar_index - lineLenBars, loVal, bar_index, loVal, color = colorDown, width = lineWidthIn))
+                    if showLabels
+                        array.push(wLbls, label.new(bar_index, loVal, str.tostring(n) + "W", style = label.style_label_left, size = labelSize, textcolor = colorDown, color = color.new(color.white, 100)))
+
+    // --- Mensuales ---
+    if showMonthly
+        mSz = array.size(mHighArr)
+        for n = 1 to N_MONTHLY
+            if mSz >= n
+                hiVal = array.max(array.slice(mHighArr, mSz - n, mSz))
+                loVal = array.min(array.slice(mLowArr,  mSz - n, mSz))
+                if hiVal > close
+                    array.push(mLines, line.new(bar_index - lineLenBars, hiVal, bar_index, hiVal, color = colorUp, width = lineWidthIn))
+                    if showLabels
+                        array.push(mLbls, label.new(bar_index, hiVal, str.tostring(n) + "M", style = label.style_label_left, size = labelSize, textcolor = colorUp, color = color.new(color.white, 100)))
+                if loVal < close
+                    array.push(mLines, line.new(bar_index - lineLenBars, loVal, bar_index, loVal, color = colorDown, width = lineWidthIn))
+                    if showLabels
+                        array.push(mLbls, label.new(bar_index, loVal, str.tostring(n) + "M", style = label.style_label_left, size = labelSize, textcolor = colorDown, color = color.new(color.white, 100)))
