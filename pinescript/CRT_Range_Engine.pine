@@ -130,31 +130,42 @@ var array<label> mLbls  = array.new<label>()
 // ------------------------------- Dibujo: solo en la ultima barra -----------
 if barstate.islast
     // --- borrar todo lo dibujado en el recalculo anterior ---
-    for i = 0 to array.size(hLines) - 1
-        line.delete(array.get(hLines, i))
-    for i = 0 to array.size(hLbls) - 1
-        label.delete(array.get(hLbls, i))
+    // Guarda explicita de tamano antes de cada bucle: en Pine, un `for`
+    // con `to` = -1 (array vacio, size-1) no se salta la vuelta como
+    // cabria esperar y revienta contra un array.get() fuera de rango.
+    if array.size(hLines) > 0
+        for i = 0 to array.size(hLines) - 1
+            line.delete(array.get(hLines, i))
+    if array.size(hLbls) > 0
+        for i = 0 to array.size(hLbls) - 1
+            label.delete(array.get(hLbls, i))
     array.clear(hLines)
     array.clear(hLbls)
 
-    for i = 0 to array.size(dLines) - 1
-        line.delete(array.get(dLines, i))
-    for i = 0 to array.size(dLbls) - 1
-        label.delete(array.get(dLbls, i))
+    if array.size(dLines) > 0
+        for i = 0 to array.size(dLines) - 1
+            line.delete(array.get(dLines, i))
+    if array.size(dLbls) > 0
+        for i = 0 to array.size(dLbls) - 1
+            label.delete(array.get(dLbls, i))
     array.clear(dLines)
     array.clear(dLbls)
 
-    for i = 0 to array.size(wLines) - 1
-        line.delete(array.get(wLines, i))
-    for i = 0 to array.size(wLbls) - 1
-        label.delete(array.get(wLbls, i))
+    if array.size(wLines) > 0
+        for i = 0 to array.size(wLines) - 1
+            line.delete(array.get(wLines, i))
+    if array.size(wLbls) > 0
+        for i = 0 to array.size(wLbls) - 1
+            label.delete(array.get(wLbls, i))
     array.clear(wLines)
     array.clear(wLbls)
 
-    for i = 0 to array.size(mLines) - 1
-        line.delete(array.get(mLines, i))
-    for i = 0 to array.size(mLbls) - 1
-        label.delete(array.get(mLbls, i))
+    if array.size(mLines) > 0
+        for i = 0 to array.size(mLines) - 1
+            line.delete(array.get(mLines, i))
+    if array.size(mLbls) > 0
+        for i = 0 to array.size(mLbls) - 1
+            label.delete(array.get(mLbls, i))
     array.clear(mLines)
     array.clear(mLbls)
 
