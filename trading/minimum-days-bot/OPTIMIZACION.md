@@ -115,3 +115,23 @@ El veredicto es mecánico. Se comparan los 4 criterios del objetivo en orden, co
 - **MUESTRA OOS INSUFICIENTE:** menos de 20 ciclos en OOS.
 
 Si las fechas del export no están en hora de Madrid, indica la zona del gráfico con `--tz`. Por ejemplo: `--tz UTC`.
+
+## Simulador de cuenta hipotética (`--account`)
+
+Simula cuentas nuevas operadas con los trades reales de un export: cada ciclo empieza con la equity inicial y 0 MIN DAYS, y termina con N MIN DAYS (OK), al violar el drawdown (FAIL) o al violar la pérdida diaria (FAIL). Dos modelos independientes: **A** solo P&L realizado, **B** realizado + excursión adversa (MAE) de cada trade.
+
+```bash
+python3 analyze_trades.py runs/v02_base.csv --account --report runs/CUENTA_base.md --out runs/base
+python3 analyze_trades.py runs/v02_base.csv --account --daily-loss 500 --report runs/CUENTA_base_dl500.md
+```
+
+| Parámetro | Defecto |
+|---|---|
+| `--starting-equity` | 25000 |
+| `--drawdown` / `--dd-mode` | 2000 / `trailing-eod` (también `trailing-intraday`, `static`) |
+| `--daily-loss` | 0 = off |
+| `--minimum-days` / `--minimum-day-profit` | 4 / 150 |
+| `--commission` / `--contracts` | 0.74 / 4 (si difieren de `--bt-commission` / `--bt-contracts`, el P&L se escala linealmente, con aviso) |
+| `--periods` | 2019-2020,2021-2022,2023-2024,2025-2026 |
+
+Son parámetros del simulador, no las reglas de ninguna empresa concreta. Salidas: informe Markdown, `<out>_cuenta_ciclos_A.csv` / `_B.csv` (una fila por ciclo) y `<out>_cuenta_dias.csv`.

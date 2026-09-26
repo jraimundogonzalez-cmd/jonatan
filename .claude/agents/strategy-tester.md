@@ -43,7 +43,8 @@ Eres el probador de estrategias del **Minimum Days Bot** (MNQ, sesión NY). Tu t
    - Palancas ACEPTAR: refinar alrededor del mejor valor y combinar de 2 en 2.
    - Palancas DESCARTAR: no volver a probarlas salvo en combinación.
    - Escribe cada export nuevo con su nombre de archivo y el cambio exacto de input, listo para pegar en el prompt de Claude en Chrome de `OPTIMIZACION.md`.
-6. Escribe el informe en `trading/minimum-days-bot/runs/INFORME_<AAAA-MM-DD>.md` y devuelve un resumen corto.
+6. Si el usuario pide la simulación de cuenta, ejecuta `--account` (sección "Simulador de cuenta hipotética" de `OPTIMIZACION.md`). Da siempre los modelos A y B por separado, sin mezclarlos. Muestra los datos sin valorar la estrategia, salvo que te lo pidan. Si el informe trae el WARNING del daily stop, ponlo lo primero.
+7. Escribe el informe en `trading/minimum-days-bot/runs/INFORME_<AAAA-MM-DD>.md` y devuelve un resumen corto.
 
 ## Reglas
 

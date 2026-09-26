@@ -449,10 +449,35 @@ def main():
     ap.add_argument("--cycles", action="store_true", help="imprimir cada ciclo con su camino")
     ap.add_argument("--rank", metavar="BASE", help="ranking + veredicto frente a la variante BASE (nombre de archivo sin extensión; requiere --split)")
     ap.add_argument("--md", help="escribir el ranking en este archivo Markdown")
+    g = ap.add_argument_group("simulador de cuenta (--account)")
+    g.add_argument("--account", action="store_true", help="simular cuentas hipotéticas (modelos A y B) con 1 export")
+    g.add_argument("--starting-equity", type=float, default=25000.0)
+    g.add_argument("--drawdown", type=float, default=2000.0, help="límite de drawdown ($)")
+    g.add_argument("--dd-mode", choices=["trailing-eod", "trailing-intraday", "static"], default="trailing-eod",
+                   help="trailing desde el pico de cierre diario (defecto), desde el pico realizado intradía, o fijo")
+    g.add_argument("--daily-loss", type=float, default=0.0, help="límite de pérdida diaria ($, 0 = off)")
+    g.add_argument("--minimum-days", type=int, default=4)
+    g.add_argument("--minimum-day-profit", type=float, default=150.0)
+    g.add_argument("--commission", type=float, default=0.74, help="$ por contrato y lado para la simulación")
+    g.add_argument("--contracts", type=int, default=4)
+    g.add_argument("--bt-commission", type=float, default=0.74, help="comisión con la que se hizo el backtest")
+    g.add_argument("--bt-contracts", type=int, default=4, help="contratos con los que se hizo el backtest")
+    g.add_argument("--periods", default="2019-2020,2021-2022,2023-2024,2025-2026", help="periodos de estabilidad")
+    g.add_argument("--report", help="escribir el informe Markdown en este archivo")
     for k in COLS:
         ap.add_argument(f"--col-{k}", dest=f"col_{k}", help=f"nombre exacto de la columna '{k}'")
     args = ap.parse_args()
     tz = ZoneInfo(args.tz)
+
+    if args.account:
+        if len(args.csv) != 1:
+            sys.exit("--account trabaja con un único export")
+        import account_sim
+        trades = load_trades(args.csv[0], tz, args)
+        if not trades:
+            sys.exit(f"{args.csv[0]}: no hay trades cerrados")
+        account_sim.run(trades, args)
+        return
 
     results = {}
     for path in args.csv:
