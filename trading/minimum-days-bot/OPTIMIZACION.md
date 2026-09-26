@@ -118,6 +118,17 @@ Si las fechas del export no están en hora de Madrid, indica la zona del gráfic
 
 ## Simulador de cuenta hipotética (`--account`)
 
+Hay dos implementaciones independientes que deben dar lo mismo, ciclo a ciclo:
+- `mindays_auditor.py --account` es la referencia: céntimos enteros, calendario CME y cabeceras de TradingView.
+- `analyze_trades.py --account` es la verificación cruzada.
+
+```bash
+python3 mindays_auditor.py runs/v02_base.csv --account --report runs/CUENTA_base.md --out runs/base
+python3 mindays_auditor.py runs/v02_base.csv --account --daily-loss 500 --report runs/CUENTA_base_dl500.md
+```
+
+En `mindays_auditor.py` el tipo de drawdown se elige con `--dd-type` (en `analyze_trades.py` es `--dd-mode`). `--dd-mode realized|mae|both` del auditor es su modo de auditoría clásico, sin simulación de cuenta.
+
 Simula cuentas nuevas operadas con los trades reales de un export: cada ciclo empieza con la equity inicial y 0 MIN DAYS, y termina con N MIN DAYS (OK), al violar el drawdown (FAIL) o al violar la pérdida diaria (FAIL). Dos modelos independientes: **A** solo P&L realizado, **B** realizado + excursión adversa (MAE) de cada trade.
 
 ```bash
