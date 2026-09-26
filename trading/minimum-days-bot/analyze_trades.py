@@ -303,6 +303,7 @@ def stats(trades, days, cyc, target):
         "ciclos_abierto": sum(c["status"] == "ABIERTO" for c in cyc),
         "pct_ciclos_ok": 100 * len(ok) / (len(ok) + len(fail)) if ok or fail else None,
         "ok_con_pnl_pos": sum(c["pnl"] > 0 for c in ok),
+        "pct_ok_pos": 100 * sum(c["pnl"] > 0 for c in ok) / len(ok) if ok else None,
         "op_media": q(op, statistics.mean), "op_mediana": q(op, statistics.median),
         "op_mejor": q(op, min), "op_peor": q(op, max),
         "mkt_media": q(mkt, statistics.mean),
@@ -328,6 +329,7 @@ LABELS = [
     ("pct_min", "% MIN / operados"),
     ("ciclos_ok", "Ciclos OK"), ("ciclos_fail", "Ciclos FAIL"), ("ciclos_abierto", "Ciclo abierto"),
     ("pct_ciclos_ok", "% ciclos OK"), ("ok_con_pnl_pos", "Ciclos OK con P&L > 0"),
+    ("pct_ok_pos", "% ciclos OK con P&L > 0"),
     ("op_media", "Días operados a OK: media"), ("op_mediana", "  mediana"),
     ("op_mejor", "  mejor"), ("op_peor", "  peor"),
     ("mkt_media", "Días mercado a OK: media"),
@@ -359,6 +361,63 @@ def print_table(results):
         print(lbl.ljust(w0) + " | " + " | ".join(fmt(results[n][k]).rjust(w) for n, w in zip(names, ws)))
 
 
+# ----------------------------------------------------------------------------- ranking
+# Objetivo lexicográfico: (1) % ciclos OK, (2) % ciclos OK con P&L > 0,
+# (3) mediana de días operados a OK (menos es mejor), (4) peor caso de días operados.
+# Una diferencia menor que la tolerancia cuenta como empate y pasa al criterio siguiente.
+OBJ = [("pct_ciclos_ok", +1, 1.0), ("pct_ok_pos", +1, 2.0), ("op_mediana", -1, 0.5), ("op_peor", -1, 1.0)]
+MIN_OOS_CYCLES = 20
+
+
+def compare(a, b):
+    """+1 si a es mejor que b, -1 si es peor, 0 si empatan dentro de tolerancia."""
+    for k, sign, tol in OBJ:
+        va, vb = a.get(k), b.get(k)
+        if va is None or vb is None:
+            continue
+        d = (va - vb) * sign
+        if d > tol:
+            return 1
+        if d < -tol:
+            return -1
+    return 0
+
+
+def oos_not_worse(v, b):
+    return all(v.get(k) is not None and b.get(k) is not None and (v[k] - b[k]) * sign >= -tol
+               for k, sign, tol in OBJ[:3])
+
+
+def rank(results, names, base):
+    rows = []
+    for n in names:
+        full, i, o = results[n], results.get(n + " <"), results.get(n + " >=")
+        if n == base:
+            verdict = "BASE"
+        elif o is None or i is None:
+            verdict = "SIN SPLIT"
+        elif o["ciclos_ok"] + o["ciclos_fail"] < MIN_OOS_CYCLES:
+            verdict = "MUESTRA OOS INSUFICIENTE"
+        else:
+            c = compare(i, results[base + " <"])
+            ok_oos = oos_not_worse(o, results[base + " >="])
+            verdict = ("ACEPTAR" if ok_oos else "DESCARTAR (empeora OOS)") if c > 0 else \
+                      "NEUTRA (empata IS)" if c == 0 else "DESCARTAR (peor IS)"
+        rows.append((n, i or full, o, full, verdict))
+    key = lambda r: tuple(sign * (r[1].get(k) or 0) for k, sign, _ in OBJ)
+    rows.sort(key=key, reverse=True)
+    hdr = ["Variante", "IS %OK", "IS %OK>0", "IS med op", "IS peor op", "OOS %OK", "OOS %OK>0",
+           "OOS med op", "Ciclos (OK/FAIL)", "Neto total", "Veredicto"]
+    out = ["| " + " | ".join(hdr) + " |", "|" + "---|" * len(hdr)]
+    for n, i, o, full, verdict in rows:
+        g = lambda r, k: fmt(r.get(k)) if r else "-"
+        out.append("| " + " | ".join([n, g(i, "pct_ciclos_ok"), g(i, "pct_ok_pos"), g(i, "op_mediana"),
+                                      g(i, "op_peor"), g(o, "pct_ciclos_ok"), g(o, "pct_ok_pos"),
+                                      g(o, "op_mediana"), f"{full['ciclos_ok']}/{full['ciclos_fail']}",
+                                      fmt(full["neto"]), verdict]) + " |")
+    return "\n".join(out)
+
+
 def write_reports(prefix, days, cyc, target):
     with open(prefix + "_dias.csv", "w", newline="") as fh:
         w = csv.writer(fh)
@@ -388,6 +447,8 @@ def main():
     ap.add_argument("--split", help="fecha AAAA-MM-DD: calcula también antes / después (in / out of sample)")
     ap.add_argument("--out", help="prefijo para escribir <prefijo>_dias.csv y <prefijo>_ciclos.csv (solo 1 CSV)")
     ap.add_argument("--cycles", action="store_true", help="imprimir cada ciclo con su camino")
+    ap.add_argument("--rank", metavar="BASE", help="ranking + veredicto frente a la variante BASE (nombre de archivo sin extensión; requiere --split)")
+    ap.add_argument("--md", help="escribir el ranking en este archivo Markdown")
     for k in COLS:
         ap.add_argument(f"--col-{k}", dest=f"col_{k}", help=f"nombre exacto de la columna '{k}'")
     args = ap.parse_args()
@@ -422,6 +483,17 @@ def main():
                               f"P&L {c['pnl']:+.2f} | " + ", ".join(f"{p:+.2f}" for p in c["path"]))
     print()
     print_table(results)
+    if args.rank:
+        names = [p.rsplit("/", 1)[-1].rsplit(".", 1)[0] for p in args.csv]
+        if args.rank not in names:
+            sys.exit(f"--rank {args.rank}: no está entre los archivos {names}")
+        if not args.split:
+            sys.exit("--rank requiere --split AAAA-MM-DD")
+        table = rank(results, names, args.rank)
+        print("\n" + table)
+        if args.md:
+            with open(args.md, "w") as fh:
+                fh.write(f"# Ranking de variantes (base: {args.rank}, split {args.split})\n\n{table}\n")
 
 
 if __name__ == "__main__":

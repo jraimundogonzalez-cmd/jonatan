@@ -98,9 +98,20 @@ Al terminar, dame una tabla con las 4 cifras anotadas de cada variante.
 
 ## Analizar los exports
 
+Guarda los exports en `runs/` y pide en Claude Code: *"usa el agente strategy-tester para analizar los exports de runs/"*.
+El agente (`.claude/agents/strategy-tester.md`) comprueba cada archivo, hace el ranking, explica los ganadores y propone la siguiente ronda.
+
+A mano:
+
 ```bash
-python3 analyze_trades.py v02_*.csv --split 2024-01-01          # comparativa IS / OOS
-python3 analyze_trades.py v02_base.csv --cycles --out base      # ciclos día a día + CSVs
+python3 analyze_trades.py runs/v02_*.csv --split 2024-01-01 --rank v02_base --md runs/RANKING.md   # ranking + veredicto
+python3 analyze_trades.py runs/v02_base.csv --cycles --out runs/base                               # ciclos día a día + CSVs
 ```
+
+El veredicto es mecánico. Se comparan los 4 criterios del objetivo en orden, con tolerancias de 1 pp, 2 pp, 0,5 días y 1 día:
+- **ACEPTAR:** mejor que la base en IS y no peor en OOS.
+- **NEUTRA:** empata en IS.
+- **DESCARTAR:** peor en IS, o mejor en IS pero peor en OOS.
+- **MUESTRA OOS INSUFICIENTE:** menos de 20 ciclos en OOS.
 
 Si las fechas del export no están en hora de Madrid, indica la zona del gráfico con `--tz`. Por ejemplo: `--tz UTC`.
