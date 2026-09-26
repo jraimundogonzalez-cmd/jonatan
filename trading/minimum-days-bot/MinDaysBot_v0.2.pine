@@ -1,0 +1,500 @@
+//@version=6
+// ============================================================================
+// MINIMUM DAYS BOT v0.2 — MNQ (Micro E-mini Nasdaq) — Sesión New York
+// Objetivo: conseguir DÍAS >= +150 $ NETOS REALIZADOS (días mínimos de fondeo),
+// no maximizar beneficio. Al alcanzar el objetivo diario se deja de operar.
+//
+// CAMBIOS v0.2 (con los valores por defecto el trading es IDÉNTICO a v0.1):
+//  - El bloqueo del día (MINIMUM DAY ACHIEVED) depende SOLO del P&L realizado.
+//    La red "GOAL" cierra la posición pero ya no bloquea el día por sí sola.
+//  - "SL" del panel/tabla renombrado a "pérdidas" (cuenta cualquier trade perdedor).
+//  - Tabla: métricas objetivo (mediana/peor días a OK, ciclos OK con P&L > 0,
+//    días D <= -objetivo). Los ciclos se reinician en cada columna A-D:
+//    SOLO la columna TOTAL es válida para ciclos.
+//  - Log por ciclo (camino día a día) en Pine Logs.
+//  - Palancas nuevas para optimizar, desactivadas por defecto (0 = off):
+//    break-even y stop por tiempo.
+//
+// DEFINICIONES (todas las horas en America/New_York, DST automático):
+//  - Día operativo = sesión CME Globex 18:00 ET (D-1) -> 17:00 ET (D). Toma la fecha D.
+//  - Rango Asia = máx/mín de las velas cuya APERTURA cae en la ventana Asia.
+//    Solo existe (y solo se usa) cuando la ventana ya ha terminado -> sin lookahead.
+//  - Ruptura = CIERRE de vela por encima de AsiaHigh + buffer (y cierre anterior <= nivel).
+//    Entrada a mercado en la APERTURA de la vela siguiente.
+//  - Filtro EMA del close, en el MISMO timeframe del gráfico (sin request.security):
+//    LONG solo si close > EMA; SHORT solo si close < EMA; igualdad = no opera.
+//  - Comisión y slippage REALES se configuran en Propiedades de la estrategia.
+//    El input "Comisión" se usa para calcular TP/SL netos: debe coincidir con Propiedades
+//    (la tabla avisa si no coincide).
+// ============================================================================
+strategy("Minimum Days Bot v0.2 - MNQ", shorttitle = "MinDaysBot", overlay = true,
+     initial_capital = 50000, default_qty_type = strategy.fixed, default_qty_value = 4,
+     commission_type = strategy.commission.cash_per_contract, commission_value = 0.74,
+     slippage = 1, pyramiding = 0, process_orders_on_close = false, calc_on_every_tick = false,
+     margin_long = 0, margin_short = 0, use_bar_magnifier = true, max_labels_count = 500)
+
+const string TZ = "America/New_York"
+
+// ---------------------------- INPUTS ----------------------------------------
+grpT = "Horario (hora Nueva York)"
+asiaSess  = input.session("2000-0000", "Rango Asia (ET)", group = grpT)
+entrySess = input.session("0930-1130", "Ventana de señales (apertura de vela, ET)", group = grpT)
+flatSess  = input.session("1245-1800", "Cierre forzado (desde, ET) — antes del cierre anticipado de festivos (13:00 ET)", group = grpT)
+dayStartH = input.int(18, "Hora inicio día operativo (ET)", minval = 0, maxval = 23, group = grpT)
+
+grpR = "Riesgo / Objetivo"
+qty        = input.int(4, "Contratos MNQ", minval = 1, group = grpR)
+slUsd      = input.float(800.0, "Riesgo neto máx. por trade ($)", minval = 1, group = grpR)
+tpNetUsd   = input.float(160.0, "Beneficio neto objetivo por trade ($)", minval = 1, group = grpR)
+dayTarget  = input.float(150.0, "Objetivo diario neto REALIZADO ($) = MIN DAY", minval = 1, group = grpR)
+commIn     = input.float(0.74, "Comisión por contrato y lado ($) — igual que Propiedades", minval = 0, group = grpR)
+maxLosses  = input.int(2, "Máx. trades perdedores por día", minval = 1, group = grpR)
+maxTrades  = input.int(2, "Máx. trades por día", minval = 1, group = grpR)
+maxPerSide = input.int(1, "Máx. entradas por lado y día", minval = 1, group = grpR)
+afterLoss  = input.string("Estándar", "TP tras un SL", options = ["Estándar", "Recuperar hasta objetivo"], group = grpR)
+useGoalNet = input.bool(true, "Red GOAL: cerrar si realizado + abierto >= objetivo", group = grpR)
+
+grpM = "Gestión del trade (0 = off)"
+beTicks    = input.int(0, "Break-even: activar tras X ticks a favor (0 = off)", minval = 0, group = grpM)
+beLockUsd  = input.float(0.0, "Break-even: beneficio neto asegurado ($)", minval = 0, group = grpM)
+maxHoldMin = input.int(0, "Stop por tiempo: cerrar tras N minutos (0 = off)", minval = 0, group = grpM)
+
+grpF = "Entrada / Filtros"
+emaLen   = input.int(20, "EMA dirección", minval = 1, group = grpF)
+bufTicks = input.int(2, "Buffer de ruptura (ticks)", minval = 0, group = grpF)
+minRange = input.float(0.0, "Rango Asia mínimo (pts, 0 = off)", minval = 0, group = grpF)
+maxRange = input.float(0.0, "Rango Asia máximo (pts, 0 = off)", minval = 0, group = grpF)
+
+grpA = "Auditoría fondeo"
+ddLimit  = input.float(2000.0, "Drawdown trailing cuenta ($, EOD)", minval = 1, group = grpA)
+needDays = input.int(4, "Días mínimos requeridos", minval = 1, group = grpA)
+doLog    = input.bool(true, "Escribir un log por día y por ciclo (Pine Logs)", group = grpA)
+showTbl  = input.bool(true, "Mostrar tabla de auditoría", group = grpA)
+livePos  = input.string("Abajo izquierda", "Posición panel 'Estado hoy'", options = ["Abajo izquierda", "Arriba derecha", "Arriba centro"], group = grpA)
+
+// ---------------------------- HELPERS ---------------------------------------
+f_start(string s) => int(str.tonumber(str.substring(s, 0, 2))) * 60 + int(str.tonumber(str.substring(s, 2, 4)))
+f_end(string s)   => int(str.tonumber(str.substring(s, 5, 7))) * 60 + int(str.tonumber(str.substring(s, 7, 9)))
+f_in(int m, int st, int en) => st == en ? false : st < en ? (m >= st and m < en) : (m >= st or m < en)
+
+asiaSt = f_start(asiaSess)
+asiaEn = f_end(asiaSess)
+entSt  = f_start(entrySess)
+entEn  = f_end(entrySess)
+flatSt = f_start(flatSess)
+daySt  = dayStartH * 60
+
+pv   = syminfo.pointvalue
+tick = syminfo.mintick
+mNow = hour(time, TZ) * 60 + minute(time, TZ)
+
+// Día operativo: desplazar la hora de apertura del día a medianoche y leer la fecha en ET
+shiftMs  = (24 - dayStartH) * 3600000
+tShift   = time + shiftMs
+dayKey   = year(tShift, TZ) * 10000 + month(tShift, TZ) * 100 + dayofmonth(tShift, TZ)
+newDay   = dayKey != nz(dayKey[1], -1)
+
+inAsia   = f_in(mNow, asiaSt, asiaEn)
+inEntry  = f_in(mNow, entSt, entEn)
+inFlat   = f_in(mNow, flatSt, daySt)
+
+ema = ta.ema(close, emaLen)
+
+// ---------------------------- ESTADO DEL DÍA --------------------------------
+var float dayStartNet = 0.0
+var int   dayTrades   = 0     // trades cerrados hoy
+var int   dayLosses   = 0     // trades cerrados hoy con pérdida (SL, tiempo, EOD...)
+var int   dayLongs    = 0     // entradas enviadas hoy
+var int   dayShorts   = 0
+var bool  dayHadNY    = false
+var bool  dayGoalLock = false
+var float dayEqMin    = na
+var float dayEqStart  = na
+var int   dayTShift   = 0
+var float asiaHi      = na
+var float asiaLo      = na
+var int   asiaBars    = 0
+var int   prevClosed  = 0
+var float commSeen    = na
+var int   firstTime   = na
+
+// Estado del trade abierto (para break-even y stop por tiempo)
+var int   pendTp  = 0
+var int   pendSl  = 0
+var float tpPx    = na
+var float slPx    = na
+var bool  beDone  = false
+var int   entryT  = na
+
+if na(firstTime)
+    firstTime := time
+
+// Registro por día de mercado (días con velas en la ventana NY)
+var array<int>   dT      = array.new<int>()
+var array<float> dPnl    = array.new<float>()
+var array<int>   dTr     = array.new<int>()
+var array<int>   dLo     = array.new<int>()
+var array<float> dEqS    = array.new<float>()
+var array<float> dEqE    = array.new<float>()
+var array<float> dEqMin  = array.new<float>()
+
+f_state(float pnl, int tr, int lo) =>
+    tr == 0 ? "SIN TRADE" : pnl >= dayTarget ? "MIN DAY" : lo >= maxLosses ? "FAIL 2 PÉRDIDAS" : pnl < 0 ? "FAIL -" : "FAIL 0-150"
+
+// ---- Cambio de día operativo: cerrar registro del día anterior y resetear ----
+if newDay
+    if dayHadNY
+        pnlPrev = strategy.netprofit - dayStartNet
+        dT.push(dayTShift)
+        dPnl.push(pnlPrev)
+        dTr.push(dayTrades)
+        dLo.push(dayLosses)
+        dEqS.push(dayEqStart)
+        dEqE.push(strategy.initial_capital + strategy.netprofit)
+        dEqMin.push(nz(dayEqMin, dayEqStart))
+        if doLog and dayTrades > 0
+            log.info("DAY {0} | P&L neto {1} | trades {2} | pérdidas {3} | {4} | eqS {5} eqMin {6} eqE {7}", str.format_time(dayTShift, "yyyy-MM-dd", TZ), str.tostring(pnlPrev, "#.##"), dayTrades, dayLosses, f_state(pnlPrev, dayTrades, dayLosses), str.tostring(dayEqStart, "#.##"), str.tostring(nz(dayEqMin, dayEqStart), "#.##"), str.tostring(strategy.initial_capital + strategy.netprofit, "#.##"))
+    dayStartNet := strategy.netprofit
+    dayTrades   := 0
+    dayLosses   := 0
+    dayLongs    := 0
+    dayShorts   := 0
+    dayHadNY    := false
+    dayGoalLock := false
+    dayEqStart  := strategy.initial_capital + strategy.netprofit
+    dayEqMin    := dayEqStart
+    dayTShift   := tShift
+    asiaHi      := na
+    asiaLo      := na
+    asiaBars    := 0
+
+// ---- Trades cerrados en esta vela ----
+nClosed = strategy.closedtrades
+if nClosed > prevClosed
+    for i = prevClosed to nClosed - 1
+        dayTrades += 1
+        if strategy.closedtrades.profit(i) < 0
+            dayLosses += 1
+        sz = math.abs(strategy.closedtrades.size(i))
+        if sz > 0
+            commSeen := strategy.closedtrades.commission(i) / (2 * sz)
+    prevClosed := nClosed
+
+dayRealized = strategy.netprofit - dayStartNet
+posSize     = strategy.position_size
+openNet     = posSize != 0 ? strategy.openprofit - commIn * math.abs(posSize) : 0.0
+
+// ---- Rango de Asia ----
+if inAsia
+    asiaHi   := na(asiaHi) ? high : math.max(asiaHi, high)
+    asiaLo   := na(asiaLo) ? low : math.min(asiaLo, low)
+    asiaBars += 1
+asiaReady = asiaBars > 0 and not inAsia and not na(asiaHi)
+asiaRng   = asiaReady ? asiaHi - asiaLo : na
+rangeOK   = asiaReady and (minRange == 0 or asiaRng >= minRange) and (maxRange == 0 or asiaRng <= maxRange)
+
+if inEntry
+    dayHadNY := true
+
+// ---- DAILY GOAL ENGINE ----
+// El día solo se bloquea con P&L REALIZADO >= objetivo.
+if dayRealized >= dayTarget
+    dayGoalLock := true
+// Red de seguridad: realizado + abierto (neto de comisión de salida) >= objetivo -> cerrar.
+// No bloquea el día: si el cierre (apertura de la vela siguiente) queda por debajo del
+// objetivo, el día sigue sin ser MIN DAY y se rige por los límites de trades.
+goalExit = useGoalNet and posSize != 0 and dayRealized + openNet >= dayTarget
+if goalExit
+    strategy.close_all(comment = "GOAL")
+
+entriesToday = dayLongs + dayShorts
+dayLocked = dayGoalLock or dayLosses >= maxLosses or entriesToday >= maxTrades
+
+// ---- Señales (solo información de velas ya cerradas) ----
+hiLvl = asiaReady ? asiaHi + bufTicks * tick : na
+loLvl = asiaReady ? asiaLo - bufTicks * tick : na
+longBreak  = asiaReady and close > hiLvl and close[1] <= hiLvl
+shortBreak = asiaReady and close < loLvl and close[1] >= loLvl
+longSig  = longBreak and close > ema
+shortSig = shortBreak and close < ema
+canTrade = inEntry and rangeOK and not dayLocked and posSize == 0
+
+// TP neto: normal = tpNetUsd; si ya hay beneficio parcial -> lo que falta hasta el objetivo
+float tpNet = tpNetUsd
+if dayRealized > 0 and dayRealized < dayTarget
+    tpNet := math.max(dayTarget - dayRealized, 1.0)
+else if dayRealized < 0 and afterLoss == "Recuperar hasta objetivo"
+    tpNet := dayTarget - dayRealized
+costRT  = commIn * qty * 2
+tpTicks = math.ceil((tpNet + costRT) / (qty * pv) / tick)
+slTicks = math.max(1, math.floor((slUsd - costRT) / (qty * pv) / tick))
+beOffTicks = math.ceil((beLockUsd + costRT) / (qty * pv) / tick)
+
+if canTrade and longSig and dayLongs < maxPerSide
+    strategy.entry("L", strategy.long, qty = qty)
+    strategy.exit("L-X", from_entry = "L", profit = tpTicks, loss = slTicks, comment_profit = "TP", comment_loss = "SL")
+    dayLongs += 1
+    pendTp := tpTicks
+    pendSl := slTicks
+else if canTrade and shortSig and dayShorts < maxPerSide
+    strategy.entry("S", strategy.short, qty = qty)
+    strategy.exit("S-X", from_entry = "S", profit = tpTicks, loss = slTicks, comment_profit = "TP", comment_loss = "SL")
+    dayShorts += 1
+    pendTp := tpTicks
+    pendSl := slTicks
+
+// ---- Gestión del trade abierto: break-even y stop por tiempo (0 = off) ----
+if posSize == 0
+    tpPx   := na
+    slPx   := na
+    beDone := false
+    entryT := na
+else
+    dir = posSize > 0 ? 1 : -1
+    ep  = strategy.position_avg_price
+    if na(tpPx)
+        // primera vela con la posición abierta: fijar precios desde el precio real de entrada
+        tpPx   := ep + dir * pendTp * tick
+        slPx   := ep - dir * pendSl * tick
+        entryT := time
+    if beTicks > 0 and not beDone
+        fav = dir > 0 ? high - ep : ep - low
+        if fav >= beTicks * tick
+            beDone := true
+            slPx   := ep + dir * beOffTicks * tick
+            if dir > 0
+                strategy.exit("L-X", from_entry = "L", limit = tpPx, stop = slPx, comment_profit = "TP", comment_loss = "BE")
+            else
+                strategy.exit("S-X", from_entry = "S", limit = tpPx, stop = slPx, comment_profit = "TP", comment_loss = "BE")
+    if maxHoldMin > 0 and not goalExit and (time_close - entryT) / 60000 >= maxHoldMin
+        strategy.close_all(comment = "TIME")
+
+// ---- Cierre forzado fin de sesión ----
+if inFlat and posSize != 0
+    strategy.close_all(comment = "EOD")
+// Guardas extra: última vela de la sesión (festivos) o posición heredada de otro día -> cerrar en ESTA vela
+if posSize != 0 and (session.islastbar or newDay)
+    strategy.close_all(comment = "SESSION END", immediately = true)
+
+// ---- Equity mínima intradía (para simulación de drawdown de fondeo) ----
+eqNow = strategy.equity
+worst = posSize > 0 ? eqNow - (close - low) * posSize * pv : posSize < 0 ? eqNow - (high - close) * math.abs(posSize) * pv : eqNow
+dayEqMin := na(dayEqMin) ? worst : math.min(dayEqMin, worst)
+
+// ---------------------------- VISUAL ----------------------------------------
+plot(ema, "EMA", color = color.orange, linewidth = 2)
+plot(asiaReady ? asiaHi : na, "Asia High", color = color.teal, style = plot.style_linebr)
+plot(asiaReady ? asiaLo : na, "Asia Low", color = color.maroon, style = plot.style_linebr)
+bgcolor(inEntry and dayGoalLock ? color.new(color.green, 88) : inEntry and dayLosses >= maxLosses ? color.new(color.red, 88) : na, title = "Estado día")
+
+// ---------------------------- AUDITORÍA -------------------------------------
+f_stats(array<float> pnl, array<int> tr, array<int> lo, int i0, int i1) =>
+    int mkt = 0
+    int traded = 0
+    int minD = 0
+    int losing = 0
+    int bigLoss = 0
+    int zeroTo = 0
+    int twoL = 0
+    int trades = 0
+    float worstDay = na
+    float net = 0.0
+    if i1 >= i0
+        for i = i0 to i1
+            mkt += 1
+            t = tr.get(i)
+            if t > 0
+                p = pnl.get(i)
+                traded += 1
+                trades += t
+                net += p
+                if p >= dayTarget
+                    minD += 1
+                else if p < 0
+                    losing += 1
+                    if p <= -dayTarget
+                        bigLoss += 1
+                else
+                    zeroTo += 1
+                if lo.get(i) >= maxLosses
+                    twoL += 1
+                worstDay := na(worstDay) ? p : math.min(worstDay, p)
+    [mkt, traded, minD, losing, bigLoss, zeroTo, twoL, trades, worstDay, net]
+
+// Simulación de ciclos: empieza con 0 días, termina al llegar a N días (OK)
+// o al tocar el drawdown trailing EOD (FAIL). El siguiente ciclo empieza al día siguiente.
+// Devuelve, por cada ciclo OK: días mercado, días operados, trades, beneficio y días naturales.
+f_cycles(array<int> tt, array<float> pnl, array<int> tr, array<float> eqS, array<float> eqE, array<float> eqMin, int i0, int i1) =>
+    array<float> okMkt = array.new<float>()
+    array<float> okOp  = array.new<float>()
+    array<float> okTrd = array.new<float>()
+    array<float> okPrf = array.new<float>()
+    array<float> okCal = array.new<float>()
+    array<string> logs = array.new<string>()
+    int fail = 0
+    bool inC = false
+    int cMin = 0
+    int cMkt = 0
+    int cTraded = 0
+    int cTrades = 0
+    float cEq0 = 0.0
+    float cPeak = 0.0
+    int cT0 = 0
+    string cPath = ""
+    if i1 >= i0
+        for i = i0 to i1
+            if not inC
+                inC := true
+                cMin := 0
+                cMkt := 0
+                cTraded := 0
+                cTrades := 0
+                cEq0 := eqS.get(i)
+                cPeak := cEq0
+                cT0 := tt.get(i)
+                cPath := ""
+            cMkt += 1
+            if tr.get(i) > 0
+                cTraded += 1
+                cTrades += tr.get(i)
+                cPath += (cPath == "" ? "" : ", ") + str.tostring(pnl.get(i), "#.##")
+            cal = math.round((tt.get(i) - cT0) / 86400000.0) + 1
+            head = str.format_time(cT0, "yyyy-MM-dd", TZ) + " -> " + str.format_time(tt.get(i), "yyyy-MM-dd", TZ)
+            if eqMin.get(i) <= cPeak - ddLimit
+                fail += 1
+                inC := false
+                logs.push("CYCLE FAIL | " + head + " | operados " + str.tostring(cTraded) + " | mercado " + str.tostring(cMkt) + " | P&L " + str.tostring(eqE.get(i) - cEq0, "#.##") + " | " + cPath)
+                continue
+            if pnl.get(i) >= dayTarget
+                cMin += 1
+            cPeak := math.max(cPeak, eqE.get(i))
+            if cMin >= needDays
+                okMkt.push(cMkt)
+                okOp.push(cTraded)
+                okTrd.push(cTrades)
+                okPrf.push(eqE.get(i) - cEq0)
+                okCal.push(cal)
+                inC := false
+                logs.push("CYCLE OK | " + head + " | operados " + str.tostring(cTraded) + " | mercado " + str.tostring(cMkt) + " | naturales " + str.tostring(cal) + " | P&L " + str.tostring(eqE.get(i) - cEq0, "#.##") + " | " + cPath)
+    [okMkt, okOp, okTrd, okPrf, okCal, fail, inC ? 1 : 0, logs]
+
+f_maxStreak(array<float> pnl, array<int> tr) =>
+    int best = 0
+    int cur = 0
+    if pnl.size() > 0
+        for i = 0 to pnl.size() - 1
+            if tr.get(i) > 0
+                if pnl.get(i) >= dayTarget
+                    cur += 1
+                    best := math.max(best, cur)
+                else
+                    cur := 0
+    best
+
+f_avg(array<float> a) => a.size() > 0 ? a.avg() : na
+f_med(array<float> a) => a.size() > 0 ? a.median() : na
+f_max(array<float> a) => a.size() > 0 ? a.max() : na
+f_npos(array<float> a) =>
+    int k = 0
+    if a.size() > 0
+        for v in a
+            if v > 0
+                k += 1
+    k
+
+f_fmt(float v) => na(v) ? "-" : str.tostring(v, "#,##0.##")
+f_pct(int a, int b) => b > 0 ? str.tostring(100.0 * a / b, "0.0") + "%" : "-"
+
+// Log de todos los ciclos (una sola vez, al terminar el histórico del gráfico)
+if doLog and barstate.islastconfirmedhistory
+    [lMkt, lOp, lTrd, lPrf, lCal, lFail, lOpn, cycLogs] = f_cycles(dT, dPnl, dTr, dEqS, dEqE, dEqMin, 0, dT.size() - 1)
+    for s in cycLogs
+        log.info(s)
+
+livePosition = livePos == "Arriba derecha" ? position.top_right : livePos == "Arriba centro" ? position.top_center : position.bottom_left
+var table tb = table.new(position.bottom_right, 6, 34, bgcolor = color.new(color.black, 10), border_width = 1, border_color = color.gray)
+var table live = table.new(livePosition, 2, 8, bgcolor = color.new(color.black, 10), border_width = 1, border_color = color.gray)
+
+if barstate.islast
+    // copia de los registros + día en curso (si tuvo sesión NY)
+    aT = dT.copy()
+    aP = dPnl.copy()
+    aTr = dTr.copy()
+    aLo = dLo.copy()
+    aS = dEqS.copy()
+    aE = dEqE.copy()
+    aM = dEqMin.copy()
+    if dayHadNY
+        aT.push(dayTShift)
+        aP.push(dayRealized)
+        aTr.push(dayTrades)
+        aLo.push(dayLosses)
+        aS.push(dayEqStart)
+        aE.push(strategy.initial_capital + strategy.netprofit)
+        aM.push(nz(dayEqMin, dayEqStart))
+    n = aT.size()
+
+    // live panel
+    stLive = dayRealized >= dayTarget ? "MINIMUM DAY ACHIEVED" : goalExit ? "GOAL: CERRANDO" : dayLosses >= maxLosses ? "STOP PÉRDIDAS" : posSize != 0 ? "EN TRADE" : dayLocked ? "BLOQUEADO (límite trades)" : not asiaReady ? "ESPERANDO RANGO" : "ARMADO"
+    live.cell(0, 0, "Estado hoy", text_color = color.white)
+    live.cell(1, 0, stLive, text_color = dayRealized >= dayTarget ? color.lime : color.yellow)
+    live.cell(0, 1, "P&L realizado", text_color = color.white)
+    live.cell(1, 1, f_fmt(dayRealized), text_color = color.white)
+    live.cell(0, 2, "P&L abierto (neto)", text_color = color.white)
+    live.cell(1, 2, f_fmt(openNet), text_color = color.white)
+    live.cell(0, 3, "Trades / pérdidas hoy", text_color = color.white)
+    live.cell(1, 3, str.tostring(dayTrades) + " / " + str.tostring(dayLosses), text_color = color.white)
+    live.cell(0, 4, "TP / SL (ticks)", text_color = color.white)
+    live.cell(1, 4, str.tostring(tpTicks) + " / " + str.tostring(slTicks), text_color = color.white)
+    live.cell(0, 5, "Comisión real/lado", text_color = color.white)
+    commTxt = na(commSeen) ? "-" : str.tostring(commSeen, "0.00") + (math.abs(commSeen - commIn) > 0.005 ? "  ≠ INPUT!" : " OK")
+    live.cell(1, 5, commTxt, text_color = na(commSeen) or math.abs(commSeen - commIn) <= 0.005 ? color.white : color.red)
+    live.cell(0, 6, "Break-even / Stop tiempo", text_color = color.white)
+    live.cell(1, 6, (beTicks > 0 ? str.tostring(beTicks) + " ticks" : "off") + " / " + (maxHoldMin > 0 ? str.tostring(maxHoldMin) + " min" : "off"), text_color = color.white)
+    live.cell(0, 7, "Red GOAL", text_color = color.white)
+    live.cell(1, 7, useGoalNet ? "on" : "off", text_color = color.white)
+
+    if showTbl and n > 0
+        // límites de periodos A-D por tiempo
+        span = (last_bar_time - firstTime) / 4.0
+        array<int> i0s = array.new<int>(4, 0)
+        array<int> i1s = array.new<int>(4, -1)
+        for p = 0 to 3
+            lo_t = firstTime + span * p
+            hi_t = firstTime + span * (p + 1)
+            int a = -1
+            int b = -2
+            for i = 0 to n - 1
+                ti = aT.get(i) - shiftMs
+                if ti >= lo_t and (ti < hi_t or p == 3)
+                    if a < 0
+                        a := i
+                    b := i
+            i0s.set(p, a < 0 ? 0 : a)
+            i1s.set(p, a < 0 ? -1 : b)
+
+        hdr = array.from("Métrica", "A", "B", "C", "D", "TOTAL")
+        for c = 0 to 5
+            tb.cell(c, 0, hdr.get(c), text_color = color.white, bgcolor = color.new(color.blue, 50))
+        labels = array.from("Desde", "Días mercado", "Días operados", "MIN DAYS (>= objetivo)", "% MIN / operados", "Días en pérdida", "  de ellos <= -objetivo", "Días 0..objetivo", "% 0..objetivo", "Días con 2 pérdidas", "Peor día ($)", "Trades", "Trades / día operado", "Neto ($)", "Ciclos OK (" + str.tostring(needDays) + " días) — usar TOTAL", "Ciclos OK con P&L > 0", "Ciclos FAIL (DD)", "Ciclo abierto", "Días mercado medios a OK", "Días operados medios a OK", "Mediana días operados a OK", "Peor días operados a OK", "Días naturales medios a OK", "Mediana días naturales a OK", "Máx. días naturales a OK", "Trades medios por ciclo OK", "Beneficio medio ciclo OK ($)")
+        for r = 0 to labels.size() - 1
+            tb.cell(0, r + 1, labels.get(r), text_color = color.white, text_halign = text.align_left, text_size = size.small)
+        for c = 1 to 5
+            a = c <= 4 ? i0s.get(c - 1) : 0
+            b = c <= 4 ? i1s.get(c - 1) : n - 1
+            [mkt, traded, minD, losing, bigLoss, zeroTo, twoL, trades, worstDay, net] = f_stats(aP, aTr, aLo, a, b)
+            [okMkt, okOp, okTrd, okPrf, okCal, fail, opn, cLogs] = f_cycles(aT, aP, aTr, aS, aE, aM, a, b)
+            vals = array.from(b >= a ? str.format_time(aT.get(a), "yyyy-MM-dd", TZ) : "-", str.tostring(mkt), str.tostring(traded), str.tostring(minD), f_pct(minD, traded), str.tostring(losing), str.tostring(bigLoss), str.tostring(zeroTo), f_pct(zeroTo, traded), str.tostring(twoL), f_fmt(worstDay), str.tostring(trades), traded > 0 ? str.tostring(trades / traded, "0.00") : "-", f_fmt(net), str.tostring(okOp.size()), str.tostring(f_npos(okPrf)), str.tostring(fail), str.tostring(opn), f_fmt(f_avg(okMkt)), f_fmt(f_avg(okOp)), f_fmt(f_med(okOp)), f_fmt(f_max(okOp)), f_fmt(f_avg(okCal)), f_fmt(f_med(okCal)), f_fmt(f_max(okCal)), f_fmt(f_avg(okTrd)), f_fmt(f_avg(okPrf)))
+            for r = 0 to vals.size() - 1
+                tb.cell(c, r + 1, vals.get(r), text_color = c == 5 ? color.yellow : color.white, text_size = size.small)
+        wins = strategy.wintrades
+        tot  = strategy.closedtrades
+        pf   = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : na
+        avgW = wins > 0 ? strategy.grossprofit / wins : na
+        avgL = strategy.losstrades > 0 ? strategy.grossloss / strategy.losstrades : na
+        base = labels.size() + 1
+        extra = array.from("Winrate trades", "Profit Factor", "Ganancia media / pérdida media ($)", "Winrate de equilibrio", "Máx. drawdown ($)", "Máx. racha MIN DAYS seguidos")
+        extraV = array.from(f_pct(wins, tot), f_fmt(pf), f_fmt(avgW) + " / " + f_fmt(avgL), na(avgW) or na(avgL) ? "-" : str.tostring(100.0 * avgL / (avgW + avgL), "0.0") + "%", f_fmt(strategy.max_drawdown), str.tostring(f_maxStreak(aP, aTr)))
+        for r = 0 to extra.size() - 1
+            tb.cell(0, base + r, extra.get(r), text_color = color.white, text_halign = text.align_left, text_size = size.small)
+            tb.cell(5, base + r, extraV.get(r), text_color = color.yellow, text_size = size.small)
