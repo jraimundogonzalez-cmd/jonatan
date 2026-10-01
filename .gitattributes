@@ -1,0 +1,14 @@
+# Los archivos .bat los ejecuta cmd.exe, que localiza cada linea dentro del
+# fichero por su posicion en bytes contando finales de linea CRLF. Con finales
+# de linea LF (los de Unix, los que se guardan por defecto trabajando en Linux)
+# esa cuenta se desajusta en cuanto hay un salto —`goto` o `call :etiqueta`— y
+# cmd aterriza en mitad de una linea: se come los primeros caracteres y el
+# lanzador se rompe con errores del tipo «"cho." no se reconoce como un
+# comando». Esta regla obliga a que se escriban siempre con CRLF al sacarlos
+# del repositorio, se clone desde donde se clone y con cualquier valor de
+# `core.autocrlf`.
+*.bat text eol=crlf
+
+# Por el motivo contrario: los scripts de shell los lee bash, que trata el
+# retorno de carro como parte del comando y falla si se cuela uno.
+*.sh text eol=lf

@@ -1,0 +1,24 @@
+{
+  "name": "@tradepilot/quant-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Única implementación autoritativa de toda fórmula matemática de TradePilot (SPEC-001). Sin I/O, sin dependencias de dominio, sin float.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "bench": "vitest bench --run"
+  },
+  "dependencies": {
+    "decimal.js": "^10.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
