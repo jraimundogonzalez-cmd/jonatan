@@ -8,6 +8,15 @@ Software premium de gestión de posiciones para traders discrecionales (Forex, �
 
 Este directorio contiene el **blueprint completo** del producto, diseñado antes de escribir una sola línea de código de la aplicación, siguiendo el orden: Blueprint → UX → Base de datos → Arquitectura → MVP → IA → Escalabilidad.
 
+> ⚠️ **El blueprint describe el diseño, no lo construido.** Para saber qué existe
+> hoy de verdad, empieza por **[`docs/context/`](./docs/context/)**:
+>
+> | | |
+> |---|---|
+> | **[`docs/context/00_PROJECT_CONTEXT.md`](./docs/context/00_PROJECT_CONTEXT.md)** | Punto de entrada. Si eres una IA que se incorpora al proyecto, lee esto primero |
+> | **[`docs/context/10_CURRENT_STATUS.md`](./docs/context/10_CURRENT_STATUS.md)** | Qué está terminado, en curso, pendiente y bloqueado |
+> | **[`AGENTS.md`](./AGENTS.md)** | Reglas operativas para cualquier agente de IA que trabaje aquí |
+
 ## Índice del blueprint
 
 | Doc | Contenido |
