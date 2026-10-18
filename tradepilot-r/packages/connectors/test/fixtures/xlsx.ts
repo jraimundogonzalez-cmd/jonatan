@@ -52,11 +52,38 @@ export const FILA_PERDIDA_CORTO = [
 
 export async function crearXlsx(filas: unknown[][], hojas: { nombre: string; filas: unknown[][] }[] = []): Promise<Uint8Array> {
   const libro = new ExcelJS.Workbook();
+  // Fecha fija: exceljs escribe la hora actual en los metadatos del libro, y
+  // dos ficheros "iguales" generados en segundos distintos tendrían huellas
+  // distintas. Sin esto, un test de reimportación fallaba de forma intermitente.
+  libro.created = libro.modified = new Date(Date.UTC(2026, 0, 1));
   const todas = hojas.length > 0 ? hojas : [{ nombre: "Lista de comercio", filas }];
   for (const h of todas) {
     const hoja = libro.addWorksheet(h.nombre);
     for (const f of h.filas) hoja.addRow(f);
   }
   const buffer = await libro.xlsx.writeBuffer();
-  return new Uint8Array(buffer as ArrayBuffer);
+  return fijarFechasZip(new Uint8Array(buffer as ArrayBuffer));
+}
+
+/**
+ * El ZIP guarda la hora de cada entrada (cabecera local y directorio central).
+ * Se fija a un valor constante para que el mismo contenido produzca siempre
+ * los mismos bytes. Esas fechas no entran en el CRC: el fichero sigue siendo
+ * válido.
+ */
+function fijarFechasZip(b: Uint8Array): Uint8Array {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const HORA = 0x0000;
+  const FECHA = ((2026 - 1980) << 9) | (1 << 5) | 1; // 2026-01-01 en formato DOS
+  for (let i = 0; i + 16 <= b.length; i++) {
+    const firma = v.getUint32(i, true);
+    if (firma === 0x04034b50) {
+      v.setUint16(i + 10, HORA, true);
+      v.setUint16(i + 12, FECHA, true);
+    } else if (firma === 0x02014b50) {
+      v.setUint16(i + 12, HORA, true);
+      v.setUint16(i + 14, FECHA, true);
+    }
+  }
+  return b;
 }

@@ -140,3 +140,12 @@ describe("cuenta externa", () => {
     expect(filasAGuardar(filas, new Set([3])).map((f) => f.fila)).toEqual([2]);
   });
 });
+
+describe("fixtures deterministas", () => {
+  it("el mismo contenido genera exactamente los mismos bytes aunque pase el tiempo", async () => {
+    const a = await crearXlsx([CABECERA, FILA_EJEMPLO]);
+    await new Promise((r) => setTimeout(r, 1100));
+    const b = await crearXlsx([CABECERA, FILA_EJEMPLO]);
+    expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).toBe(0);
+  });
+});
