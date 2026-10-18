@@ -6,9 +6,8 @@ REM ===================================================================
 REM  TradePilot - apagado limpio.
 REM
 REM  NO BORRA NADA. `supabase stop` conserva la base de datos: la proxima
-REM  vez que abras TradePilot, tus cuentas y operaciones seguiran ahi.
-REM  Para empezar de cero hay que pedirlo a proposito con `supabase db reset`,
-REM  y este archivo no lo hace nunca.
+REM  vez que abras TradePilot, tus cuentas y operaciones seguiran ahi. El
+REM  borrado solo ocurriria con la opcion --no-backup, que aqui no se usa.
 REM ===================================================================
 
 echo.
@@ -18,11 +17,15 @@ echo   ================================================
 echo.
 
 REM --- 1. Parar la aplicacion web -------------------------------------
-REM  Se paran SOLO los procesos de Node que estan ejecutando la web de
-REM  TradePilot. No se toca ningun otro Node que puedas tener abierto.
+REM  Se paran SOLO los procesos de Node que ejecutan Next.js DESDE ESTA
+REM  CARPETA. Antes bastaba con que la linea de comandos contuviese "next",
+REM  lo que tambien cerraba otros proyectos Next.js que tuvieras abiertos.
+REM  La ruta se pasa por variable de entorno y se compara como texto (no con
+REM  -like): una ruta con corchetes o parentesis no se interpreta como patron.
+set "TP_DIR=%~dp0"
 echo   [ ] Parando la aplicacion web...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$p = Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*next*' -and $_.CommandLine -notlike '*Cerrar_TradePilot*' };" ^
+  "$d = $env:TP_DIR; $p = Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.IndexOf($d, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $_.CommandLine.IndexOf('next', [StringComparison]::OrdinalIgnoreCase) -ge 0 };" ^
   "if ($p) { $p | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } ; Write-Host '  [OK] Aplicacion web detenida' } else { Write-Host '  [OK] La aplicacion web no estaba en marcha' }"
 
 REM --- 2. Parar la base de datos ---------------------------------------

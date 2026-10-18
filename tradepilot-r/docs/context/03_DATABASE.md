@@ -182,5 +182,5 @@ Todas en verde sobre una base reconstruida desde cero.
   `consultar_importacion_previa`, `listar_lotes_importacion` y
   `obtener_lote_importacion` (decimales como texto, I5).
 - ⚠️ En una base con datos, `imports.sql` no se aplica con `supabase start`
-  (solo en `db reset`, que borra). Procedimiento sin borrado:
-  `IMPORTAR-OPERACIONES.md` §2.
+  (solo en `db reset`, que borra). Se aplica sin borrado con
+  `Actualizar_TradePilot.bat` (`scripts/windows/actualizar.ps1`).

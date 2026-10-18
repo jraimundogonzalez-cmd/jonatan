@@ -79,7 +79,7 @@ enabled = true
 #
 # ⚠️ Esta lista SOLO se aplica al crear la base o en un `db reset`, que BORRA
 # los datos. En una base que ya tiene datos, un fichero nuevo de esta lista se
-# aplica a mano, sin reset: ver IMPORTAR-OPERACIONES.md.
+# aplica sin reset con Actualizar_TradePilot.bat (scripts/windows/actualizar.ps1).
 sql_paths = [
   "./functions/sql/funding.sql",
   "./functions/sql/operations.sql",

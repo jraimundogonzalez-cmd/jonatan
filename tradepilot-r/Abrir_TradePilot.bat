@@ -195,31 +195,49 @@ REM --- 9. Escribir apps\web\.env.local ---------------------------------
 REM  SOLO dos variables. La clave de administracion (service_role) NUNCA se
 REM  lee, ni se escribe, ni se muestra: no aparece en ninguna linea de este
 REM  archivo a proposito.
+REM
+REM  Antes de reescribirlo se guarda el anterior en .env.anterior.local: si
+REM  alguna vez anadiste algo a mano, no se pierde. El nombre termina en
+REM  ".local" a proposito para que git lo ignore igual que el original.
+if exist "apps\web\.env.local" copy /y "apps\web\.env.local" "apps\web\.env.anterior.local" >nul
 > "apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_URL=!TP_URL!
 >>"apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_ANON_KEY=!TP_ANON!
 echo   [OK] Configuracion local escrita en apps\web\.env.local
 
-REM --- 10. Comprobar que la base tiene las funciones del dominio --------
-REM  Un `supabase start` sin las funciones deja una base que parece bien y
-REM  falla en la primera accion. Se comprueba llamando a una funcion real.
+REM --- 10. Comprobar que la base tiene las funciones y esta al dia ------
+REM  Se llama a dos funciones reales: una de siempre (listar_empresas) y otra
+REM  de la ultima actualizacion (listar_lotes_importacion, del importador). Un
+REM  404 significa que la funcion no existe: la base es anterior al codigo.
+REM
+REM  La solucion es ACTUALIZAR la base, nunca reiniciarla. `supabase db reset`
+REM  borra todas las cuentas y operaciones; este lanzador no lo propone jamas.
+REM  La segunda llamada va por GET con el parametro en la URL para no tener
+REM  que escapar JSON aqui dentro.
 where curl >nul 2>&1
 if not errorlevel 1 (
   set "TP_RPC="
+  set "TP_RPC2="
   for /f "delims=" %%C in ('curl -s -o nul -w "%%{http_code}" -X POST "!TP_URL!/rest/v1/rpc/listar_empresas" -H "apikey: !TP_ANON!" -H "Content-Type: application/json" -d "{}" 2^>nul') do set "TP_RPC=%%C"
-  if "!TP_RPC!"=="404" (
+  for /f "delims=" %%C in ('curl -s -o nul -w "%%{http_code}" "!TP_URL!/rest/v1/rpc/listar_lotes_importacion?p_account_id=00000000-0000-0000-0000-000000000000" -H "apikey: !TP_ANON!" 2^>nul') do set "TP_RPC2=%%C"
+  set "TP_FALTA="
+  if "!TP_RPC!"=="404" set "TP_FALTA=1"
+  if "!TP_RPC2!"=="404" set "TP_FALTA=1"
+  if defined TP_FALTA (
     echo.
-    echo   [!] La base de datos esta en marcha pero le faltan las funciones
-    echo       de TradePilot. Suele pasar si la base se creo antes de la
-    echo       ultima actualizacion del proyecto.
+    echo   [!] La base de datos esta en marcha pero NO esta al dia con esta
+    echo       version de TradePilot. Tus datos estan bien: solo faltan las
+    echo       piezas nuevas.
     echo.
-    echo       Para arreglarlo, escribe en PowerShell, en esta carpeta:
-    echo           supabase db reset
+    echo       Para ponerla al dia SIN borrar nada:
+    echo         1. Cierra esta ventana.
+    echo         2. Ejecuta Actualizar_TradePilot.bat
+    echo            ^(hace una copia de seguridad verificada antes de tocar nada^).
     echo.
-    echo       AVISO: eso borra los datos de prueba que tengas guardados.
+    echo       NO uses "supabase db reset": borraria tus cuentas y operaciones.
     echo.
     pause
   ) else (
-    echo   [OK] Funciones de TradePilot disponibles
+    echo   [OK] Funciones de TradePilot disponibles y al dia
   )
 )
 

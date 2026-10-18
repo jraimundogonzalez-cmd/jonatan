@@ -7,7 +7,110 @@ Guía de la **fase 1** del importador de la «Lista de comercio» (`.xlsx`).
 
 ---
 
-## 1. Antes de nada: copia de seguridad verificada
+## 1. Antes de nada: poner la base al día (sin borrar datos)
+
+El importador necesita dos tablas y cuatro funciones nuevas en tu base local. No
+modifican ninguna tabla existente.
+
+1. Cierra TradePilot (`Cerrar_TradePilot.bat`).
+2. Doble clic en **`Actualizar_TradePilot.bat`**. Él solo:
+   - comprueba, sin tocar nada, qué le falta a la base, y **se niega a seguir** si
+     tu base tiene migraciones que esta versión no conoce;
+   - te pide confirmación;
+   - hace una **copia de seguridad completa** en la carpeta `respaldos` y la
+     **verifica** (la copia en disco es idéntica a la generada, y tiene las mismas
+     filas por tabla que la base);
+   - aplica **solo** las migraciones pendientes y reinstala las funciones;
+   - vuelve a contar las filas: tienen que seguir siendo las mismas.
+3. Tiene que terminar con `Actualizacion terminada. Tus datos siguen ahi.`
+
+> ⚠️ **Nunca uses `supabase db reset`**: borra la base entera. Si el actualizador
+> se para con un error, no intentes arreglarlo así: copia el mensaje y pide ayuda.
+
+Para hacer solo una copia de seguridad, sin actualizar nada:
+**`Copia_de_seguridad_TradePilot.bat`**.
+
+> Verificado en un entorno aislado (Linux, PowerShell 7.4, PostgreSQL 16, con
+> `docker` y la CLI de Supabase simulados) sobre una base con el esquema anterior
+> y datos: caso normal con las 23 tablas existentes idénticas byte a byte, y
+> nueve escenarios de fallo (migración desconocida, sin historial, migración que
+> falla, copia corrupta, Docker parado, cancelar…) en los que no se tocó ningún
+> dato. **En tu PC está sin verificar**: no se ha podido probar con Windows
+> PowerShell 5.1, Docker Desktop ni la CLI real de Supabase.
+
+**Volver atrás.** Si algo saliera mal, la copia permite recuperar los datos.
+Restaurar sobre una base de Supabase toca también sus esquemas internos
+(`auth`, `storage`…), así que no lo hagas a ciegas: pídelo y se prepara un
+procedimiento guiado sobre esa copia.
+
+---
+
+## 2. Hacer una importación de prueba
+
+1. Arranca la aplicación (`Abrir_TradePilot.bat` o `npm run dev --workspace=@tradepilot/web`).
+2. En la barra lateral, entra en **Importar**. También se llega desde el
+   detalle de una Cuenta → **Importaciones** → *Importar Excel*.
+3. Elige la **Cuenta de destino**.
+4. Elige la **zona horaria** en la que tu plataforma muestra las horas. No hay
+   valor por defecto a propósito. Todas las importaciones de una Cuenta tienen
+   que usar la misma zona.
+5. Elige el archivo `.xlsx` exportado desde «Lista de comercio».
+6. Pulsa **Previsualizar**. Todavía no se guarda nada.
+7. Revisa:
+   - si el archivo trae varias cuentas, elige cuál corresponde a esta Cuenta;
+   - la primera vez, marca la casilla que confirma que la cuenta del archivo es
+     esta Cuenta (después ya no se admitirán archivos de otra cuenta en ella);
+   - el resumen (nuevas, en revisión, ya importadas, de otra cuenta, inválidas);
+   - las filas **Requiere revisión**: solo se guardan si las marcas en «Aceptar».
+8. **Confirmar importación** o **Cancelar**. Cancelar no guarda nada.
+9. Verás el resumen del lote: filas guardadas y filas no guardadas con su motivo.
+
+**Prueba de idempotencia:** vuelve a importar el mismo archivo. La vista previa
+debe mostrar todas las filas como «Ya importada» y no deja confirmar.
+
+---
+
+## 3. Qué hace y qué no hace esta fase
+
+| Hace | No hace |
+|---|---|
+| Guarda cada fila del Excel tal cual, con todas sus columnas originales | Crear Operaciones de TradePilot a partir de las filas |
+| Conserva P&L bruto y neto exactos, sin redondeo | Restar comisiones o deducir nada de la diferencia bruto − neto |
+| Guarda la hora original y su conversión a UTC con la zona que declaras | Calcular R, riesgo, stop, objetivo, MAE/MFE ni asignar estrategias |
+| Comprueba que el bruto cuadra con los precios (MNQ, NQ, MES, ES) y marca para revisión si no | Corregir un importe del archivo |
+| Evita duplicados al reimportar | Agrupar filas en posiciones |
+| Registra cada lote para auditoría | Conectarse a la plataforma, sincronizar ni ejecutar órdenes |
+
+---
+
+## 4. Pendiente de verificar con un archivo real
+
+El importador se ha probado con **archivos generados** que imitan el esquema
+conocido, no con una exportación real. Al importar tu primer archivo, comprueba:
+
+- [ ] **Zona horaria**: que la hora que ves en la vista previa es la que
+      muestra la plataforma para esa operación.
+- [ ] **Formato de celdas**: que las fechas y los números se leen sin filas
+      inválidas (el archivo puede traer fechas como texto o como fecha de Excel;
+      ambos están soportados).
+- [ ] **Convención de `Side`**: que `BUY` significa entrada larga. El
+      importador lo comprueba con el signo del bruto en MNQ/NQ/MES/ES y marca
+      para revisión si no cuadra.
+- [ ] **Cantidades negativas**: si aparecen, van a revisión. Hace falta saber
+      qué significan en esta plataforma antes de usarlas.
+- [ ] **Filas idénticas**: si el archivo trae filas exactamente iguales, van a
+      revisión; decide si son ejecuciones reales distintas.
+- [ ] **Cabecera**: que los nombres de columna coinciden exactamente con
+      `Account; Symbol; Contract; Entry Date; Entry Price; Exit Date; Exit Price; Side; Quantity; Gross P/L; Net P/L`.
+
+---
+
+## Apéndice — el mismo procedimiento a mano
+
+Solo si `Actualizar_TradePilot.bat` no pudiera ejecutarse. Es lo que hace por
+dentro, paso a paso, en PowerShell y en la carpeta `tradepilot-r`.
+
+### A. Copia de seguridad verificada
 
 Tu base local tiene datos reales (tus cuentas y operaciones). Haz la copia
 **antes** de aplicar la actualización. Todos los comandos se ejecutan en
@@ -52,9 +155,8 @@ Restaurar sobre una base de Supabase toca también sus esquemas internos
 (`auth`, `storage`…), así que no lo hagas a ciegas: pídelo y se prepara un
 procedimiento guiado sobre esta misma copia.
 
----
 
-## 2. Aplicar la actualización SIN borrar datos
+### B. Aplicar la actualización SIN borrar datos
 
 > ⚠️ **No uses `supabase db reset`.** Borra la base entera. Tampoco borres
 > volúmenes de Docker.
@@ -98,63 +200,3 @@ docker exec supabase_db_tradepilot-r psql -U postgres -d postgres -At -c "select
 La primera línea debe listar las cuatro funciones. La segunda, el mismo número
 de cuentas que antes (vuelve a ejecutar el recuento del paso 1.2 si quieres
 comprobarlo todo).
-
----
-
-## 3. Hacer una importación de prueba
-
-1. Arranca la aplicación (`Abrir_TradePilot.bat` o `npm run dev --workspace=@tradepilot/web`).
-2. En la barra lateral, entra en **Importar**. También se llega desde el
-   detalle de una Cuenta → **Importaciones** → *Importar Excel*.
-3. Elige la **Cuenta de destino**.
-4. Elige la **zona horaria** en la que tu plataforma muestra las horas. No hay
-   valor por defecto a propósito. Todas las importaciones de una Cuenta tienen
-   que usar la misma zona.
-5. Elige el archivo `.xlsx` exportado desde «Lista de comercio».
-6. Pulsa **Previsualizar**. Todavía no se guarda nada.
-7. Revisa:
-   - si el archivo trae varias cuentas, elige cuál corresponde a esta Cuenta;
-   - la primera vez, marca la casilla que confirma que la cuenta del archivo es
-     esta Cuenta (después ya no se admitirán archivos de otra cuenta en ella);
-   - el resumen (nuevas, en revisión, ya importadas, de otra cuenta, inválidas);
-   - las filas **Requiere revisión**: solo se guardan si las marcas en «Aceptar».
-8. **Confirmar importación** o **Cancelar**. Cancelar no guarda nada.
-9. Verás el resumen del lote: filas guardadas y filas no guardadas con su motivo.
-
-**Prueba de idempotencia:** vuelve a importar el mismo archivo. La vista previa
-debe mostrar todas las filas como «Ya importada» y no deja confirmar.
-
----
-
-## 4. Qué hace y qué no hace esta fase
-
-| Hace | No hace |
-|---|---|
-| Guarda cada fila del Excel tal cual, con todas sus columnas originales | Crear Operaciones de TradePilot a partir de las filas |
-| Conserva P&L bruto y neto exactos, sin redondeo | Restar comisiones o deducir nada de la diferencia bruto − neto |
-| Guarda la hora original y su conversión a UTC con la zona que declaras | Calcular R, riesgo, stop, objetivo, MAE/MFE ni asignar estrategias |
-| Comprueba que el bruto cuadra con los precios (MNQ, NQ, MES, ES) y marca para revisión si no | Corregir un importe del archivo |
-| Evita duplicados al reimportar | Agrupar filas en posiciones |
-| Registra cada lote para auditoría | Conectarse a la plataforma, sincronizar ni ejecutar órdenes |
-
----
-
-## 5. Pendiente de verificar con un archivo real
-
-El importador se ha probado con **archivos generados** que imitan el esquema
-conocido, no con una exportación real. Al importar tu primer archivo, comprueba:
-
-- [ ] **Zona horaria**: que la hora que ves en la vista previa es la que
-      muestra la plataforma para esa operación.
-- [ ] **Formato de celdas**: que las fechas y los números se leen sin filas
-      inválidas (el archivo puede traer fechas como texto o como fecha de Excel;
-      ambos están soportados).
-- [ ] **Convención de `Side`**: que `BUY` significa entrada larga. El
-      importador lo comprueba con el signo del bruto en MNQ/NQ/MES/ES y marca
-      para revisión si no cuadra.
-- [ ] **Cantidades negativas**: si aparecen, van a revisión. Hace falta saber
-      qué significan en esta plataforma antes de usarlas.
-- [ ] **Filas idénticas**: si el archivo trae filas exactamente iguales, van a
-      revisión; decide si son ejecuciones reales distintas.
-- [ ] **Cabecera**: que los nombres de columna coinciden exactamente con
-      `Account; Symbol; Contract; Entry Date; Entry Price; Exit Date; Exit Price; Side; Quantity; Gross P/L; Net P/L`.

@@ -8,6 +8,31 @@
 `3961c27` (rama de trabajo `claude/ecstatic-planck-tg10r0`). La verificación
 anterior (2026-10-01, `c91e3af`) se conserva abajo donde no ha cambiado.
 
+### Seguridad local y uso diario en Windows (2026-10-18, segunda tanda)
+
+- `Actualizar_TradePilot.bat` → `scripts/windows/actualizar.ps1`: comprueba el
+  historial de migraciones (se niega si la base tiene migraciones que el código
+  no conoce o le faltan antiguas), copia de seguridad verificada (SHA-256 +
+  recuento por tabla), `supabase migration up`, reinstala funciones en una
+  transacción por fichero y vuelve a contar filas. Nunca `db reset`.
+- `Copia_de_seguridad_TradePilot.bat`, `Crear_accesos_directos.bat`.
+- `Abrir_TradePilot.bat` ya no propone `supabase db reset`: detecta una base
+  desactualizada (también la del importador) y remite al actualizador. Guarda
+  el `.env.local` anterior en `.env.anterior.local` antes de reescribirlo.
+- `Cerrar_TradePilot.bat` solo para los procesos Next.js de su propia carpeta.
+- Importador endurecido: inspección del ZIP antes de descomprimir (bomba ZIP,
+  cifrado, ZIP64), límite de columnas y de longitud de celda, `__proto__`
+  conservado como dato, límites de tamaño en `confirmar_importacion`.
+
+```
+Tests TypeScript 405 verdes · suite SQL 16: 37/37 · suites 01–15 sin cambios
+Actualizador probado en Linux (PowerShell 7.4, PostgreSQL 16, docker y CLI de
+Supabase SIMULADOS) sobre una base con el esquema de 3961c27 y datos: caso
+normal (23 tablas idénticas byte a byte) y 9 escenarios de fallo sin tocar datos.
+NO probado en Windows: ni PowerShell 5.1, ni Docker Desktop, ni la CLI real,
+ni los .bat (no hay cmd.exe en el entorno de pruebas).
+```
+
 ### Importación de ficheros — fase 1 (2026-10-18)
 
 ```
@@ -24,7 +49,7 @@ adaptador temporal sobre psql (no versionado). Sin PostgREST ni navegador.
 
 **Probado solo con ficheros generados** que imitan el esquema conocido de la
 «Lista de comercio». **No se ha probado con una exportación real**: ver
-`IMPORTAR-OPERACIONES.md` §5.
+`IMPORTAR-OPERACIONES.md` §4.
 
 ---
 

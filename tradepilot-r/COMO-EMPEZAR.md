@@ -17,6 +17,11 @@ cd tradepilot-r
 
 Esa última carpeta, `tradepilot-r`, es desde donde se ejecuta todo lo demás.
 
+> **Mientras no se fusione**, el actualizador seguro, la copia de seguridad, los accesos
+> directos y el importador están en la rama `claude/ecstatic-planck-tg10r0`, no en la de
+> arriba. Si ya tienes el proyecto descargado, antes de cambiar de rama mira que no
+> tengas trabajo sin guardar: `git status` debe decir *nothing to commit*.
+
 ---
 
 ## 1. Qué necesitas antes de empezar
@@ -35,12 +40,18 @@ Si te falta la CLI de Supabase: `npm install -g supabase`.
 
 ## 2. Arrancar — la forma fácil (Windows)
 
-Dentro de la carpeta `tradepilot-r` hay dos archivos:
+Dentro de la carpeta `tradepilot-r` hay cinco archivos de doble clic:
 
-| Archivo | Qué hace |
-|---|---|
-| **`Abrir_TradePilot.bat`** | Doble clic y arranca todo |
-| **`Cerrar_TradePilot.bat`** | Doble clic y lo apaga |
+| Archivo | Qué hace | Cuándo |
+|---|---|---|
+| **`Abrir_TradePilot.bat`** | Arranca todo y abre el navegador | Cada día |
+| **`Cerrar_TradePilot.bat`** | Lo apaga. Tus datos se conservan | Cada día, al terminar |
+| **`Copia_de_seguridad_TradePilot.bat`** | Copia verificada de tus datos en la carpeta `respaldos` | Cuando quieras (p. ej. cada semana) |
+| **`Actualizar_TradePilot.bat`** | Pone la base al día **sin borrar datos**; hace una copia antes | Solo después de descargar una versión nueva |
+| **`Crear_accesos_directos.bat`** | Pone los cuatro anteriores en tu Escritorio | Una vez (y si mueves la carpeta) |
+
+**Recomendado la primera vez:** doble clic en `Crear_accesos_directos.bat`. A partir de
+ahí usas TradePilot desde el Escritorio, sin buscar carpetas ni abrir terminales.
 
 **Doble clic en `Abrir_TradePilot.bat`.** Él solo comprueba que tienes lo necesario,
 levanta la base de datos, escribe la configuración, arranca la web y te abre el navegador
@@ -90,15 +101,13 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=pega-aquí-el-anon-key-que-te-dio-supabase-start
 ```
 
-**Aplica el esquema de TradePilot** (sólo la primera vez, con la base vacía):
+**Comprueba que la base tiene todo**: la primera vez, `supabase start` crea la base
+con el esquema completo. Si la aplicación avisa de que falta algo, ponla al día con el
+actualizador, que no borra datos (en Mac o Linux, con PowerShell instalado):
 
 ```bash
-supabase db reset
+pwsh scripts/windows/actualizar.ps1
 ```
-
-> ⚠️ `supabase db reset` **borra todos los datos**. Si ya tienes cuentas u
-> operaciones guardadas, no lo uses para actualizar: sigue el procedimiento sin
-> borrado de [`IMPORTAR-OPERACIONES.md`](./IMPORTAR-OPERACIONES.md) §1–2.
 
 **Terminal 2 — la aplicación:**
 
@@ -113,6 +122,31 @@ Navega a **<http://localhost:3000>** en Chrome, Firefox o Safari. Cualquiera val
 > `localhost` y `127.0.0.1` son la misma máquina, pero el navegador las trata como sitios
 > distintos y la sesión se guarda en una de las dos. Los dos funcionan; **elige uno y
 > quédate con él**. El lanzador abre siempre `localhost`.
+
+---
+
+## 2-ter. Actualizar a una versión nueva del proyecto
+
+1. Doble clic en **`Cerrar_TradePilot.bat`**.
+2. Descarga la versión nueva (con `git pull` en la carpeta del proyecto, o un ZIP nuevo).
+   Si usas un ZIP en otra carpeta, **copia antes tu carpeta `respaldos`** a un sitio seguro.
+3. Doble clic en **`Actualizar_TradePilot.bat`**. Hace una copia de seguridad verificada,
+   aplica solo lo que falta y comprueba que siguen todas tus filas. Si algo no cuadra,
+   se para y te lo dice sin tocar nada más.
+4. Doble clic en **`Abrir_TradePilot.bat`**.
+
+Tus datos no viven en la carpeta del proyecto: viven en la base de datos de Docker, que
+se identifica por el nombre del proyecto (`tradepilot-r`) y no por la carpeta. Borrar o
+cambiar la carpeta no los borra.
+
+> ### ⛔ Lo que nunca debes hacer
+> - **`supabase db reset`** — borra todas tus cuentas y operaciones.
+> - **`supabase stop --no-backup`** — borra la base al apagar.
+> - **Borrar volúmenes** en Docker Desktop (pestaña *Volumes*) o con `docker volume rm`.
+> - **Borrar la carpeta `respaldos`** — son tus copias de seguridad.
+>
+> Si alguna vez una pantalla o un mensaje te propone una de estas cosas, no lo hagas y
+> pide ayuda. Ningún archivo de TradePilot las ejecuta.
 
 ---
 
@@ -187,6 +221,8 @@ capital.
 | El enlace del correo no te deja entrar | Falta la plantilla de correo | Comprueba que existe `supabase/templates/magic-link.html` y reinicia con `supabase stop && supabase start` |
 | No llega ningún correo | El buzón local | Ábrelo en <http://localhost:54324> |
 | Entras y no ves tus datos | Has mezclado `localhost` y `127.0.0.1` | Quédate siempre con `localhost:3000` |
+| El lanzador dice que la base **no está al día** | Has descargado una versión nueva | Cierra y ejecuta `Actualizar_TradePilot.bat` (no borra nada) |
+| El actualizador se para con «migraciones que este código NO conoce» | Tu base tiene trabajo que esta versión no trae | No sigas: pide ayuda. Ese trabajo hay que recuperarlo |
 
 ---
 
@@ -197,9 +233,14 @@ operaciones, registrar parciales, ver el R realizado y el porcentaje abierto, ce
 previsualización, ver el R acumulado de la cuenta, corregir un desenlace viendo antes su
 impacto, cancelar una operación abierta por error, anotar, y leer el historial de cambios.
 
+**En pruebas**: importar el Excel de operaciones cerradas de tu plataforma (menú
+**Importar**). Guarda las filas del archivo tal cual; todavía no las convierte en
+Operaciones. Está probado solo con archivos de ejemplo: guía en
+[`IMPORTAR-OPERACIONES.md`](./IMPORTAR-OPERACIONES.md).
+
 **Todavía no**: estadísticas y gráficas, optimizador, motor de reglas, simulación, diario
-con IA, planes de gestión reutilizables desde la interfaz, e importación desde el bróker.
-Nada de eso está construido — no es que esté escondido.
+con IA, planes de gestión reutilizables desde la interfaz, ni conexión automática con el
+bróker. Nada de eso está construido — no es que esté escondido.
 
 ---
 
