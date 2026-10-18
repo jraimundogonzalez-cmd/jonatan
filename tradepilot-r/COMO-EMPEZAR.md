@@ -90,11 +90,15 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=pega-aquí-el-anon-key-que-te-dio-supabase-start
 ```
 
-**Aplica el esquema de TradePilot** (sólo la primera vez, o cuando cambie):
+**Aplica el esquema de TradePilot** (sólo la primera vez, con la base vacía):
 
 ```bash
 supabase db reset
 ```
+
+> ⚠️ `supabase db reset` **borra todos los datos**. Si ya tienes cuentas u
+> operaciones guardadas, no lo uses para actualizar: sigue el procedimiento sin
+> borrado de [`IMPORTAR-OPERACIONES.md`](./IMPORTAR-OPERACIONES.md) §1–2.
 
 **Terminal 2 — la aplicación:**
 

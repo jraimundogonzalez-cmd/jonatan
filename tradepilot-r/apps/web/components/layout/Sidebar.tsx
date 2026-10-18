@@ -7,11 +7,17 @@
 // BUILD 019 no añade una entrada «Operaciones» de primer nivel: una Operación
 // pertenece siempre a una Cuenta, y no hay ninguna vista de Operaciones que no
 // esté acotada a una. Se llega a ellas desde el Detalle de Cuenta.
+//
+// «Importar» sí es de primer nivel: la Cuenta de destino se elige dentro del
+// propio importador, y un archivo puede traer varias cuentas.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./Sidebar.module.css";
 
-const NAV_ITEMS = [{ href: "/cuentas", label: "Cuentas" }] as const;
+const NAV_ITEMS = [
+  { href: "/cuentas", label: "Cuentas" },
+  { href: "/importar", label: "Importar" },
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();

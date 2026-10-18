@@ -4,8 +4,27 @@
 > coincide con el código, gana el código — y entonces este fichero está
 > desactualizado y hay que corregirlo.
 
-**Última verificación**: 2026-10-01 · commit `c91e3af` · rama
-`claude/tradepilot-r-position-manager-mwbovl`
+**Última verificación**: 2026-10-18 · importador de ficheros, fase 1, sobre
+`3961c27` (rama de trabajo `claude/ecstatic-planck-tg10r0`). La verificación
+anterior (2026-10-01, `c91e3af`) se conserva abajo donde no ha cambiado.
+
+### Importación de ficheros — fase 1 (2026-10-18)
+
+```
+typecheck / lint / build      PASS
+tests TypeScript              396 verdes (7 paquetes; 327 antes de la fase)
+  · @tradepilot/connectors     45 nuevos
+  · @tradepilot/web            24 nuevos (114 en total)
+Suite SQL 16 (Postgres 16, rol authenticated)   35/35 OK, autoverificada
+Suites SQL 01–15: misma salida que antes del cambio (solo difieren anchos de
+columna por marcas de tiempo)
+Flujo completo conector → servicio → RPC → Postgres: verificado con un
+adaptador temporal sobre psql (no versionado). Sin PostgREST ni navegador.
+```
+
+**Probado solo con ficheros generados** que imitan el esquema conocido de la
+«Lista de comercio». **No se ha probado con una exportación real**: ver
+`IMPORTAR-OPERACIONES.md` §5.
 
 ---
 
@@ -47,7 +66,8 @@ Contratos frontend↔RPC:                              16/16 existen
 | Manejo de errores | Catálogo tipado, sin fuga de mensajes de PostgreSQL |
 | Historial | `audit_log` + `domain_events` con secuencia monotónica |
 | Tests | 327 TS + 15 suites SQL + batería adversa |
-| **Documentación de contexto** | **Esta carpeta** (fase actual) |
+| Documentación de contexto | Esta carpeta |
+| **Importación de ficheros, fase 1** | `.xlsx` «Lista de comercio» → evidencia en `imported_trade_rows`; vista previa, revisión, idempotencia, lotes auditables. **No crea Operaciones** |
 
 ## 3. EN DESARROLLO 🟡
 
@@ -63,7 +83,8 @@ Contratos frontend↔RPC:                              16/16 existen
 
 | Área | Estado |
 |---|---|
-| **Integración con proveedores** | **0 líneas.** Especificado en SPEC-008 |
+| **Integración con proveedores** | Solo **importación de fichero** (fase 1, un conector). Nada de API, webhooks ni sincronización |
+| Reconstrucción de Operaciones desde filas importadas | No existe. Exige una regla validada para agrupar filas y decidir qué hacer con R, riesgo y Plan, que el fichero no trae |
 | API de salida / webhooks / websocket | No existen |
 | Proceso servidor de larga duración | **No existe ninguno** — bloquea polling, OAuth y reconexión |
 | Almacenamiento de secretos | Vault comentado en `config.toml` |
@@ -89,8 +110,9 @@ desarrollo donde se audita no tiene Docker ni Windows.
 `docker ps -a` con el estado de salud.
 
 ### B-2 · No se sabe qué plataforma se va a integrar
-**Estado**: bloqueante por diseño. No se puede escribir un conector sin saber a
-qué traduce. Ver las cuatro preguntas [PRE-COMPRA] de `08_PROVIDER_INTEGRATIONS.md`.
+**Estado**: parcialmente desbloqueado. Existe un primer conector de **fichero**
+(`packages/connectors/src/nys-markets/`) sobre el esquema de columnas conocido.
+Sigue sin verificarse con una exportación real, y no hay integración en vivo.
 
 ### B-3 · DEC-013, riesgo congelado como % o como importe
 **Estado**: pendiente de decisión humana. Afecta a cómo un conector traducirá

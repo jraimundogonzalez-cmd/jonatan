@@ -1,8 +1,13 @@
 # 03 · BASE DE DATOS
 
 > Verificado reconstruyendo el esquema desde cero a partir de las migraciones:
-> **21 tablas · 100 funciones · 26 triggers · 27 políticas RLS**.
+> **21 tablas · 100 funciones · 26 triggers · 27 políticas RLS** (2026-10-01).
 > Fuente: `supabase/migrations/` (17 ficheros) + `supabase/functions/sql/` (3).
+>
+> **2026-10-18 — importación de ficheros, fase 1**: +1 migración
+> (`20261018120000_trade_file_imports.sql`), +1 fichero de funciones
+> (`imports.sql`), **+2 tablas** (`import_batches`, `imported_trade_rows`),
+> +2 triggers de inmutabilidad, +2 políticas de lectura. Ver §8.
 
 ---
 
@@ -160,3 +165,22 @@ supabase/tests/01…15_*.sql    15 suites contra Postgres real, rol authenticate
 Cubren RLS, concurrencia real con dos sesiones, idempotencia, máquina de
 estados, integridad de operaciones y corrección de desenlaces.
 Todas en verde sobre una base reconstruida desde cero.
+
+## 8. Importación de ficheros (fase 1, 2026-10-18)
+
+| Tabla | Qué guarda |
+|---|---|
+| `import_batches` | **Inmutable.** Un lote por confirmación: fichero (nombre, sha256), zona horaria declarada, cuenta externa, recuentos y detalle de lo no guardado |
+| `imported_trade_rows` | **Inmutable.** Una fila del fichero = una fila aquí. Reloj original + instante UTC, precios, lado, cantidad, P&L bruto y neto en `numeric` sin escala (exactos), motivos de revisión y todas las columnas originales en `raw` |
+
+- **No son Operaciones.** No tocan `trades`, no tienen R, riesgo ni Plan.
+- Deduplicación: índice único `(account_id, source, dedup_key)`.
+- El **primer lote** de una Cuenta fija su cuenta externa y su zona horaria;
+  los siguientes deben coincidir (`ACCOUNT_MISMATCH`, `TIMEZONE_MISMATCH`).
+- Escritura solo por `confirmar_importacion` (`SECURITY DEFINER`, una
+  transacción, cerrojo consultivo por cuenta y conector). Lectura por
+  `consultar_importacion_previa`, `listar_lotes_importacion` y
+  `obtener_lote_importacion` (decimales como texto, I5).
+- ⚠️ En una base con datos, `imports.sql` no se aplica con `supabase start`
+  (solo en `db reset`, que borra). Procedimiento sin borrado:
+  `IMPORTAR-OPERACIONES.md` §2.

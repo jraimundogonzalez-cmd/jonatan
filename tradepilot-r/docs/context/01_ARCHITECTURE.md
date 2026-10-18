@@ -18,7 +18,8 @@ tradepilot-r/
 │   ├── risk-engine/     estado de riesgo        src   633 · test   603
 │   ├── operations-engine/ orquestación          src 1.079 · test 1.335
 │   ├── optimizer/       recomendación           src 1.023 · test   348
-│   └── rule-engine/     evaluación de reglas    src   756 · test   507
+│   ├── rule-engine/     evaluación de reglas    src   756 · test   507
+│   └── connectors/      importación de ficheros (fase 1, 2026-10-18) — único sitio con código de plataforma
 ├── supabase/
 │   ├── migrations/      17 ficheros — esquema
 │   ├── functions/sql/   3 ficheros — las RPC del dominio
@@ -133,7 +134,12 @@ lectura. Fue la causa raíz de varios fallos en producción local.
 | Optimizer | cómo escribir en otro módulo |
 | **Núcleo entero** | **el nombre de ninguna plataforma de trading** |
 
-## 8. Capa de integración externa — PENDIENTE
+## 8. Capa de integración externa — PENDIENTE (salvo importación de fichero)
+
+> **2026-10-18**: existe `packages/connectors` con un conector de fichero
+> (`.xlsx`), la pantalla `/importar` y las rutas
+> `/cuentas/[id]/importaciones[/loteId]`. Ver `06_CONNECTORS.md` §9. Lo de abajo
+> sigue siendo cierto para todo lo demás (API, webhooks, workers).
 
 Verificado por búsqueda directa:
 

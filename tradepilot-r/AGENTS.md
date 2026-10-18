@@ -145,7 +145,7 @@ ejecutarla, la palabra es "sin verificar".
 npm install                              # dependencias
 npm run typecheck                        # tipos
 npm run lint                             # estilo
-npm run test                             # 327 pruebas
+npm run test                             # 396 pruebas
 npm run build --workspace=@tradepilot/web
 
 # Entorno local (Docker):  supabase stop && supabase start

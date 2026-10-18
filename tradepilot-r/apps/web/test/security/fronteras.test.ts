@@ -111,3 +111,25 @@ describe("apps/web no reimplementa el dominio", () => {
     expect(correccion!.codigo).not.toMatch(/setBorrarCierreManual\(true\)/);
   });
 });
+
+describe("la importación de ficheros no es una vía de alta ni conoce la plataforma", () => {
+  const importacion = FUENTES.filter((f) => /importaciones|lib[\\/]imports|api[\\/]imports/.test(f.ruta));
+
+  it("existe código de importación que comprobar", () => {
+    expect(importacion.length).toBeGreaterThan(0);
+  });
+
+  it("no crea Operaciones: no invoca ninguna RPC de nacimiento ni de cierre", () => {
+    // Las filas importadas son evidencia, no Operaciones. Reconstruir
+    // Operaciones exige una regla validada que todavía no existe.
+    for (const f of importacion) {
+      expect(f.codigo).not.toMatch(/registrar_operacion|abrir_operacion_desde_intencion|crear_operacion_nucleo|aplicar_cierre/);
+    }
+  });
+
+  it("el nombre de la plataforma solo aparece donde se elige el conector (I10)", () => {
+    // Toda la variación de plataforma vive en packages/connectors. La app solo
+    // decide QUÉ conector usa, y lo decide en un único sitio.
+    expect(conteneidosEn(/nys/i)).toEqual(["lib/imports/servicio.ts"]);
+  });
+});

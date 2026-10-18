@@ -150,6 +150,45 @@ Las dos lecturas son defendibles:
 **No se ha modificado nada.** Cambiarlo redefine qué es una decisión de riesgo.
 Afecta además a cómo un conector traducirá operaciones importadas.
 
+### Propuestas de la importación de ficheros, fase 1 (2026-10-18)
+
+**Sin número asignado a propósito.** Pueden existir DEC-014 a DEC-016 en
+trabajo no publicado en el repositorio (rama de ejecuciones, commits `c70f927` y
+`6a9d03a`, no localizados). Numerar aquí podría colisionar. Están
+**implementadas** en el código de la fase 1 y quedan **PENDIENTES DE VALIDACIÓN
+HUMANA**; ninguna toca DEC-013.
+
+#### PROPUESTA-IMP-A · Las filas importadas son evidencia, no Operaciones
+**Decisión**: una fila de un fichero de operaciones cerradas se guarda tal cual
+en `imported_trade_rows`; no se crea ninguna fila en `trades`.
+**Motivo**: `trades` exige riesgo y Plan que el fichero no trae, y sin parciales
+la fórmula congelada asigna −1R a toda pérdida. No hay regla validada para
+agrupar varias filas en una posición.
+**Impacto**: la reconstrucción en Operaciones es una fase posterior y pasará por
+las RPC del dominio (DEC-007).
+
+#### PROPUESTA-IMP-B · Identidad de una fila sin identificador externo
+**Decisión**: clave = sha256 de los datos de la fila (decimales canónicos, horas
+como reloj) + número de ocurrencia entre filas idénticas del mismo fichero. Una
+fila ya importada con distintos importes va a revisión, nunca se fusiona.
+**Motivo**: la plataforma no exporta identificador de operación; inventar uno
+sería peor que derivarlo de los datos.
+**Limitación conocida**: si la plataforma corrige un importe en una exportación
+posterior, aparece como fila nueva en revisión; el usuario decide.
+
+#### PROPUESTA-IMP-C · Zona horaria declarada y fijada por Cuenta
+**Decisión**: el usuario declara la zona de las horas del fichero (sin valor por
+defecto); el primer lote de una Cuenta la fija y los siguientes deben coincidir.
+Horas inexistentes o ambiguas por cambio de horario se rechazan.
+**Motivo**: el fichero trae horas sin zona; cualquier valor por defecto sería
+una conversión silenciosa.
+
+#### PROPUESTA-IMP-D · Vínculo Cuenta ↔ cuenta externa por confirmación
+**Decisión**: la primera importación exige confirmar expresamente qué cuenta del
+fichero corresponde a la Cuenta de TradePilot; después no se admite otra, ni la
+misma cuenta externa en otra Cuenta. No se añade columna a `accounts`: el
+vínculo se deriva del primer lote, que es inmutable.
+
 ---
 
 ## 4. Decisiones que NO se han tomado

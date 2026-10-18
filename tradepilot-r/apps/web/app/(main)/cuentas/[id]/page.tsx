@@ -57,6 +57,9 @@ export default async function CuentaDetallePage({ params }: { params: Promise<{ 
           <Link href={`/cuentas/${account.id}/eventos/nuevo`}>
             <Button variant="secondary">Registrar evento</Button>
           </Link>
+          <Link href={`/cuentas/${account.id}/importaciones`}>
+            <Button variant="secondary">Importaciones</Button>
+          </Link>
           <Link href={`/cuentas/${account.id}/operaciones`}>
             <Button variant="primary">Operaciones</Button>
           </Link>

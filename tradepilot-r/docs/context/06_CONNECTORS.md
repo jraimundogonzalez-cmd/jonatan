@@ -1,9 +1,10 @@
 # 06 · CONECTORES — contrato de integración
 
-> **Estado: ESPECIFICADO, no implementado.** Existen 0 líneas de código de
-> conectores. Lo que sí existe es la zona de aterrizaje en la base de datos.
-> Este documento convierte `specs/008-trade-capture-engine.md` §3.2 en el
-> contrato operativo. **No inventes una interfaz distinta de la de abajo.**
+> **Estado: un conector de FICHERO implementado (fase 1, 2026-10-18); el resto,
+> ESPECIFICADO.** Ver §9. Este documento convierte
+> `specs/008-trade-capture-engine.md` §3.2 en el contrato operativo. **No
+> inventes una interfaz distinta de la de abajo** sin registrarlo (§9 explica la
+> única desviación y por qué).
 
 ---
 
@@ -177,3 +178,51 @@ con fidelidad:
 5. Conserva siempre el `raw_payload` original para auditoría.
 6. Nunca sobrescribe datos subjetivos introducidos por el trader (notas,
    intención, motivo de cierre declarado).
+
+---
+
+## 9. Implementado: importación de fichero, fase 1 (2026-10-18)
+
+**Dónde**: `packages/connectors` (`@tradepilot/connectors`). Es el único sitio
+del monorepo con código específico de una plataforma (I10). La aplicación solo
+elige el conector, en `apps/web/lib/imports/servicio.ts`, y un test de fronteras
+lo hace cumplir.
+
+| Pieza | Fichero |
+|---|---|
+| Conector «Lista de comercio» (`nys_markets_trade_list`) | `src/nys-markets/lista-de-comercio.ts` |
+| Lector `.xlsx` (única dependencia: `exceljs` 4.4.0) | `src/xlsx.ts` |
+| Zona horaria declarada, rechazo de horas inexistentes/ambiguas | `src/zona-horaria.ts` |
+| Decimales exactos (cadenas canónicas, `BigInt`) | `src/decimal-exacto.ts` |
+| Huella de deduplicación | `src/huella.ts` |
+| Clasificación de la vista previa (independiente de la plataforma) | `src/clasificar.ts` |
+
+### Desviación registrada del contrato `RawCaptureEvent`
+
+El conector no produce `RawCaptureEvent[]`, produce `FilaOperacionCerrada[]`. El
+motivo: el fichero trae **viajes completos ya emparejados** con P&L bruto y neto,
+no eventos. Partir cada fila en `open` + `full_close` exigiría inventar un evento
+`commission` con la diferencia bruto − neto, que no se sabe si es solo comisión.
+Se conserva la fila. **Pendiente de decisión humana**: si el contrato se amplía
+con un tipo de captura «operación cerrada» o si la reconstrucción traducirá
+estas filas a eventos.
+
+### Etapas del §5, estado tras la fase 1
+
+| Etapa | Estado |
+|---|---|
+| Captura (`file_import`) | ✅ un conector |
+| Traducción | ✅ a `FilaOperacionCerrada` (ver desviación) |
+| Normalización de zona horaria | ✅ declarada por el usuario, fijada por Cuenta |
+| Deduplicación | ✅ `imported_trade_rows(account_id, source, dedup_key)` — misma forma que DEC-005 |
+| Persistencia | ✅ como **evidencia**, por RPC transaccional (`confirmar_importacion`) |
+| Reconstrucción en Operaciones | 🔴 no existe; no hay regla validada para agrupar filas |
+| Inferencia, normalización de unidades, reconciliación | 🔴 |
+
+### Por qué no se reutiliza `trades(account_id, source, external_ref)`
+
+Ese índice exige un identificador de operación de la plataforma, que este
+fichero no exporta, y vive en `trades`, donde no se puede escribir una fila sin
+riesgo, Plan ni R. Se reproduce la misma forma de clave —(cuenta, conector,
+identidad)— sobre la tabla de evidencia, con una identidad derivada de los
+datos de la fila y un número de ocurrencia para filas idénticas legítimas.
