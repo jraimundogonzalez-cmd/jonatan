@@ -1,4 +1,8 @@
 #!/bin/sh
+# OPCIONAL, para Linux o uso manual. Los scripts de Windows ya NO lo usan: su
+# verificación (scripts/windows/comun.ps1) solo necesita psql y pg_restore,
+# porque sh/awk/wc no están garantizados en la imagen de Supabase.
+#
 # Verifica una copia de seguridad hecha con `pg_dump -Fc` contando, tabla a
 # tabla, las filas de la base viva y las que contiene la copia. No restaura
 # nada ni escribe en la base: solo lee.

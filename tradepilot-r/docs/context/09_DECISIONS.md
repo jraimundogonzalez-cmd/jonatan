@@ -150,6 +150,28 @@ Las dos lecturas son defendibles:
 **No se ha modificado nada.** Cambiarlo redefine qué es una decisión de riesgo.
 Afecta además a cómo un conector traducirá operaciones importadas.
 
+### Abierta · Subir Next.js de 14.2.35 a 15.5.x (2026-10-18)
+**Estado**: **PENDIENTE DE DECISIÓN HUMANA**
+
+Next.js 14.2.35 es la última de la rama 14 y acumula 23 avisos sin corrección
+en 14.x. Dos afectan al uso real de TradePilot:
+- **CVE-2026-75604** (GHSA-p293-qw3h-jr36, crítica): RCE sin autenticación en
+  aplicaciones App Router alojadas en **Windows**. Sin alternativa; corregida en
+  15.5.24.
+- **CVE-2026-64641** (GHSA-m99w-x7hq-7vfj, alta): DoS con Server Actions (el
+  importador las usa). Corregida en 15.5.21.
+
+**Mitigación aplicada sin cambiar de versión**: `next dev`/`next start` atados
+a `127.0.0.1` (solo este PC llega al servidor). No cubre ataques desde una web
+abierta en el propio navegador.
+
+**Prueba realizada** (copia aislada, sin publicar): con `next@15.5.28` y React
+18 pasan typecheck, lint, build y todos los tests (el único fallo fue un test
+intermitente propio, ya corregido). Hay que renombrar
+`experimental.serverComponentsExternalPackages` → `serverExternalPackages`.
+**Sin probar**: la aplicación en el navegador con Next 15 y React 18 (el App
+Router de Next 15 usa React 19 internamente).
+
 ### Propuestas de la importación de ficheros, fase 1 (2026-10-18)
 
 **Sin número asignado a propósito.** Pueden existir DEC-014 a DEC-016 en

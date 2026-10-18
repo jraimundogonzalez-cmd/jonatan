@@ -8,6 +8,7 @@ $accesos = @(
   @{ Nombre = 'TradePilot - Abrir';              Bat = 'Abrir_TradePilot.bat' },
   @{ Nombre = 'TradePilot - Cerrar';             Bat = 'Cerrar_TradePilot.bat' },
   @{ Nombre = 'TradePilot - Copia de seguridad'; Bat = 'Copia_de_seguridad_TradePilot.bat' },
+  @{ Nombre = 'TradePilot - Diagnosticar';       Bat = 'Diagnosticar_TradePilot.bat' },
   @{ Nombre = 'TradePilot - Actualizar';         Bat = 'Actualizar_TradePilot.bat' }
 )
 try {

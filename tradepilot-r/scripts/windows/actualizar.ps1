@@ -3,10 +3,10 @@
 #
 # Pasos, y en cada uno se para si algo no cuadra (sin haber tocado nada que no
 # se pueda deshacer con la copia):
-#   1. Comprueba, solo leyendo, que migraciones tiene la base y cuales faltan.
-#      Se NIEGA a seguir si la base tiene migraciones que este codigo no
-#      conoce, o si falta alguna antigua: eso significa que base y codigo no
-#      son de la misma linea de trabajo.
+#   1. Diagnostico de solo lectura (el mismo de Diagnosticar_TradePilot.bat).
+#      Se NIEGA a seguir si la base tiene migraciones u objetos que este
+#      codigo no conoce, si le falta algo que su historial dice tener, o si no
+#      tiene ninguna Cuenta: base y codigo no son de la misma linea de trabajo.
 #   2. Pide confirmacion.
 #   3. Copia de seguridad completa y verificada.
 #   4. Aplica SOLO las migraciones pendientes (`supabase migration up`).
@@ -14,36 +14,12 @@
 #      tocan filas), cada fichero en una unica transaccion.
 #   6. Vuelve a contar las filas de todas las tablas de la copia: deben seguir
 #      siendo las mismas.
+# Dependencias: docker y supabase en Windows; psql, pg_dump y pg_restore
+# dentro del contenedor. Ninguna herramienta Unix.
 #
 # Nunca ejecuta `supabase db reset`, ni borra volumenes, ni restaura nada.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'comun.ps1')
-
-function Get-EstadoMigraciones {
-  $ficheros = @(Get-ChildItem -Path (Join-Path $script:Raiz 'supabase/migrations') -Filter '*.sql' |
-    Where-Object { $_.Name -match '^(\d+)_' } |
-    ForEach-Object { [pscustomobject]@{ Version = ($_.Name -split '_')[0]; Nombre = $_.Name } } |
-    Sort-Object Version)
-
-  $existe = Invoke-Sql "select to_regclass('supabase_migrations.schema_migrations') is not null"
-  if (@($existe)[0] -ne 't') {
-    throw 'No encuentro el historial de migraciones de la base (supabase_migrations.schema_migrations). No puedo saber que le falta, asi que no toco nada.'
-  }
-  $aplicadas = @(Invoke-Sql 'select version from supabase_migrations.schema_migrations order by version')
-
-  $versionesFichero = @($ficheros | ForEach-Object { $_.Version })
-  $desconocidas = @($aplicadas | Where-Object { $versionesFichero -notcontains $_ })
-  $pendientes = @($ficheros | Where-Object { $aplicadas -notcontains $_.Version })
-  $ultimaAplicada = if ($aplicadas.Count -gt 0) { ($aplicadas | Sort-Object)[-1] } else { '' }
-  $fueraDeOrden = @($pendientes | Where-Object { $_.Version -lt $ultimaAplicada })
-
-  return [pscustomobject]@{
-    Aplicadas = $aplicadas
-    Pendientes = $pendientes
-    Desconocidas = $desconocidas
-    FueraDeOrden = $fueraDeOrden
-  }
-}
 
 # Ficheros de funciones, en el orden declarado en supabase/config.toml
 # ([db.seed] sql_paths). Se leen de ahi para no mantener dos listas.
@@ -69,27 +45,25 @@ $respaldo = $null
 try {
   Assert-Entorno
 
-  Write-Paso 'Comprobando que le falta a la base (solo lectura)...'
-  $estado = Get-EstadoMigraciones
-  if ($estado.Desconocidas.Count -gt 0) {
-    Write-Fallo 'Tu base de datos tiene migraciones que este codigo NO conoce:'
-    $estado.Desconocidas | ForEach-Object { Write-Host "         $_" }
-    Write-Host '       Puede que tu base contenga trabajo que no esta en esta version del'
-    Write-Host '       proyecto. No toco nada. Avisa antes de seguir: ese trabajo hay que'
-    Write-Host '       recuperarlo, no pisarlo.'
+  Write-Paso 'Diagnostico de solo lectura: historial, esquema y filas...'
+  $diag = Get-Diagnostico
+  if ($diag.Bloqueos.Count -gt 0) {
+    Write-Host ''
+    $informe = Write-Diagnostico $diag
+    Write-Host ''
+    Write-Fallo 'La actualizacion esta BLOQUEADA. No se ha tocado nada.'
+    Write-Host "       Informe: $informe"
+    Write-Host '       Si tu base tiene trabajo que no esta en esta version, hay que'
+    Write-Host '       recuperarlo antes de actualizar, no pisarlo.'
     exit 2
   }
-  if ($estado.FueraDeOrden.Count -gt 0) {
-    Write-Fallo 'Faltan migraciones ANTERIORES a otras ya aplicadas:'
-    $estado.FueraDeOrden | ForEach-Object { Write-Host "         $($_.Nombre)" }
-    Write-Host '       Base y codigo no son de la misma linea de trabajo. No toco nada.'
-    exit 2
-  }
-  Write-Ok "Migraciones ya aplicadas: $($estado.Aplicadas.Count)"
+  $estado = $diag.Estado
+  foreach ($a in $diag.Avisos) { Write-Aviso $a }
+  Write-Ok "Migraciones ya aplicadas: $($estado.Aplicadas.Count); ningun objeto desconocido en tu base"
   if ($estado.Pendientes.Count -eq 0) {
     Write-Ok 'No falta ninguna migracion'
   } else {
-    Write-Host '       Pendientes de aplicar (todas aditivas segun el proyecto):'
+    Write-Host '       Pendientes de aplicar:'
     $estado.Pendientes | ForEach-Object { Write-Host "         $($_.Nombre)" }
   }
   $funciones = Get-FicherosDeFunciones
@@ -127,7 +101,7 @@ try {
   }
 
   Write-Paso 'Comprobando que no se ha perdido ni una fila...'
-  Test-RespaldoContraBase -Dump '/tmp/tradepilot-respaldo.dump'
+  $null = Test-RespaldoContraBase
   Write-Ok 'Mismas filas que antes de actualizar'
 
   $faltan = Invoke-Sql "select count(*) from (values ('listar_empresas'),('registrar_operacion'),('confirmar_importacion'),('listar_lotes_importacion')) v(f) where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = v.f)"

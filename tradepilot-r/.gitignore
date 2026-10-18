@@ -13,3 +13,6 @@ supabase-status.err
 # Actualizar_TradePilot.bat). Contienen tus datos: nunca van al repositorio.
 respaldos/
 *.dump
+# Informes de Diagnosticar_TradePilot.bat (recuentos y nombres de objetos de
+# tu base). Se comparten a mano si hace falta; no van al repositorio.
+diagnosticos/

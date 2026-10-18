@@ -40,15 +40,17 @@ Si te falta la CLI de Supabase: `npm install -g supabase`.
 
 ## 2. Arrancar — la forma fácil (Windows)
 
-Dentro de la carpeta `tradepilot-r` hay cinco archivos de doble clic:
+Dentro de la carpeta `tradepilot-r` hay siete archivos de doble clic:
 
 | Archivo | Qué hace | Cuándo |
 |---|---|---|
 | **`Abrir_TradePilot.bat`** | Arranca todo y abre el navegador | Cada día |
 | **`Cerrar_TradePilot.bat`** | Lo apaga. Tus datos se conservan | Cada día, al terminar |
 | **`Copia_de_seguridad_TradePilot.bat`** | Copia verificada de tus datos en la carpeta `respaldos` | Cuando quieras (p. ej. cada semana) |
+| **`Probar_copia_de_seguridad_TradePilot.bat`** | Restaura la última copia en una base temporal y comprueba que está entera | De vez en cuando |
+| **`Diagnosticar_TradePilot.bat`** | Compara tu base con lo que espera esta versión. **Solo lee** | Siempre antes de actualizar |
 | **`Actualizar_TradePilot.bat`** | Pone la base al día **sin borrar datos**; hace una copia antes | Solo después de descargar una versión nueva |
-| **`Crear_accesos_directos.bat`** | Pone los cuatro anteriores en tu Escritorio | Una vez (y si mueves la carpeta) |
+| **`Crear_accesos_directos.bat`** | Pone Abrir, Cerrar, Copia, Diagnosticar y Actualizar en tu Escritorio | Una vez (y si mueves la carpeta) |
 
 **Recomendado la primera vez:** doble clic en `Crear_accesos_directos.bat`. A partir de
 ahí usas TradePilot desde el Escritorio, sin buscar carpetas ni abrir terminales.
@@ -127,13 +129,19 @@ Navega a **<http://localhost:3000>** en Chrome, Firefox o Safari. Cualquiera val
 
 ## 2-ter. Actualizar a una versión nueva del proyecto
 
-1. Doble clic en **`Cerrar_TradePilot.bat`**.
-2. Descarga la versión nueva (con `git pull` en la carpeta del proyecto, o un ZIP nuevo).
+1. Descarga la versión nueva (con `git pull` en la carpeta del proyecto, o un ZIP nuevo).
    Si usas un ZIP en otra carpeta, **copia antes tu carpeta `respaldos`** a un sitio seguro.
-3. Doble clic en **`Actualizar_TradePilot.bat`**. Hace una copia de seguridad verificada,
-   aplica solo lo que falta y comprueba que siguen todas tus filas. Si algo no cuadra,
-   se para y te lo dice sin tocar nada más.
-4. Doble clic en **`Abrir_TradePilot.bat`**.
+2. Doble clic en **`Abrir_TradePilot.bat`**. Con tu base existente no le aplica ningún
+   cambio. Si avisa de que la base **no está al día**, es lo esperado: sigue.
+3. Doble clic en **`Diagnosticar_TradePilot.bat`** (solo lee). Solo si dice
+   **LISTA PARA ACTUALIZAR**, sigue. Si dice **BLOQUEADA**, para y envía el informe de la
+   carpeta `diagnosticos`. La primera vez, sigue la guía completa:
+   [`COMPROBAR-INSTALACION-WINDOWS.md`](./COMPROBAR-INSTALACION-WINDOWS.md).
+4. Doble clic en **`Actualizar_TradePilot.bat`** (la base tiene que seguir en marcha; no
+   uses `Cerrar_TradePilot.bat` antes). Hace una copia de seguridad verificada, aplica solo
+   lo que falta y comprueba que siguen todas tus filas. Si algo no cuadra, se para y te lo
+   dice sin tocar nada más.
+5. Vuelve a abrir TradePilot con **`Abrir_TradePilot.bat`**.
 
 Tus datos no viven en la carpeta del proyecto: viven en la base de datos de Docker, que
 se identifica por el nombre del proyecto (`tradepilot-r`) y no por la carpeta. Borrar o

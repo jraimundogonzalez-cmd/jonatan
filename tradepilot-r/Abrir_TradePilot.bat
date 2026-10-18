@@ -229,9 +229,11 @@ if not errorlevel 1 (
     echo       piezas nuevas.
     echo.
     echo       Para ponerla al dia SIN borrar nada:
-    echo         1. Cierra esta ventana.
-    echo         2. Ejecuta Actualizar_TradePilot.bat
-    echo            ^(hace una copia de seguridad verificada antes de tocar nada^).
+    echo         1. Cierra esta ventana ^(la base de datos sigue en marcha^).
+    echo         2. Ejecuta Diagnosticar_TradePilot.bat ^(solo lee^).
+    echo         3. Solo si dice LISTA PARA ACTUALIZAR, ejecuta
+    echo            Actualizar_TradePilot.bat ^(hace una copia verificada antes^).
+    echo       Guia completa: COMPROBAR-INSTALACION-WINDOWS.md
     echo.
     echo       NO uses "supabase db reset": borraria tus cuentas y operaciones.
     echo.

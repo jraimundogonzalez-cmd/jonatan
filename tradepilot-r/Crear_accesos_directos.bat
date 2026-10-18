@@ -3,7 +3,8 @@ setlocal
 REM ===================================================================
 REM  Crea en el Escritorio los accesos directos de TradePilot:
 REM    TradePilot - Abrir, TradePilot - Cerrar,
-REM    TradePilot - Copia de seguridad, TradePilot - Actualizar
+REM    TradePilot - Copia de seguridad, TradePilot - Diagnosticar,
+REM    TradePilot - Actualizar
 REM  Solo crea accesos directos; no toca la base de datos ni el proyecto.
 REM  Si mueves la carpeta del proyecto, vuelve a ejecutarlo.
 REM ===================================================================

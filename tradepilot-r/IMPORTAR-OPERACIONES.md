@@ -12,14 +12,19 @@ Guía de la **fase 1** del importador de la «Lista de comercio» (`.xlsx`).
 El importador necesita dos tablas y cuatro funciones nuevas en tu base local. No
 modifican ninguna tabla existente.
 
-1. Cierra TradePilot (`Cerrar_TradePilot.bat`).
+La primera vez, sigue la guía [`COMPROBAR-INSTALACION-WINDOWS.md`](./COMPROBAR-INSTALACION-WINDOWS.md),
+que incluye proteger tu trabajo en Git y el diagnóstico. En resumen:
+
+1. Doble clic en **`Diagnosticar_TradePilot.bat`** (solo lee). Si no dice
+   **LISTA PARA ACTUALIZAR**, para aquí.
 2. Doble clic en **`Actualizar_TradePilot.bat`**. Él solo:
-   - comprueba, sin tocar nada, qué le falta a la base, y **se niega a seguir** si
-     tu base tiene migraciones que esta versión no conoce;
+   - repite el diagnóstico de solo lectura y **se niega a seguir** si tu base
+     tiene migraciones u objetos que esta versión no conoce, si le falta algo
+     que su historial dice tener o si no tiene ninguna Cuenta;
    - te pide confirmación;
-   - hace una **copia de seguridad completa** en la carpeta `respaldos` y la
-     **verifica** (la copia en disco es idéntica a la generada, y tiene las mismas
-     filas por tabla que la base);
+   - hace una **copia de seguridad completa** en la carpeta `respaldos` y
+     **verifica el fichero que queda en tu disco** (se lee entero y tiene las
+     mismas filas por tabla que la base);
    - aplica **solo** las migraciones pendientes y reinstala las funciones;
    - vuelve a contar las filas: tienen que seguir siendo las mismas.
 3. Tiene que terminar con `Actualizacion terminada. Tus datos siguen ahi.`
@@ -30,13 +35,9 @@ modifican ninguna tabla existente.
 Para hacer solo una copia de seguridad, sin actualizar nada:
 **`Copia_de_seguridad_TradePilot.bat`**.
 
-> Verificado en un entorno aislado (Linux, PowerShell 7.4, PostgreSQL 16, con
-> `docker` y la CLI de Supabase simulados) sobre una base con el esquema anterior
-> y datos: caso normal con las 23 tablas existentes idénticas byte a byte, y
-> nueve escenarios de fallo (migración desconocida, sin historial, migración que
-> falla, copia corrupta, Docker parado, cancelar…) en los que no se tocó ningún
-> dato. **En tu PC está sin verificar**: no se ha podido probar con Windows
-> PowerShell 5.1, Docker Desktop ni la CLI real de Supabase.
+> Qué está verificado y qué no: tabla final de
+> [`COMPROBAR-INSTALACION-WINDOWS.md`](./COMPROBAR-INSTALACION-WINDOWS.md).
+> **En tu PC está sin verificar** hasta que lo ejecutes.
 
 **Volver atrás.** Si algo saliera mal, la copia permite recuperar los datos.
 Restaurar sobre una base de Supabase toca también sus esquemas internos
@@ -107,8 +108,10 @@ conocido, no con una exportación real. Al importar tu primer archivo, comprueba
 
 ## Apéndice — el mismo procedimiento a mano
 
-Solo si `Actualizar_TradePilot.bat` no pudiera ejecutarse. Es lo que hace por
-dentro, paso a paso, en PowerShell y en la carpeta `tradepilot-r`.
+Solo si `Actualizar_TradePilot.bat` no pudiera ejecutarse. Es una versión
+manual anterior: la verificación de abajo usa `sh` y `awk` **dentro** del
+contenedor, que no están garantizados en la imagen de Supabase. Los scripts de
+Windows ya no dependen de ellos.
 
 ### A. Copia de seguridad verificada
 

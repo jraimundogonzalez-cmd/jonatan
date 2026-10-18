@@ -8,6 +8,37 @@
 `3961c27` (rama de trabajo `claude/ecstatic-planck-tg10r0`). La verificación
 anterior (2026-10-01, `c91e3af`) se conserva abajo donde no ha cambiado.
 
+### Diagnóstico, dependencias y Windows (2026-10-18, tercera tanda)
+
+- **Diagnóstico de solo lectura** (`Diagnosticar_TradePilot.bat` →
+  `scripts/windows/diagnostico.ps1`): historial de migraciones y esquema de
+  `public` frente a `supabase/esquema-esperado.txt` (427 objetos con su
+  origen; se regenera con `scripts/esquema/generar-esquema-esperado.sh`).
+  Bloquea ante migraciones u objetos desconocidos, objetos que faltan sin
+  explicación o una base sin Cuentas. Consultas con
+  `default_transaction_read_only=on`. El actualizador ejecuta el mismo
+  diagnóstico y se niega si bloquea.
+- **Sin herramientas Unix**: la verificación de copias solo usa `psql`,
+  `pg_dump` y `pg_restore` y comprueba el fichero que queda en disco.
+- **Prueba de restauración** en base temporal (`Probar_copia_de_seguridad_TradePilot.bat`).
+- **Ningún script arranca la base por su cuenta** (evita trabajar sobre una
+  base nueva vacía si faltara el volumen).
+- **Dependencias**: `brace-expansion`, `nanoid` y `source-map-js` actualizados
+  dentro de rango (7 → 4 avisos). Servidor web atado a `127.0.0.1`
+  (mitigación de CVE-2026-75604). **Pendiente de decisión**: Next.js 14 → 15.5
+  (ver `09_DECISIONS.md` §3).
+- **PowerShell 5.1**: comprobación estática con el perfil oficial de Windows
+  PowerShell 5.1 (`scripts/windows/pruebas/comprobar-ps51.ps1`) y
+  PSScriptAnalyzer (sintaxis). Sin ejecutar en Windows.
+
+```
+Tests TypeScript 411 verdes · suite SQL 16: 37/37
+Escenarios con docker/supabase SIMULADOS y PostgreSQL 16 real: diagnóstico
+(7), actualizador (6), copia y restauración (2): todos correctos, datos intactos.
+Comportamiento de `supabase start` / `migration up` verificado LEYENDO el
+código fuente de la CLI (commit f01410e), no ejecutándola.
+```
+
 ### Seguridad local y uso diario en Windows (2026-10-18, segunda tanda)
 
 - `Actualizar_TradePilot.bat` → `scripts/windows/actualizar.ps1`: comprueba el
