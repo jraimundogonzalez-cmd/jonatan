@@ -76,10 +76,15 @@ enabled = true
 #
 # El orden importa: `operations.sql` referencia objetos que crea `funding.sql`.
 # Los ficheros no se tocan; sólo se declara aquí que hay que aplicarlos.
+#
+# ⚠️ Esta lista SOLO se aplica al crear la base o en un `db reset`, que BORRA
+# los datos. En una base que ya tiene datos, un fichero nuevo de esta lista se
+# aplica a mano, sin reset: ver IMPORTAR-OPERACIONES.md.
 sql_paths = [
   "./functions/sql/funding.sql",
   "./functions/sql/operations.sql",
-  "./functions/sql/management_intent.sql"
+  "./functions/sql/management_intent.sql",
+  "./functions/sql/imports.sql"
 ]
 
 [db.network_restrictions]

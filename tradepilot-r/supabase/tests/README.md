@@ -26,6 +26,7 @@ for f in ../migrations/*.sql; do psql -d tradepilot_test -f "$f"; done
 psql -d tradepilot_test -f ../functions/sql/funding.sql
 psql -d tradepilot_test -f ../functions/sql/operations.sql
 psql -d tradepilot_test -f ../functions/sql/management_intent.sql
+psql -d tradepilot_test -f ../functions/sql/imports.sql
 psql -d tradepilot_test -f 01_funding_management_rls.sql
 psql -d tradepilot_test -f 02_risk_engine.sql
 psql -d tradepilot_test -f 03_operations_engine.sql
@@ -41,6 +42,7 @@ psql -d tradepilot_test -f 12_management_intent_binding.sql
 psql -d tradepilot_test -f 13_operations_integrity.sql
 psql -d tradepilot_test -f 14_operations_outcome.sql
 psql -d tradepilot_test -v operations_sql=../functions/sql/operations.sql -f 15_outcome_correction.sql
+psql -d tradepilot_test -f 16_trade_file_imports.sql
 ```
 
 La suite 15 necesita `-v operations_sql=...` porque **reaplica el propio
@@ -587,3 +589,17 @@ la llamada se vuelve ambigua (`is not unique`), y `[23]`-`[26]` que reaplicar
 `operations.sql` —dos veces— deja exactamente una firma. El primer entorno real
 que hubiera actualizado ese fichero habría visto fallar **todos** los cierres
 por PostgREST sin haber cambiado nada más.
+
+### Importación de ficheros (fase 1) — `16_trade_file_imports.sql`
+
+A diferencia de las suites anteriores, que se leen por etiqueta, la 16 **se
+autoverifica**: cada comprobación imprime `OK [n]` o aborta con `FALLO`, y se
+ejecuta con `ON_ERROR_STOP` activo. Solo está en verde si su última línea es
+`TODAS LAS COMPROBACIONES DE 16 EN VERDE` (35 comprobaciones).
+
+Cubre: vínculo Cuenta ↔ cuenta externa (primera confirmación expresa, rechazo de
+otra cuenta y de otra zona horaria), conservación exacta de P&L bruto y neto,
+reimportación sin duplicados, filas idénticas legítimas, **fallo a mitad sin
+persistencia parcial**, inmutabilidad de la evidencia (también como
+propietario), aislamiento entre usuarios y que `trades`, `accounts` y
+`account_capital_events` quedan idénticos byte a byte.

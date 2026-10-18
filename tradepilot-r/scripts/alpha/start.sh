@@ -52,7 +52,7 @@ if [ "${TP_ALPHA_RESET:-0}" = "1" ] || ! su postgres -c "psql -lqt" | cut -d'|' 
   for f in "$RAIZ"/supabase/migrations/*.sql; do
     su postgres -c "psql -q -v ON_ERROR_STOP=1 -d $DB -f $f" >/dev/null || { echo "  FALLO $(basename "$f")"; exit 1; }
   done
-  for f in funding operations management_intent; do
+  for f in funding operations management_intent imports; do
     su postgres -c "psql -q -v ON_ERROR_STOP=1 -d $DB -f $RAIZ/supabase/functions/sql/$f.sql" >/dev/null || { echo "  FALLO $f"; exit 1; }
   done
   su postgres -c "psql -q -d $DB -c \"grant select, insert, update, delete on all tables in schema public to authenticated; grant execute on all functions in schema public to authenticated, anon; grant usage, select on all sequences in schema public to authenticated;\"" >/dev/null

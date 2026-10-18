@@ -1,0 +1,24 @@
+{
+  "name": "@tradepilot/connectors",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontera de integración (06_CONNECTORS.md, I10): el único sitio donde vive código específico de una plataforma. Lee y traduce ficheros importados; nunca escribe en la base de datos, nunca calcula R y nunca ejecuta órdenes (I17).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
