@@ -23,6 +23,7 @@ import {
   type DecimalLeido,
 } from "../decimal-exacto.js";
 import { leerXlsx } from "../xlsx.js";
+import { inspeccionarZip, MAXIMO_DESCOMPRIMIDO_BYTES } from "../zip.js";
 import {
   esZonaValida,
   formatearReloj,
@@ -62,6 +63,10 @@ export const COLUMNAS_LISTA_DE_COMERCIO = [
 type Columna = (typeof COLUMNAS_LISTA_DE_COMERCIO)[number];
 
 export const MAXIMO_FILAS = 5000;
+/** Columnas de la cabecera (las 11 conocidas + las que la plataforma añada). */
+export const MAXIMO_COLUMNAS = 64;
+/** Una celda de esta exportación es un código, una fecha o un número. */
+export const MAXIMO_LARGO_CELDA = 256;
 
 /** Filas que se inspeccionan buscando la cabecera (puede haber un título encima). */
 const FILAS_BUSQUEDA_CABECERA = 10;
@@ -126,6 +131,10 @@ function buscarCabecera(hojas: HojaLeida[]): BusquedaCabecera {
         if (col) indicePorColumna.set(col, indice);
         else columnasExtra.push({ nombre: t, indice });
       });
+      const columnas = indicePorColumna.size + columnasExtra.length;
+      if (columnas > MAXIMO_COLUMNAS) {
+        return { ok: false, error: { ok: false, error: { codigo: "DEMASIADAS_COLUMNAS", columnas, maximo: MAXIMO_COLUMNAS } } };
+      }
       const faltan = COLUMNAS_LISTA_DE_COMERCIO.filter((c) => !indicePorColumna.has(c));
       if (faltan.length === 0) {
         return { ok: true, cabecera: { hoja, filaCabecera: i, indicePorColumna, columnasExtra } };
@@ -213,11 +222,20 @@ function traducirFila(
   zonaHoraria: string,
 ): { valida: FilaOperacionCerrada } | { invalida: FilaInvalida } {
   const celda = (c: Columna) => celdas[cabecera.indicePorColumna.get(c) as number];
-  const original: Record<string, string> = {};
-  for (const c of COLUMNAS_LISTA_DE_COMERCIO) original[c] = textoDeCelda(celda(c));
-  for (const extra of cabecera.columnasExtra) original[extra.nombre] = textoDeCelda(celdas[extra.indice]);
+  // Object.fromEntries crea propiedades propias: una columna llamada
+  // "__proto__" se guarda como dato en vez de perderse contra el prototipo.
+  const original: Record<string, string> = Object.fromEntries([
+    ...COLUMNAS_LISTA_DE_COMERCIO.map((c) => [c, textoDeCelda(celda(c))] as const),
+    ...cabecera.columnasExtra.map((extra) => [extra.nombre, textoDeCelda(celdas[extra.indice])] as const),
+  ]);
 
   const errores: ProblemaDeFila[] = [];
+  for (const [columna, valor] of Object.entries(original)) {
+    if (valor.length > MAXIMO_LARGO_CELDA) {
+      errores.push(problema(columna, "CELDA_DEMASIADO_LARGA", `${columna} tiene ${valor.length} caracteres; el máximo es ${MAXIMO_LARGO_CELDA}`));
+      original[columna] = `${valor.slice(0, MAXIMO_LARGO_CELDA)}…`;
+    }
+  }
   const revision: ProblemaDeFila[] = [];
   const notas: ProblemaDeFila[] = [];
 
@@ -330,6 +348,18 @@ export const conectorNysListaDeComercio: ConectorDeFichero = {
 
   async traducir(bytes, { zonaHoraria }): Promise<ResultadoTraduccion> {
     if (!esZonaValida(zonaHoraria)) return { ok: false, error: { codigo: "ZONA_HORARIA_NO_VALIDA", zona: zonaHoraria } };
+
+    // Defensa en profundidad: aunque el llamante ya haya pasado
+    // comprobarFichero, no se descomprime nada sin mirar antes el ZIP.
+    const zip = inspeccionarZip(bytes);
+    if (!zip.ok) {
+      return {
+        ok: false,
+        error: zip.motivo === "DEMASIADO_GRANDE"
+          ? { codigo: "CONTENIDO_DEMASIADO_GRANDE", maximo: MAXIMO_DESCOMPRIMIDO_BYTES }
+          : { codigo: "ZIP_NO_ADMITIDO", motivo: zip.motivo },
+      };
+    }
 
     let hojas: HojaLeida[];
     try {

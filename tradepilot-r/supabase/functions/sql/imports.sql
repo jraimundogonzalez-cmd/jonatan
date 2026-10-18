@@ -120,6 +120,18 @@ begin
   if v_total_filas > 5000 then
     raise exception 'IMPORT_ERROR:VALIDATION_ERROR:rows:% filas superan el máximo de 5000', v_total_filas;
   end if;
+  -- Límites de tamaño: la RPC está expuesta a cualquier sesión autenticada y
+  -- no debe aceptar resúmenes ni filas desmesurados (el conector limita la
+  -- celda a 256 caracteres y la cabecera a 64 columnas: 16 KB por fila sobra).
+  if pg_column_size(p_resumen) > 1048576 then
+    raise exception 'IMPORT_ERROR:VALIDATION_ERROR:resumen:el resumen supera 1 MB';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_rows) e
+    where jsonb_typeof(e->'raw') is distinct from 'object' or pg_column_size(e->'raw') > 16384
+  ) then
+    raise exception 'IMPORT_ERROR:VALIDATION_ERROR:rows:alguna fila trae columnas originales ausentes o de más de 16 KB';
+  end if;
 
   perform pg_advisory_xact_lock(hashtextextended(p_account_id::text || ':' || p_source, 0));
 

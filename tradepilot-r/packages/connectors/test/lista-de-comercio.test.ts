@@ -147,11 +147,10 @@ describe("estructura del fichero", () => {
     if (!r.ok) expect(r.error.codigo).toBe("XLSX_ILEGIBLE");
   });
 
-  it("xlsx truncado → XLSX_ILEGIBLE sin lanzar", async () => {
+  it("xlsx truncado → rechazado antes de descomprimir, sin lanzar", async () => {
     const bytes = await crearXlsx([CABECERA, FILA_EJEMPLO]);
     const r = await conectorNysListaDeComercio.traducir(bytes.slice(0, Math.floor(bytes.length / 2)), { zonaHoraria: NY });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.codigo).toBe("XLSX_ILEGIBLE");
+    expect(r).toEqual({ ok: false, error: { codigo: "ZIP_NO_ADMITIDO", motivo: "ESTRUCTURA" } });
   });
 });
 
@@ -266,5 +265,59 @@ describe("lo que el fichero no trae no se inventa", () => {
     for (const prohibida of ["r", "rFinal", "riesgo", "stop", "takeProfit", "estrategia", "mae", "mfe", "comision"]) {
       expect(claves).not.toContain(prohibida);
     }
+  });
+});
+
+/** Busca la primera cabecera del directorio central y devuelve su posición. */
+function directorioCentral(b: Uint8Array): number {
+  for (let i = b.length - 22; i >= 0; i--) {
+    if (b[i] === 0x50 && b[i + 1] === 0x4b && b[i + 2] === 0x05 && b[i + 3] === 0x06) {
+      return (b[i + 16]! | (b[i + 17]! << 8) | (b[i + 18]! << 16)) + (b[i + 19]! << 24);
+    }
+  }
+  throw new Error("sin directorio central");
+}
+
+describe("protecciones del lector frente a ficheros hostiles", () => {
+  it("un ZIP que declara demasiado contenido descomprimido (bomba ZIP) se rechaza sin abrirlo", async () => {
+    const bytes = await crearXlsx([CABECERA, FILA_EJEMPLO]);
+    const p = directorioCentral(bytes);
+    // Tamaño descomprimido declarado de la primera entrada: 100 MB.
+    new DataView(bytes.buffer, bytes.byteOffset).setUint32(p + 24, 100 * 1024 * 1024, true);
+    expect(comprobarFicheroListaDeComercio("lista.xlsx", bytes)).toEqual({ codigo: "CONTENIDO_DEMASIADO_GRANDE", maximo: 64 * 1024 * 1024 });
+    const r = await conectorNysListaDeComercio.traducir(bytes, { zonaHoraria: NY });
+    expect(r).toMatchObject({ ok: false, error: { codigo: "CONTENIDO_DEMASIADO_GRANDE" } });
+  });
+
+  it("un ZIP cifrado se rechaza", async () => {
+    const bytes = await crearXlsx([CABECERA, FILA_EJEMPLO]);
+    const p = directorioCentral(bytes);
+    bytes[p + 8] = bytes[p + 8]! | 0x1;
+    expect(comprobarFicheroListaDeComercio("lista.xlsx", bytes)).toEqual({ codigo: "ZIP_NO_ADMITIDO", motivo: "CIFRADO" });
+  });
+
+  it("un xlsx normal pasa la inspección", async () => {
+    expect(comprobarFicheroListaDeComercio("lista.xlsx", await crearXlsx([CABECERA, FILA_EJEMPLO]))).toBeNull();
+  });
+
+  it("demasiadas columnas → error de fichero", async () => {
+    const extras = Array.from({ length: 60 }, (_, i) => `Extra ${i}`);
+    const r = await traducir([[...CABECERA, ...extras], FILA_EJEMPLO]);
+    expect(r).toEqual({ ok: false, error: { codigo: "DEMASIADAS_COLUMNAS", columnas: 71, maximo: 64 } });
+  });
+
+  it("una celda desmesurada invalida su fila y no se guarda entera", async () => {
+    const r = exito(await traducir([[...CABECERA, "Notas"], [...FILA_EJEMPLO, "x".repeat(5000)]]));
+    expect(r.validas).toEqual([]);
+    expect(r.invalidas[0]?.errores.map((e) => e.codigo)).toEqual(["CELDA_DEMASIADO_LARGA"]);
+    expect(r.invalidas[0]?.original.Notas?.length).toBeLessThanOrEqual(257);
+  });
+
+  it("una columna llamada __proto__ se conserva como dato y no toca el prototipo", async () => {
+    const r = exito(await traducir([[...CABECERA, "__proto__"], [...FILA_EJEMPLO, "valor"]]));
+    const original = r.validas[0]!.original;
+    expect(Object.prototype.hasOwnProperty.call(original, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(original)).toBe(Object.prototype);
+    expect(JSON.parse(JSON.stringify(original))["__proto__"]).toBe("valor");
   });
 });

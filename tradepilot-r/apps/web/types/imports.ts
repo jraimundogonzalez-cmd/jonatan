@@ -53,6 +53,12 @@ function mensajeDeFichero(e: ErrorDeFichero): string {
       return `El archivo ocupa ${Math.ceil(e.bytes / 1024)} KB; el máximo es ${Math.floor(e.maximo / 1024)} KB.`;
     case "NO_ES_XLSX":
       return "El archivo tiene extensión .xlsx pero su contenido no es un libro de Excel (¿un CSV renombrado?).";
+    case "ZIP_NO_ADMITIDO":
+      return "El archivo está dañado, cifrado o usa un formato de compresión no admitido. Vuelve a exportarlo desde la plataforma.";
+    case "CONTENIDO_DEMASIADO_GRANDE":
+      return `El archivo declara más de ${Math.floor(e.maximo / 1024 / 1024)} MB de contenido descomprimido. Una exportación de operaciones no ocupa tanto: no se ha abierto.`;
+    case "DEMASIADAS_COLUMNAS":
+      return `La cabecera tiene ${e.columnas} columnas; el máximo es ${e.maximo}.`;
     case "XLSX_ILEGIBLE":
       return "No se ha podido leer el libro de Excel: el archivo está dañado o incompleto.";
     case "CABECERA_NO_ENCONTRADA":

@@ -1,6 +1,7 @@
 // Comprobaciones previas a leer un fichero importado. Independientes de la
 // plataforma: solo miran el nombre, el tamaño y la firma del contenido.
 import { pareceZip } from "./xlsx.js";
+import { inspeccionarZip, MAXIMO_DESCOMPRIMIDO_BYTES } from "./zip.js";
 import type { ErrorDeFichero } from "./tipos.js";
 
 /** 2 MB: una exportación de miles de operaciones ocupa decenas de KB. */
@@ -21,5 +22,12 @@ export function comprobarFichero(
   }
   // Un `.csv` o un `.xls` antiguo renombrado a `.xlsx` no es un ZIP.
   if (!pareceZip(bytes)) return { codigo: "NO_ES_XLSX" };
+  // Antes de descomprimir nada: que el ZIP no declare más de lo razonable.
+  const zip = inspeccionarZip(bytes);
+  if (!zip.ok) {
+    return zip.motivo === "DEMASIADO_GRANDE"
+      ? { codigo: "CONTENIDO_DEMASIADO_GRANDE", maximo: MAXIMO_DESCOMPRIMIDO_BYTES }
+      : { codigo: "ZIP_NO_ADMITIDO", motivo: zip.motivo };
+  }
   return null;
 }

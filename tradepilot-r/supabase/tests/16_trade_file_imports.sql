@@ -197,6 +197,17 @@ select pg_temp.espera_error(
     jsonb_build_array(pg_temp.fila(2, 'e') || jsonb_build_object('entry_utc', '2026-10-06 14:03:56+00'))),
   'IMPORT_ERROR:TIMEZONE_CONVERSION_MISMATCH%', '[7g] instante distinto del de la vista previa → rechazo');
 
+select pg_temp.espera_error(
+  format($q$select confirmar_importacion(%L, 'nys_markets_trade_list', 'x.xlsx', %L, 'America/New_York',
+    'NYS00000-000001', false, %L, '{}')$q$, :'cta1', pg_temp.h('f3'),
+    jsonb_build_array(pg_temp.fila(2, 'e') || jsonb_build_object('raw', jsonb_build_object('Notas', repeat('x', 20000))))),
+  'IMPORT_ERROR:VALIDATION_ERROR:rows%16 KB%', '[7h] columnas originales desmesuradas → rechazo');
+select pg_temp.espera_error(
+  format($q$select confirmar_importacion(%L, 'nys_markets_trade_list', 'x.xlsx', %L, 'America/New_York',
+    'NYS00000-000001', false, %L, %L)$q$, :'cta1', pg_temp.h('f3'), jsonb_build_array(pg_temp.fila(2, 'e')),
+    jsonb_build_object('detalle', (select jsonb_agg(md5(i::text) || md5((i+1)::text)) from generate_series(1, 40000) i))),
+  'IMPORT_ERROR:VALIDATION_ERROR:resumen%', '[7i] resumen desmesurado → rechazo');
+
 \echo '--- [8] Fallo a mitad: ni lote ni filas'
 create temp table conteo_previo as
   select (select count(*) from import_batches) as lotes, (select count(*) from imported_trade_rows) as filas;

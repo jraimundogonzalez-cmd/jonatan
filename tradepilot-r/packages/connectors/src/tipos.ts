@@ -30,6 +30,11 @@ export type ErrorDeFichero =
   | { codigo: "EXTENSION_NO_ADMITIDA"; nombre: string }
   | { codigo: "FICHERO_DEMASIADO_GRANDE"; bytes: number; maximo: number }
   | { codigo: "NO_ES_XLSX" }
+  /** El ZIP está dañado, cifrado o usa ZIP64 (ver zip.ts). */
+  | { codigo: "ZIP_NO_ADMITIDO"; motivo: string }
+  /** Declara más contenido descomprimido del admitido (posible bomba ZIP). */
+  | { codigo: "CONTENIDO_DEMASIADO_GRANDE"; maximo: number }
+  | { codigo: "DEMASIADAS_COLUMNAS"; columnas: number; maximo: number }
   | { codigo: "XLSX_ILEGIBLE"; detalle: string }
   | { codigo: "CABECERA_NO_ENCONTRADA"; faltan: string[] }
   | { codigo: "COLUMNAS_AUSENTES"; faltan: string[]; encontradas: string[] }
