@@ -7,6 +7,7 @@
     "apps/*"
   ],
   "scripts": {
+    "build:packages": "npm run build --workspace=@tradepilot/quant-engine && npm run build --workspace=@tradepilot/risk-engine && npm run build --workspace=@tradepilot/operations-engine && npm run build --workspace=@tradepilot/optimizer && npm run build --workspace=@tradepilot/rule-engine && npm run build --workspace=@tradepilot/connectors",
     "build": "npm run build --workspace=@tradepilot/quant-engine && npm run build --workspace=@tradepilot/risk-engine && npm run build --workspace=@tradepilot/operations-engine && npm run build --workspace=@tradepilot/optimizer && npm run build --workspace=@tradepilot/rule-engine && npm run build --workspace=@tradepilot/connectors && npm run build --workspace=@tradepilot/web",
     "typecheck": "npm run build --workspace=@tradepilot/quant-engine && npm run build --workspace=@tradepilot/risk-engine && npm run build --workspace=@tradepilot/operations-engine && npm run build --workspace=@tradepilot/optimizer && npm run build --workspace=@tradepilot/rule-engine && npm run build --workspace=@tradepilot/connectors && tsc -p apps/web/tsconfig.json --noEmit",
     "test": "npm run test --workspace=@tradepilot/quant-engine && npm run test --workspace=@tradepilot/risk-engine && npm run test --workspace=@tradepilot/operations-engine && npm run test --workspace=@tradepilot/optimizer && npm run test --workspace=@tradepilot/rule-engine && npm run test --workspace=@tradepilot/connectors && npm run test --workspace=@tradepilot/web",
