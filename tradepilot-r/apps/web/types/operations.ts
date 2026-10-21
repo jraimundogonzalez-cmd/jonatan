@@ -41,7 +41,10 @@ export interface OperacionRow {
   readonly notes: string | null;
   readonly comments: string | null;
   readonly source: string;
+  /** Cuándo se REGISTRÓ la Operación. `opened_at` es cuándo se entró en el mercado. */
   readonly created_at: string;
+  /** BUILD 024 — cuándo se registró el cierre. Nulo si sigue abierta o si es anterior a BUILD 024. */
+  readonly closure_recorded_at: string | null;
 }
 
 export interface ParcialEjecutadoRow {
@@ -51,6 +54,8 @@ export interface ParcialEjecutadoRow {
   readonly rr_level: string;
   readonly pct_close: string;
   readonly executed_at: string;
+  /** BUILD 024 — cuándo se registró en TradePilot. Nulo en parciales anteriores. */
+  readonly recorded_at: string | null;
 }
 
 export interface ParcialPlanificadoRow {
@@ -117,6 +122,9 @@ const CAMPO_POR_CODIGO: Partial<Record<OperationsError["code"], string>> = {
   OUTCOME_EXCEEDS_R_MAX: "r_max",
   INCONSISTENT_TRIGGER_STATE: "r_max",
   INCOHERENT_CLOSURE_REASON: "closure_reason",
+  // BUILD 024 — cada formulario tiene un único campo de fecha y hora.
+  EVENT_IN_FUTURE: "fecha",
+  CHRONOLOGY_VIOLATION: "fecha",
 };
 
 const CATEGORIA: Record<string, ErrorCategoria> = {
@@ -134,6 +142,8 @@ const CATEGORIA: Record<string, ErrorCategoria> = {
   PLAN_NOT_FOUND: "estado",
   CONFIRMATION_REQUIRED: "usuario",
   CANCELLATION_REQUIRES_REASON: "usuario",
+  EVENT_IN_FUTURE: "usuario",
+  CHRONOLOGY_VIOLATION: "usuario",
 };
 
 export function categoriaDeError(error: OperationsError): ErrorCategoria {
@@ -193,6 +203,10 @@ export function mensajeDeError(error: OperationsError): string {
       return "Ese Plan de Gestión no existe o no es tuyo.";
     case "ACCOUNT_NOT_FOUND":
       return "Esa Cuenta no existe o no es tuya.";
+    case "EVENT_IN_FUTURE":
+      return "Esa fecha y hora todavía no han llegado. Indica cuándo ocurrió de verdad.";
+    case "CHRONOLOGY_VIOLATION":
+      return "La fecha y hora no respetan el orden de la operación: entrada, después los parciales en su orden y, por último, el cierre.";
     case "RISK_ENGINE_ERROR":
       return "El motor de cálculo rechazó los datos del cierre.";
     default:

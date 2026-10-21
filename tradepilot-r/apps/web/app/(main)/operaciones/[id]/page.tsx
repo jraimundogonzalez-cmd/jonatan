@@ -99,6 +99,12 @@ export default async function OperacionPage({ params }: { params: Promise<{ id: 
             tradeId={operacion.id}
             accountId={operacion.account_id}
             siguienteSequence={siguienteSequence}
+            noAntesDe={
+              ejecutados.length > 0
+                ? ejecutados.reduce((a, p) => (p.sequence > a.sequence ? p : a)).executed_at
+                : operacion.opened_at
+            }
+            nombreDelPrevio={ejecutados.length > 0 ? "al parcial anterior" : "a la entrada"}
           />
         </Card>
       ) : null}

@@ -107,6 +107,11 @@ export type OperationsError =
   | { readonly code: "CONFIRMATION_REQUIRED"; readonly detail: string }
   | { readonly code: "CANCELLATION_REQUIRES_REASON"; readonly detail: string }
   | { readonly code: "VALIDATION_ERROR"; readonly campo: string; readonly detail: string }
+  // ── BUILD 024: orden cronológico de los hechos (aditivo) ──
+  /** Un hecho (apertura, parcial o cierre) con hora posterior al momento actual. */
+  | { readonly code: "EVENT_IN_FUTURE"; readonly detail: string }
+  /** Un hecho anterior a otro que debe precederle (apertura → parciales → cierre). */
+  | { readonly code: "CHRONOLOGY_VIOLATION"; readonly detail: string }
   /**
    * Código bien formado (`OPERATIONS_ERROR:<CODE>:<detalle>`) pero que este
    * catálogo todavía no conoce. No es un fallo: es la degradación explícita
@@ -141,4 +146,6 @@ export const KNOWN_OPERATIONS_ERROR_CODES: ReadonlySet<string> = new Set([
   "CONFIRMATION_REQUIRED",
   "CANCELLATION_REQUIRES_REASON",
   "VALIDATION_ERROR",
+  "EVENT_IN_FUTURE",
+  "CHRONOLOGY_VIOLATION",
 ]);

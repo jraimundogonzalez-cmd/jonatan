@@ -192,6 +192,8 @@ export function parseOperationsError(message: string): OperationsError {
     case "PLAN_ARCHIVED":
     case "CONFIRMATION_REQUIRED":
     case "CANCELLATION_REQUIRES_REASON":
+    case "EVENT_IN_FUTURE":
+    case "CHRONOLOGY_VIOLATION":
       return { code, detail } as OperationsError;
 
     default:

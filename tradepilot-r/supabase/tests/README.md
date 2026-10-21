@@ -43,7 +43,15 @@ psql -d tradepilot_test -f 13_operations_integrity.sql
 psql -d tradepilot_test -f 14_operations_outcome.sql
 psql -d tradepilot_test -v operations_sql=../functions/sql/operations.sql -f 15_outcome_correction.sql
 psql -d tradepilot_test -f 16_trade_file_imports.sql
+psql -d tradepilot_test -f 16_event_times.sql
 ```
+
+La suite `16_event_times.sql` (BUILD 024, fechas y horas de los hechos) es la
+primera que **se corrige sola**: cada comprobación lanza `SUITE16_FALLO` si no
+da lo esperado y aborta psql con código 3. Ha pasado si termina con exit 0 y la
+línea `SUITE 16 · TODO CORRECTO`. Comparte el número 16 con
+`16_trade_file_imports.sql` porque las dos se escribieron en ramas distintas; se
+rescató sin renombrarla para que siga siendo idéntica a la original.
 
 La suite 15 necesita `-v operations_sql=...` porque **reaplica el propio
 fichero de funciones** para demostrar que las firmas superadas se eliminan.

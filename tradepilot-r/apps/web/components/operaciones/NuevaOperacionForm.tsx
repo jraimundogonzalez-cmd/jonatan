@@ -6,14 +6,25 @@
 //
 // Si hay Planes de Gestión guardados se puede elegir uno; si no, se declara un
 // objetivo RR ad hoc (Plan anónimo), que el dominio ya admite desde BUILD 004.
+//
+// BUILD 024 — la hora de entrada la declara el trader (por defecto, ahora). Si
+// es bastante anterior al momento de registrar, se avisa de que el riesgo se
+// congela con el capital vigente HOY: DEC-013 sigue abierta y no se recalcula.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OperationsError } from "@tradepilot/operations-engine";
 import { Button, Input } from "@/components/ui";
 import { registrarOperacionAction } from "@/actions/operaciones";
 import { campoDeError, categoriaDeError, codigoDeError, mensajeDeError } from "@/types/operations";
 import type { PlanGestionRow, TradeSide } from "@/types/operations";
+import {
+  aValorLocal,
+  esRegistroAPosteriori,
+  isoDesdeValorLocal,
+  validarFechaEvento,
+} from "@/lib/format/fechaEvento";
+import { AvisoRegistroHistorico } from "./AvisoRegistroHistorico";
 import styles from "./operaciones.module.css";
 
 export function NuevaOperacionForm({
@@ -32,17 +43,29 @@ export function NuevaOperacionForm({
   const [planId, setPlanId] = useState<string>(planes[0]?.id ?? "");
   const [rrObjective, setRrObjective] = useState("3.0000");
   const [error, setError] = useState<OperationsError | null>(null);
+  // Vacío en el render del servidor y fijado al montar: así la hora por
+  // defecto es la del navegador del trader, no la del servidor.
+  const [fechaEntrada, setFechaEntrada] = useState("");
+  const [errorFecha, setErrorFecha] = useState<string | null>(null);
+  useEffect(() => {
+    setFechaEntrada((actual) => (actual === "" ? aValorLocal(new Date()) : actual));
+  }, []);
 
   const usaPlanGuardado = planId !== "";
+  const openedAtIso = isoDesdeValorLocal(fechaEntrada);
+  const esHistorica = openedAtIso !== null && esRegistroAPosteriori(openedAtIso, new Date().toISOString());
 
   function abrir() {
     setError(null);
+    const problemaFecha = validarFechaEvento(openedAtIso);
+    setErrorFecha(problemaFecha);
+    if (problemaFecha !== null || openedAtIso === null) return;
     startTransition(async () => {
       const result = await registrarOperacionAction({
         account_id: accountId,
         symbol: symbol.trim().toUpperCase(),
         side,
-        opened_at: new Date().toISOString(),
+        opened_at: openedAtIso,
         risk_pct: riskPct.trim(),
         ...(usaPlanGuardado
           ? { management_plan_id: planId }
@@ -85,6 +108,24 @@ export function NuevaOperacionForm({
           <option value="short">Corto</option>
         </select>
       </div>
+
+      <Input
+        name="opened_at"
+        type="datetime-local"
+        label="Fecha y hora de entrada"
+        helperText="Cuándo entraste en el mercado. Se guarda aparte de la hora a la que la registras."
+        value={fechaEntrada}
+        max={aValorLocal(new Date())}
+        onChange={(e) => {
+          setFechaEntrada(e.target.value);
+          setErrorFecha(null);
+        }}
+        error={
+          errorFecha ?? (campoConError === "fecha" && error ? mensajeDeError(error) : undefined)
+        }
+      />
+
+      {esHistorica ? <AvisoRegistroHistorico momento="antes" /> : null}
 
       <Input
         name="risk_pct"

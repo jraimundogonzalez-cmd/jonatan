@@ -7,7 +7,7 @@ import styles from "./Input.module.css";
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type"> {
   label: string;
-  type?: "text" | "email" | "date";
+  type?: "text" | "email" | "date" | "datetime-local";
   numeric?: boolean;
   error?: string | undefined;
   helperText?: string | undefined;

@@ -135,12 +135,28 @@ export async function cancelarOperacionAction(
 
 // ── Previsualización, cierre y corrección (pasan por el motor) ──────────────
 
+/** BUILD 024 — la hora de cierre declarada, validada como fecha; o ahora, si no llega. */
+function horaDeCierre(closedAt: string | undefined): OperationsResult<string> {
+  if (closedAt === undefined || closedAt.trim() === "") return { ok: true, value: new Date().toISOString() };
+  const t = new Date(closedAt);
+  if (Number.isNaN(t.getTime())) {
+    return { ok: false, error: { code: "VALIDATION_ERROR", campo: "fecha", detail: "Indica una fecha y hora de cierre válidas." } };
+  }
+  return { ok: true, value: t.toISOString() };
+}
+
 export interface CierreFormInput {
   readonly trade_id: string;
   readonly account_id: string;
   readonly closure_reason: ClosureReason;
   readonly r_max: string;
   readonly cierre_manual_rr?: string;
+  /**
+   * BUILD 024 — hora del cierre en el mercado (ISO 8601). Si no llega, se usa
+   * el momento actual, como antes. La base rechaza un cierre en el futuro o
+   * anterior a la entrada o al último parcial.
+   */
+  readonly closed_at?: string;
   /** Generada al abrir el formulario, estable durante todos los reintentos. */
   readonly idempotency_key?: string;
   /** Parciales que vio la previsualización que el usuario confirmó. */
@@ -169,6 +185,9 @@ export async function previsualizarCierreAction(
 ): Promise<OperationsResult<PrevisualizacionUI>> {
   const rMax = aRValueSeguro(input.r_max);
   if (!rMax.ok) return rMax;
+  const cierre = horaDeCierre(input.closed_at);
+  if (!cierre.ok) return cierre;
+  const cierreEn = cierre.value;
 
   let cierreManual: ReturnType<typeof rvalue> | undefined;
   if (input.cierre_manual_rr !== undefined && input.cierre_manual_rr.trim() !== "") {
@@ -183,7 +202,7 @@ export async function previsualizarCierreAction(
   const engine = crearOperationsEngine(supabase);
   const result = await engine.previsualizarCierre({
     trade_id: input.trade_id,
-    closed_at: new Date().toISOString(),
+    closed_at: cierreEn,
     closure_reason: input.closure_reason,
     r_max: rMax.value,
     ...(cierreManual ? { cierre_manual_rr: cierreManual } : {}),
@@ -211,6 +230,9 @@ export async function cerrarOperacionAction(
 ): Promise<OperationsResult<OperacionRow>> {
   const rMax = aRValueSeguro(input.r_max);
   if (!rMax.ok) return rMax;
+  const cierre = horaDeCierre(input.closed_at);
+  if (!cierre.ok) return cierre;
+  const cierreEn = cierre.value;
 
   let cierreManual: ReturnType<typeof rvalue> | undefined;
   if (input.cierre_manual_rr !== undefined && input.cierre_manual_rr.trim() !== "") {
@@ -225,7 +247,7 @@ export async function cerrarOperacionAction(
   const engine = crearOperationsEngine(supabase);
   const result = await engine.cerrarOperacion({
     trade_id: input.trade_id,
-    closed_at: new Date().toISOString(),
+    closed_at: cierreEn,
     closure_reason: input.closure_reason,
     r_max: rMax.value,
     ...(cierreManual ? { cierre_manual_rr: cierreManual } : {}),

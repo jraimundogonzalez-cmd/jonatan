@@ -53,6 +53,12 @@ export default async function CerrarPage({ params }: { params: Promise<{ id: str
           currency={currency}
           hayParciales={ejecutados.length > 0}
           rMaximoEvidenciado={evidencia?.r_maximo_evidenciado ?? null}
+          noAntesDe={
+            ejecutados.length > 0
+              ? ejecutados.reduce((a, p) => (p.sequence > a.sequence ? p : a)).executed_at
+              : operacion.opened_at
+          }
+          nombreDelPrevio={ejecutados.length > 0 ? "al último parcial" : "a la entrada"}
         />
       </Card>
     </main>

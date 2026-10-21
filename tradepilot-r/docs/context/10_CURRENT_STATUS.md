@@ -125,6 +125,22 @@ Contratos frontend↔RPC:                              16/16 existen
 | Documentación de contexto | Esta carpeta |
 | **Importación de ficheros, fase 1** | `.xlsx` «Lista de comercio» → evidencia en `imported_trade_rows`; vista previa, revisión, idempotencia, lotes auditables. **No crea Operaciones** |
 
+### BUILD 024 · fechas y horas de los hechos (rama `claude/tradepilot-r-uso-diario`)
+
+- Entrada, parciales y cierre llevan la fecha y hora que declara el trader (por
+  defecto, ahora); antes era siempre `now()`.
+- Hora de registro guardada aparte: `trades.created_at` (ya existía),
+  `trade_partials_executed.recorded_at` y `trades.closure_recorded_at` (nuevas,
+  fijadas por la base). Filas anteriores: NULL, no inventadas.
+- Triggers de orden cronológico: nada en el futuro (tolerancia 5 min), ningún
+  parcial antes de la entrada ni del parcial previo, ningún cierre antes de la
+  entrada ni del último parcial.
+- **Sin cambio en el riesgo**: `risk_amount` se sigue congelando con el capital
+  vigente al REGISTRAR. Si la operación se registra a posteriori, la interfaz lo
+  avisa. DEC-013 sigue abierta.
+- Verificado: suite SQL 16 (se corrige sola), 15 tests TS nuevos, y el
+  recorrido completo en navegador.
+
 ## 3. EN DESARROLLO 🟡
 
 | Área | Qué falta |

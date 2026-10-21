@@ -2,6 +2,7 @@
 // pantalla se calcula aquí: `r_final` y `pnl_amount` los produjo Quant Engine
 // y `time_in_market_sec` lo derivó un trigger.
 import { formatMoney } from "@/lib/format/money";
+import { esRegistroAPosteriori } from "@/lib/format/fechaEvento";
 import { formatFecha, formatMotivoCierre, formatR } from "@/lib/format/operacion";
 import type { OperacionRow } from "@/types/operations";
 import styles from "./operaciones.module.css";
@@ -56,6 +57,15 @@ export function DesenlacePanel({ operacion, currency }: { operacion: OperacionRo
           <span className={styles.hechoLabel}>Cierre</span>
           <span className={styles.hechoValor}>{formatFecha(operacion.closed_at)}</span>
         </div>
+        {/* BUILD 024 — si el cierre se registró bastante después de ocurrir, se
+            enseña también cuándo se registró. */}
+        {operacion.closed_at !== null &&
+        esRegistroAPosteriori(operacion.closed_at, operacion.closure_recorded_at) ? (
+          <div className={styles.hecho}>
+            <span className={styles.hechoLabel}>Cierre registrado</span>
+            <span className={styles.hechoValor}>{formatFecha(operacion.closure_recorded_at)}</span>
+          </div>
+        ) : null}
         {/* BUILD 022 — `time_in_market_sec` sale de la vista principal (§13):
             es un derivado correcto que no interviene en ninguna decisión de
             trading. Sigue calculado por su trigger y sigue en la fila. */}

@@ -6,8 +6,10 @@
 // esos hechos como campos apagados sugeriría que en otro contexto podrían
 // editarse. No pueden, por ninguna vía.
 import { formatMoney } from "@/lib/format/money";
+import { esRegistroAPosteriori } from "@/lib/format/fechaEvento";
 import { formatFecha, formatLado, formatPct, formatR } from "@/lib/format/operacion";
 import type { OperacionRow } from "@/types/operations";
+import { AvisoRegistroHistorico } from "./AvisoRegistroHistorico";
 import { EstadoBadge } from "./EstadoBadge";
 import styles from "./operaciones.module.css";
 
@@ -21,6 +23,10 @@ function Hecho({ label, children, grande }: { label: string; children: React.Rea
 }
 
 export function OperacionHeader({ operacion, currency }: { operacion: OperacionRow; currency: string }) {
+  // BUILD 024 — la hora de entrada es la del mercado; `created_at`, la de
+  // registro. Si distan, se enseñan las dos y se avisa de con qué capital se
+  // congeló el riesgo.
+  const aPosteriori = esRegistroAPosteriori(operacion.opened_at, operacion.created_at);
   return (
     <>
       <div className={styles.seccion}>
@@ -31,6 +37,7 @@ export function OperacionHeader({ operacion, currency }: { operacion: OperacionR
           </Hecho>
           <Hecho label="Lado">{formatLado(operacion.side)}</Hecho>
           <Hecho label="Apertura">{formatFecha(operacion.opened_at)}</Hecho>
+          {aPosteriori ? <Hecho label="Registrada">{formatFecha(operacion.created_at)}</Hecho> : null}
           <Hecho label="Estado">
             <EstadoBadge status={operacion.status} />
           </Hecho>
@@ -58,6 +65,7 @@ export function OperacionHeader({ operacion, currency }: { operacion: OperacionR
             <Hecho label="R máximo alcanzado">{formatR(operacion.r_max)}</Hecho>
           ) : null}
         </div>
+        {aPosteriori ? <AvisoRegistroHistorico momento="despues" /> : null}
       </div>
     </>
   );

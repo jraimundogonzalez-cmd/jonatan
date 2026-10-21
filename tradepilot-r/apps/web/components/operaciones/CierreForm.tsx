@@ -11,8 +11,11 @@
 // de las cuatro reglas de BUILD 018 dentro de React, que podría divergir en
 // silencio de la del trigger. La legalidad la juzga el dominio y el rechazo
 // llega tipado, señalando el campo.
+//
+// BUILD 024 — más la fecha y hora del cierre, que declara el trader (por
+// defecto, ahora). No interviene en el cálculo de R: sólo fecha el hecho.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OperationsError } from "@tradepilot/operations-engine";
 import { Button, Input } from "@/components/ui";
@@ -22,6 +25,7 @@ import { DesgloseR } from "./DesgloseR";
 import { formatMoney } from "@/lib/format/money";
 import { campoDeError, categoriaDeError, codigoDeError, mensajeDeError } from "@/types/operations";
 import type { ClosureReason } from "@/types/operations";
+import { aValorLocal, isoDesdeValorLocal, validarFechaEvento } from "@/lib/format/fechaEvento";
 import styles from "./operaciones.module.css";
 
 export function CierreForm({
@@ -30,6 +34,8 @@ export function CierreForm({
   currency,
   hayParciales,
   rMaximoEvidenciado,
+  noAntesDe,
+  nombreDelPrevio,
 }: {
   tradeId: string;
   accountId: string;
@@ -42,6 +48,9 @@ export function CierreForm({
   hayParciales: boolean;
   /** El mayor R ejecutado, calculado por Quant Engine. Cota inferior de `r_max`. */
   rMaximoEvidenciado: string | null;
+  /** Hora de la entrada o del último parcial: el cierre no puede ser anterior. */
+  noAntesDe?: string | null;
+  nombreDelPrevio?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -65,6 +74,11 @@ export function CierreForm({
   const [preview, setPreview] = useState<PrevisualizacionUI | null>(null);
   const [error, setError] = useState<OperationsError | null>(null);
   const [evidenciaCambio, setEvidenciaCambio] = useState<string | null>(null);
+  const [fechaCierre, setFechaCierre] = useState("");
+  const [errorFecha, setErrorFecha] = useState<string | null>(null);
+  useEffect(() => {
+    setFechaCierre((actual) => (actual === "" ? aValorLocal(new Date()) : actual));
+  }, []);
 
   const exigeCierreManual = closureReason === "MANUAL_CLOSE";
 
@@ -90,18 +104,31 @@ export function CierreForm({
   const exigePrevisualizacion = hayParciales || exigeCierreManual;
   const puedeConfirmar = preview !== null || !exigePrevisualizacion;
 
+  /** Comprueba la fecha antes de enviar; `false` si no es aceptable. */
+  function fechaValida(): boolean {
+    const problema = validarFechaEvento(isoDesdeValorLocal(fechaCierre), {
+      noAntesDe: noAntesDe ?? null,
+      ...(nombreDelPrevio ? { nombreDelPrevio } : {}),
+    });
+    setErrorFecha(problema);
+    return problema === null;
+  }
+
   function datosFormulario() {
+    const closedAt = isoDesdeValorLocal(fechaCierre);
     return {
       trade_id: tradeId,
       account_id: accountId,
       closure_reason: closureReason,
       r_max: rMax,
+      ...(closedAt !== null ? { closed_at: closedAt } : {}),
       ...(exigeCierreManual && cierreManualRr.trim() !== "" ? { cierre_manual_rr: cierreManualRr } : {}),
     };
   }
 
   function previsualizar() {
     setError(null);
+    if (!fechaValida()) return;
     startTransition(async () => {
       const result = await previsualizarCierreAction(datosFormulario());
       if (result.ok) {
@@ -116,6 +143,7 @@ export function CierreForm({
   function confirmar() {
     if (!puedeConfirmar) return;
     setError(null);
+    if (!fechaValida()) return;
     startTransition(async () => {
       const result = await cerrarOperacionAction({
         ...datosFormulario(),
@@ -188,6 +216,21 @@ export function CierreForm({
         }}
         placeholder="2.5000"
         error={campoConError === "r_max" && error ? mensajeDeError(error) : undefined}
+      />
+
+      <Input
+        name="closed_at"
+        type="datetime-local"
+        label="Fecha y hora de cierre"
+        helperText="Cuándo cerraste en el mercado. Se guarda aparte de la hora a la que lo registras."
+        value={fechaCierre}
+        max={aValorLocal(new Date())}
+        onChange={(e) => {
+          setFechaCierre(e.target.value);
+          setErrorFecha(null);
+          setPreview(null);
+        }}
+        error={errorFecha ?? (campoConError === "fecha" && error ? mensajeDeError(error) : undefined)}
       />
 
       {exigeCierreManual ? (
