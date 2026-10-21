@@ -25,6 +25,7 @@ export {
   // BUILD 022
   type PrevisualizacionCorreccion,
   type ResumenDeCuenta,
+  type EstadisticasDeCuenta,
 } from "./services/OperationsEngineService.js";
 export type { EvidenciaParciales, ImpactoPorParcialItem } from "@tradepilot/risk-engine";
 

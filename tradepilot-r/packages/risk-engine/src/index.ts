@@ -25,7 +25,16 @@ export {
   toDecimal,
   calcularEvidenciaParciales,
   calcularRAgregado,
+  // Estadísticas de cartera. Se re-exportan por el mismo motivo que las dos de
+  // arriba: Operations Engine y la interfaz nunca importan `quant-engine` por su
+  // cuenta. Son lecturas puras sobre la muestra de R vigentes — no juzgan nada
+  // (I13: calcular ≠ juzgar) y no tocan capital ni estado.
+  calcularEsperanza,
+  calcularDesviacionR,
+  calcularWinRate,
+  calcularRachaMaxima,
 } from "@tradepilot/quant-engine";
+export type { RachaMaxima } from "@tradepilot/quant-engine";
 
 export type { AccountRiskState, CapitalFacts, DrawdownConfig, RiskEngineError } from "./domain/types.js";
 export type {

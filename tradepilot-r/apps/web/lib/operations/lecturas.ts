@@ -52,6 +52,40 @@ export interface ResumenCuentaUI {
   readonly canceladas: number;
 }
 
+/**
+ * Estadísticas de cartera listas para pintar. `null` significa **no definida
+ * para esta muestra**, no cero: la pantalla tiene que decirlo con palabras.
+ */
+export interface EstadisticasCuentaUI {
+  readonly operaciones_en_la_muestra: number;
+  readonly esperanza: string | null;
+  readonly desviacion: string | null;
+  readonly win_rate: string | null;
+  readonly racha_longitud: number | null;
+  readonly racha_signo: "positiva" | "negativa" | null;
+}
+
+export async function leerEstadisticasDeCuenta(
+  client: SupabaseClient,
+  accountId: string,
+): Promise<OperationsResult<EstadisticasCuentaUI>> {
+  const engine = crearOperationsEngine(client);
+  const result = await engine.estadisticasDeCuenta(accountId);
+  if (!result.ok) return { ok: false, error: result.error };
+  const v = result.value;
+  return {
+    ok: true,
+    value: {
+      operaciones_en_la_muestra: v.operaciones_en_la_muestra,
+      esperanza: v.esperanza === null ? null : toDisplayString(v.esperanza),
+      desviacion: v.desviacion === null ? null : toDisplayString(v.desviacion),
+      win_rate: v.win_rate === null ? null : toDisplayString(v.win_rate),
+      racha_longitud: v.racha === null ? null : v.racha.longitud,
+      racha_signo: v.racha === null ? null : v.racha.signo,
+    },
+  };
+}
+
 export async function leerResumenDeCuenta(
   client: SupabaseClient,
   accountId: string,

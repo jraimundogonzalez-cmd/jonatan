@@ -6,20 +6,24 @@ import { formatMoney } from "@/lib/format/money";
 import { formatAccountStatus } from "@/lib/format/status";
 import { createClient } from "@/lib/supabase/server";
 import { fundingErrorMessage, detalleTecnico } from "@/types/funding";
-import { leerResumenDeCuenta } from "@/lib/operations/lecturas";
+import { leerEstadisticasDeCuenta, leerResumenDeCuenta } from "@/lib/operations/lecturas";
 import { ResultadoEnR } from "@/components/cuentas/ResultadoEnR";
+import { EstadisticasPanel } from "@/components/cuentas/EstadisticasPanel";
 
 export default async function CuentaDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const [cuentaResult, empresasResult, eventosResult, resumenResult] = await Promise.all([
+  const [cuentaResult, empresasResult, eventosResult, resumenResult, estadisticasResult] = await Promise.all([
     obtenerCuenta(supabase, id),
     listarEmpresas(supabase),
     listarEventosCapital(supabase, id),
     // BUILD 022 (decisión E-1) — el R agregado lo calcula el motor desde la
     // muestra vigente de resultados. Esta pantalla no suma nada.
     leerResumenDeCuenta(supabase, id),
+    // Las estadísticas salen del mismo motor y de la misma muestra. La pantalla
+    // no calcula ninguna de ellas.
+    leerEstadisticasDeCuenta(supabase, id),
   ]);
 
   if (!cuentaResult.ok) {
@@ -45,6 +49,7 @@ export default async function CuentaDetallePage({ params }: { params: Promise<{ 
     : "Empresa";
   const events = eventosResult.ok ? eventosResult.value : [];
   const resumen = resumenResult.ok ? resumenResult.value : null;
+  const estadisticas = estadisticasResult.ok ? estadisticasResult.value : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: "560px" }}>
@@ -69,6 +74,8 @@ export default async function CuentaDetallePage({ params }: { params: Promise<{ 
       {/* BUILD 022 — TradePilot mide en R. El resultado de la Cuenta va
           primero y en R; el capital sigue estando, como apoyo. */}
       {resumen ? <ResultadoEnR resumen={resumen} /> : null}
+
+      {estadisticas ? <EstadisticasPanel estadisticas={estadisticas} /> : null}
 
       <Card>
         <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)", margin: 0 }}>

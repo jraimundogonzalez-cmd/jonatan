@@ -9,14 +9,20 @@
  */
 import { randomUUID } from "node:crypto";
 import {
+  calcularDesviacionR,
+  calcularEsperanza,
   calcularEvidenciaParciales,
   calcularRAgregado,
+  calcularRachaMaxima,
+  calcularWinRate,
   err,
   ok,
   restar,
   RiskEngineService,
   type Money,
+  type Percent,
   type ProcesarEventoResultado,
+  type RachaMaxima,
   type Result,
   type RFinalInput,
   type EvidenciaParciales,
@@ -112,6 +118,24 @@ export interface ResumenDeCuenta {
   readonly cerradas: number;
   readonly abiertas: number;
   readonly canceladas: number;
+}
+
+/**
+ * Estadísticas de cartera de una Cuenta. Cada magnitud es `null` cuando **no
+ * está definida** para la muestra disponible — nunca cero por defecto, que se
+ * leería como un resultado.
+ */
+export interface EstadisticasDeCuenta {
+  /** Tamaño de la muestra: Operaciones cerradas con R final vigente. */
+  readonly operaciones_en_la_muestra: number;
+  /** Esperanza matemática en R por Operación. `null` con muestra vacía. */
+  readonly esperanza: RValue | null;
+  /** Desviación de R. `null` con menos de 2 Operaciones: no está definida. */
+  readonly desviacion: RValue | null;
+  /** Porcentaje de Operaciones con R > 0. `null` con muestra vacía. */
+  readonly win_rate: Percent | null;
+  /** Racha consecutiva más larga y su signo. `null` con muestra vacía. */
+  readonly racha: RachaMaxima | null;
 }
 
 export interface CierreOperacionResultado {
@@ -386,6 +410,64 @@ export class OperationsEngineService {
       cerradas: operaciones.filter((t) => t.status === "closed").length,
       abiertas: operaciones.filter((t) => t.status === "open").length,
       canceladas: operaciones.filter((t) => t.status === "cancelled").length,
+    });
+  }
+
+  /**
+   * Estadísticas de cartera sobre la **misma muestra** que alimenta
+   * `r_agregado`: los R finales vigentes de las Operaciones cerradas, en orden
+   * de cierre. No hay una segunda fuente ni un segundo criterio — si divergieran,
+   * la pantalla mentiría (misma lección que BUILD 022 con «R realizado»).
+   *
+   * **Una muestra insuficiente no es un error.** Cada magnitud se devuelve
+   * `null` cuando no está definida, y la interfaz lo dice en vez de pintar un
+   * cero que parecería un resultado:
+   *   - n = 0 → no hay nada que medir.
+   *   - n = 1 → hay esperanza, acierto y racha; la **desviación no está
+   *     definida** (varianza muestral con N = 1), y Quant Engine lo rechaza a
+   *     propósito. Se respeta, no se sortea.
+   *
+   * No juzga nada contra ningún límite (I13: calcular ≠ juzgar) y no propone
+   * ninguna acción (I17). Solo mide lo ya registrado.
+   */
+  async estadisticasDeCuenta(accountId: string): Promise<Result<EstadisticasDeCuenta, OperationsError>> {
+    const muestraResult = await this.tradeGateway.listarRFinalVigentePorCuenta(accountId);
+    if (!muestraResult.ok) return muestraResult;
+
+    const muestra = muestraResult.value;
+    if (muestra.length === 0) {
+      return ok({
+        operaciones_en_la_muestra: 0,
+        esperanza: null,
+        desviacion: null,
+        win_rate: null,
+        racha: null,
+      });
+    }
+
+    const esperanza = calcularEsperanza(muestra);
+    if (!esperanza.ok) {
+      return err({ code: "RISK_ENGINE_ERROR", error: { code: "QUANT_ENGINE_ERROR", error: esperanza.error } });
+    }
+    const winRate = calcularWinRate(muestra);
+    if (!winRate.ok) {
+      return err({ code: "RISK_ENGINE_ERROR", error: { code: "QUANT_ENGINE_ERROR", error: winRate.error } });
+    }
+    const racha = calcularRachaMaxima(muestra);
+    if (!racha.ok) {
+      return err({ code: "RISK_ENGINE_ERROR", error: { code: "QUANT_ENGINE_ERROR", error: racha.error } });
+    }
+
+    // La desviación es la única que puede no estar definida con una muestra no
+    // vacía (N = 1). Su error NO se propaga: se traduce a `null`.
+    const desviacion = muestra.length >= 2 ? calcularDesviacionR(muestra) : null;
+
+    return ok({
+      operaciones_en_la_muestra: muestra.length,
+      esperanza: esperanza.value.value,
+      desviacion: desviacion !== null && desviacion.ok ? desviacion.value.value : null,
+      win_rate: winRate.value.value,
+      racha: racha.value.value,
     });
   }
 
