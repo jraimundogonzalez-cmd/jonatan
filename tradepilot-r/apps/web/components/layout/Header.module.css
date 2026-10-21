@@ -14,6 +14,33 @@
   margin: 0;
 }
 
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mobileNav {
+  display: flex;
+}
+
+.mobileLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  color: var(--accent);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  .mobileNav {
+    display: none;
+  }
+}
+
 .userInfo {
   display: flex;
   align-items: center;
@@ -27,4 +54,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+}
+
+/* En el móvil el correo empujaba «Cerrar sesión» fuera de la pantalla. */
+@media (max-width: 767px) {
+  .email {
+    display: none;
+  }
 }
