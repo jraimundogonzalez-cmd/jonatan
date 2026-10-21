@@ -173,7 +173,7 @@ cambiar la carpeta no los borra.
 la primera vez que entras. Es el mismo formulario para entrar y para darse de alta.
 
 1. En <http://127.0.0.1:3000> escribe tu correo (vale cualquiera, no sale de tu ordenador).
-2. Pulsa **Entrar**.
+2. Pulsa **Enviar enlace de acceso**.
 3. Abre **<http://127.0.0.1:54324>** — es el buzón de correo local que trae Supabase.
 4. Verás el mensaje «Entrar en TradePilot». Ábrelo y pulsa el enlace.
 5. Ya estás dentro.
@@ -194,15 +194,19 @@ Después: nombre de la cuenta, capital inicial y moneda → **Crear cuenta**.
 
 ### 2 · Abrir una Operación
 Entra en la cuenta → **Operaciones** → **Nueva Operación**.
-Tres datos: **símbolo** (EURUSD), **riesgo %** (1.00) y **objetivo RR** (3.0000).
-Pulsa **Abrir Operación**.
+Datos: **símbolo** (MNQ), **lado**, **fecha y hora de entrada** (por defecto, ahora),
+**riesgo %** (1.00) y **objetivo RR** (3.0000). Pulsa **Abrir Operación**.
+
+Si pones una hora de entrada pasada, verás el aviso «Operación registrada a posteriori»:
+el riesgo en dinero se calcula con el capital que la cuenta tiene **ahora**, no con el
+que tenía a esa hora. Es el comportamiento actual mientras la decisión DEC-013 siga abierta.
 
 Fíjate en «Riesgo»: TradePilot congela ahí el importe que arriesgas, calculado sobre tu
 capital **en ese instante**. Ese número no vuelve a cambiar nunca.
 
 ### 3 · Registrar un parcial
 En la Operación, abajo, «Registrar parcial ejecutado».
-Nivel de R = `1.0000`, % cerrado = `50.00` → **Registrar parcial**.
+Nivel de R = `1.0000`, % cerrado = `50.00`, y la fecha y hora del parcial → **Registrar parcial**.
 Repite con `2.0000` y `25.00`.
 
 ### 4 · Ver tu R realizado
@@ -210,7 +214,7 @@ Arriba aparece **Realizado hasta ahora**: `+1.0000 R`, con 75 % cerrado y 25 % a
 Eso es lo que ya te has llevado. Todavía no es tu resultado final.
 
 ### 5 · Cerrar
-**Cerrar Operación** → motivo **Break-even** → **Previsualizar resultado**.
+**Cerrar Operación** → motivo **Break-even**, fecha y hora de cierre → **Previsualizar resultado**.
 Verás de dónde sale el R, parcial a parcial. Si te cuadra, **Confirmar cierre**.
 
 ### 6 · Ver tu R acumulado

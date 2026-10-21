@@ -140,6 +140,14 @@ Contratos frontend↔RPC:                              16/16 existen
   avisa. DEC-013 sigue abierta.
 - Verificado: suite SQL 16 (se corrige sola), 15 tests TS nuevos, y el
   recorrido completo en navegador.
+- **Rescate (2026-10-21)**: BUILD 024 nunca llegó a git; la rama de arriba no
+  existe en el remoto. Se recuperó de la copia local de Windows en la rama
+  `claude/tradepilot-r-build024-rescate`, sobre `620cb42` (importador incluido).
+  Verificado allí: typecheck, lint, build y 16 tests TS nuevos (`fechaEvento`
+  10, `build024` 5, `Header` 1); suite SQL `16_event_times` (15 comprobaciones)
+  y suites 01–16 en un PostgreSQL 17 desechable, con salida idéntica a la de
+  `620cb42` salvo la columna nueva. **Sin verificar en navegador** sobre esta
+  rama. Detalle: [`12_BUILD024_RESCUE_HANDOFF.md`](./12_BUILD024_RESCUE_HANDOFF.md).
 
 ## 3. EN DESARROLLO 🟡
 

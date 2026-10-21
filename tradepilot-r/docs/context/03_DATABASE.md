@@ -8,6 +8,12 @@
 > (`20261018120000_trade_file_imports.sql`), +1 fichero de funciones
 > (`imports.sql`), **+2 tablas** (`import_batches`, `imported_trade_rows`),
 > +2 triggers de inmutabilidad, +2 políticas de lectura. Ver §8.
+>
+> **2026-10-21 — BUILD 024 rescatado** (rama `claude/tradepilot-r-build024-rescate`):
+> +1 migración (`20261017120000_event_times.sql`, anterior a la del importador),
+> +2 columnas (`trade_partials_executed.recorded_at`, `trades.closure_recorded_at`),
+> +3 funciones y +3 triggers de cronología. Sin tablas ni políticas nuevas.
+> Comprobado regenerando `supabase/esquema-esperado.txt` (427 → 435 objetos).
 
 ---
 
