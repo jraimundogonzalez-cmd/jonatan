@@ -1,0 +1,27 @@
+{
+  "name": "@tradepilot/risk-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Primer consumidor oficial de @tradepilot/quant-engine. Orquesta: invoca Quant Engine, persiste el estado agregado por Cuenta, emite eventos de dominio. Nunca contiene una fórmula matemática propia (26 §8, 22.5 §2.3).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tradepilot/quant-engine": "*"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

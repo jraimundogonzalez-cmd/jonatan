@@ -1,0 +1,13 @@
+{
+  "name": "@tradepilot/rule-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Motor de cumplimiento normativo (SPEC-004). Evalúa reglas configurables contra hechos ya calculados por otros módulos. Nunca calcula, nunca ejecuta, nunca escribe fuera de su propio catálogo.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@tradepilot/risk-engine": "*" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.0.5" }
+}

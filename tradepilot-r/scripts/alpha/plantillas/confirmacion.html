@@ -1,0 +1,25 @@
+<!--
+  Plantilla del correo de acceso del entorno Alpha.
+
+  POR QUÉ EXISTE: la aplicación implementa el patrón oficial de Supabase para
+  Next.js con renderizado en servidor — la ruta `/auth/confirm` recibe
+  `token_hash` + `type` y llama a `verifyOtp`. Ese patrón **exige** que la
+  plantilla del correo emita `{{ .TokenHash }}`; la plantilla por defecto de
+  GoTrue envía en su lugar un enlace a su propio `/verify`, que redirige sin
+  esos parámetros y deja al usuario en `/auth/auth-code-error`.
+
+  Encontrado en BUILD 023 intentando entrar por primera vez como usuario nuevo:
+  el usuario se creaba, el correo llegaba, el enlace no abría sesión.
+
+  No es una particularidad de este entorno: contra un proyecto de Supabase real
+  hay que configurar exactamente lo mismo en Authentication > Email Templates.
+
+  Se usa `{{ .RedirectTo }}` y no `{{ .SiteURL }}` a propósito: lleva el origen
+  desde el que se pidió el acceso y conserva el `next`, así que el usuario
+  vuelve a la página que quería y las cookies de sesión caen en el mismo
+  origen que las emitió.
+-->
+<h2>Entrar en TradePilot</h2>
+<p>Pulsa para acceder. El enlace caduca en una hora y sólo puede usarse una vez.</p>
+<p><a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email">Entrar en TradePilot</a></p>
+<p>Si no has pedido este acceso, ignora este mensaje.</p>

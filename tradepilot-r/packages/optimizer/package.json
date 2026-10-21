@@ -1,0 +1,13 @@
+{
+  "name": "@tradepilot/optimizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Domain Service sin estado (21.5 §6). Busca configuraciones de gestión sobre el historial del propio trader delegando TODO cálculo en @tradepilot/quant-engine (SPEC-005). Nunca calcula una fórmula propia, nunca persiste, nunca aplica una recomendación.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@tradepilot/quant-engine": "*" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.0.5" }
+}

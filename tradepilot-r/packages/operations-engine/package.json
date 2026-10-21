@@ -1,0 +1,27 @@
+{
+  "name": "@tradepilot/operations-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dueño del ciclo de vida de la Operación (SPEC-002). Orquesta @tradepilot/risk-engine solo para cerrar/editar (único camino donde R_final/pnl_amount deben calcularse) — nunca importa @tradepilot/quant-engine directamente (SPEC-002 §4.1).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tradepilot/risk-engine": "*"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
