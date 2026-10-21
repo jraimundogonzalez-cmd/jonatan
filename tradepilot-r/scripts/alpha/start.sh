@@ -55,7 +55,10 @@ if [ "${TP_ALPHA_RESET:-0}" = "1" ] || ! su postgres -c "psql -lqt" | cut -d'|' 
   for f in funding operations management_intent imports; do
     su postgres -c "psql -q -v ON_ERROR_STOP=1 -d $DB -f $RAIZ/supabase/functions/sql/$f.sql" >/dev/null || { echo "  FALLO $f"; exit 1; }
   done
-  su postgres -c "psql -q -d $DB -c \"grant select, insert, update, delete on all tables in schema public to authenticated; grant execute on all functions in schema public to authenticated, anon; grant usage, select on all sequences in schema public to authenticated;\"" >/dev/null
+  # Sin `grant ... on all tables/functions` aquí: los privilegios los concede
+  # `00_roles_y_helpers.sql` con `alter default privileges` ANTES de migrar, que
+  # es como lo hace Supabase. Concederlos después deshacía las revocaciones de
+  # seguridad de las migraciones (ver el comentario de ese fichero).
 fi
 
 # El gateway se quedaba vivo entre reinicios (BUILD 020 no lo mataba): seguía

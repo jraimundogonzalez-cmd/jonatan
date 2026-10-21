@@ -271,8 +271,8 @@ echo.
 echo   ================================================
 echo      TradePilot esta arrancando
 echo.
-echo      Se abrira solo en:  http://localhost:3000
-echo      Buzon de correo:    http://localhost:54324
+echo      Se abrira solo en:  http://127.0.0.1:3000
+echo      Buzon de correo:    http://127.0.0.1:54324
 echo.
 echo      NO CIERRES ESTA VENTANA mientras uses TradePilot.
 echo      Para apagarlo: ejecuta Cerrar_TradePilot.bat
@@ -294,9 +294,9 @@ REM ===================================================================
 REM  Espera a que la web responda y entonces abre el navegador. La primera
 REM  vez tarda mas porque compila.
 for /l %%i in (1,1,90) do (
-  curl -s -o nul --max-time 2 http://localhost:3000 >nul 2>&1
+  curl -s -o nul --max-time 2 http://127.0.0.1:3000 >nul 2>&1
   if not errorlevel 1 (
-    start "" http://localhost:3000
+    start "" http://127.0.0.1:3000
     exit /b 0
   )
   timeout /t 2 >nul 2>&1
@@ -313,7 +313,7 @@ echo       ventana. Si arrancase igualmente, se iria al puerto 3001 y el
 echo       enlace de acceso que llega por correo dejaria de funcionar.
 echo.
 echo       Que hacer:
-echo         1. Mira si ya tienes TradePilot abierto en http://localhost:3000
+echo         1. Mira si ya tienes TradePilot abierto en http://127.0.0.1:3000
 echo            Si es asi, usalo y cierra esta ventana.
 echo         2. Si no lo usas, ejecuta Cerrar_TradePilot.bat y vuelve a
 echo            intentarlo.
