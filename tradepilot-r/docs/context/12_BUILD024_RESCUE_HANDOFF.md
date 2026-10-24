@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-24 17:29 (+02:00) · sesión 3, Fase B completada (ver §13)
+**Último registro**: 2026-10-24 19:54 (+02:00) · sesión 3, auditoría local de la Fase C (ver §14)
 
 ---
 
@@ -20,7 +20,7 @@
 | Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `5234494`. Después solo hay commits de **este documento**: `1252d18` (sesión 2, publicado), `bbb65d0` (sesión 3, plan de despliegue, local) y el de la Fase B (sesión 3, local). El último: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | `5234494`. Después solo hay commits de **este documento**: `1252d18` (sesión 2, publicado), `bbb65d0` (sesión 3, plan de despliegue, local), `556bf1b` (sesión 3, Fase B, local) y el de la auditoría de la Fase C (sesión 3, local). El último: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
@@ -28,9 +28,9 @@
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el commit de este documento.
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras los dos commits locales de la sesión 3 (`bbb65d0` y
-  el de la Fase B), la rama va **2 por delante** del remoto; no están
-  publicados. Sin stash.
+  la sesión 3, §12). Tras los tres commits locales de la sesión 3 (`bbb65d0`,
+  `556bf1b` y el de la auditoría de la Fase C), la rama va **3 por delante**
+  del remoto; no están publicados. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -46,7 +46,8 @@ Commits de la rama sobre `620cb42`:
 | `5234494` | Script `build:packages` |
 | `1252d18` | Este documento, anonimizado (sustituye a `fda1199`, `2d3e74e`, `4e3e5d0` y `c9ed89b`, que siguen en la rama de respaldo). **Publicado** |
 | `bbb65d0` | Este documento: push, compilación limpia y plan de alojamiento (§12). Local |
-| (siguiente) | Este documento: Fase B completada (§13). Local |
+| `556bf1b` | Este documento: Fase B completada (§13). Local |
+| (siguiente) | Este documento: auditoría local de la Fase C (§14). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -166,16 +167,22 @@ distinto del de la base real (comprobado; valores no publicados). El volumen ori
    de esta sesión. Propuesta: que el lanzador ejecute `npm run build:packages`
    antes de la web, **sin** `migration up` (y quizá el script `dev`). Sin
    aplicar: es un cambio del lanzador, no validable sin abrirlo.
+   **Confirmado** leyendo el lanzador (línea 282), en §14.1. Hoy los seis
+   `dist` existen y ningún `src` es más reciente.
 2. `fronteras.test.ts` falla en Windows (separador de rutas). Fuera de alcance; arreglarlo requiere autorización.
 3. Dos suites con número 16. Se dejó así a propósito; renumerar es opcional.
 4. ~~Push de la rama de rescate a GitHub.~~ **Resuelto** en la sesión 3
    (`1252d18`, verificado con `git ls-remote`; §12).
 5. `.env.local` del clon nuevo: no existe. Según `10_CURRENT_STATUS.md`,
    `Abrir_TradePilot.bat` lo reescribe (guardando el anterior en
-   `.env.anterior.local`). No se ha comprobado aquí.
+   `.env.anterior.local`). No se ha comprobado aquí. **Actualización (§14.1)**:
+   el código lo confirma (líneas 202-204). Hoy `apps/web/.env.local` **no
+   existe** (comprobado solo por el nombre; solo está `.env.example`).
 6. Revisar antes de abrir: los contenedores llevan la etiqueta `workdir` de la
    carpeta antigua de Descargas, y `supabase_edge_runtime_tradepilot-r` sale con
-   código 255.
+   código 255. **Auditado (§14.2-§14.4)**: confirmado en los 9 contenedores.
+   Kong y Studio montan ficheros desde esa carpeta. La causa del 255 no se ha
+   podido determinar. Sigue abierto: hay que decidir cómo resolverlo (§14.6).
 7. `probar-restauracion.ps1` (`Probar_copia_de_seguridad_TradePilot.bat`) **no
    es aislado**: crea, restaura y borra una base temporal **dentro del
    PostgreSQL original**. Por eso no se usó en la Fase B (§13.1). Cambiarlo
@@ -184,6 +191,13 @@ distinto del de la base real (comprobado; valores no publicados). El volumen ori
    `supabase/postgres`, hay que crear antes el rol `supabase_functions_admin`
    (lo crea el arranque del CLI, no la imagen). Sin él aparecen 5 errores de
    propietario o permisos en `supabase_functions` (§13.1).
+9. **Exposición de puertos en la red local** (§14.5): 54321-54324 se publican
+   en todas las interfaces, y una regla de entrada de Windows permite
+   `com.docker.backend.exe` sin restricciones. Revisarlo requiere una
+   autorización independiente.
+10. **`Abrir_TradePilot.bat` ejecuta `supabase start` sin comprobar nada
+    antes y sin mirar su resultado** (§14.1, §14.4). Las correcciones
+    recomendadas están en §14.6.
 
 ## 7. Hecho y expresamente no hecho
 
@@ -214,6 +228,15 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 - Cualquier prueba funcional en el navegador **escribe en la base real**. Las
   Operaciones, los eventos de capital y `audit_log` son evidencia inmutable:
   no se pueden borrar después (AGENTS.md §5). Ver §13.6.
+- **No borrar ni mover `%USERPROFILE%\Downloads\TradePilot-R-Windows`**
+  mientras existan los contenedores actuales: Kong monta desde allí la
+  plantilla del correo y Studio sus `snippets` (§14.1).
+- Los puertos de Supabase local, incluida la base de datos con la contraseña
+  local por defecto y Studio sin autenticación, podrían ser accesibles desde
+  la red local (§14.5).
+- No ejecutar `supabase start` ni el lanzador si `supabase_db_tradepilot-r`
+  está parado: el CLI 2.121.0 eliminaría y recrearía los 9 contenedores
+  (§14.4).
 - Docker Desktop vuelve a levantar los contenedores de Supabase solo, sobre el
   volumen real. Cualquier herramienta que se conecte a `127.0.0.1:54322` habla
   con la base real: **las pruebas SQL nunca van ahí**.
@@ -232,9 +255,10 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    diagnóstico final.~~ **Hecha** en la sesión 3 (§13). La prueba de la copia
    se hizo en una instancia aislada, no con `Probar_copia_de_seguridad_TradePilot.bat`
    (§6.7).
-5. **Siguiente recomendado, NO autorizado todavía.** Fase C: resolver §6.1,
-   §6.5 y §6.6; después abrir la web y hacer el recorrido de BUILD 024 en el
-   navegador. Objetivos y decisiones en §13.6.
+5. **En curso.** Fase C: resolver §6.1, §6.5 y §6.6; después abrir la web y
+   hacer el recorrido de BUILD 024 en el navegador. Objetivos y decisiones en
+   §13.6. **Auditoría de solo lectura hecha** (§14). Siguiente: corregir el
+   lanzador según §14.6, **NO autorizado todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -242,8 +266,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 2] respecto a origin (bbb65d0 + commit de la Fase B)
-git -C $r log --oneline 620cb42..HEAD    # 9 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + el de la Fase B
+git -C $r status --short --branch        # limpio; [ahead 3] respecto a origin (bbb65d0 + 556bf1b + commit de la auditoría de la Fase C)
+git -C $r log --oneline 620cb42..HEAD    # 10 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + el de la auditoría
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
@@ -546,7 +570,7 @@ Las tres son anteriores a la migración `20261018120000`.
 - Siguen abiertos: §6.1 (el lanzador no compila los paquetes), §6.2
   (`fronteras.test.ts` en Windows), §6.3 (dos suites 16, opcional), §6.5
   (`.env.local`), §6.6 (etiquetas `workdir` y `edge_runtime` con código 255),
-  §6.7 y §6.8.
+  §6.7 y §6.8. *Situación posterior: ver §14.*
 
 ### 13.5 Siguiente paso recomendado: Fase C (NO autorizada todavía)
 
@@ -581,6 +605,165 @@ Validar la aplicación web **local** antes de abordar el alojamiento externo
 7. Antes de cualquier escritura en la base real, una copia nueva con
    `respaldo.ps1`.
 8. Opcional, con autorización: corregir §6.2 y §6.7.
+
+> Avance (§14): los objetivos 1, 3 y 4 se han **auditado en solo lectura**,
+> sin corregir nada. Los objetivos 2, 5, 6, 7 y 8 siguen pendientes.
+
+## 14. Sesión 3 (continuación) · 2026-10-24 · Auditoría local de la Fase C
+
+Solo lectura, con cada bloque autorizado expresamente. **No se ha ejecutado
+`Abrir_TradePilot.bat` ni se ha modificado**, y no se ha arrancado, parado ni
+reiniciado ningún servicio. Tampoco se han cambiado ficheros de configuración
+ni reglas de red, ni se ha conectado nadie a PostgreSQL. Las rutas personales
+aparecen como `%USERPROFILE%`.
+
+### 14.1 Auditoría estática de `Abrir_TradePilot.bat`
+
+- Trabaja en la carpeta del clon (`cd /d "%~dp0"`, línea 22), así que
+  `supabase` lee `supabase/config.toml` → `project_id = "tradepilot-r"`. No
+  invoca ningún `.ps1` del proyecto. Solo usa PowerShell en línea para el
+  puerto 3000 y se relanza para abrir el navegador (línea 267).
+- Línea 157: `call supabase start`, **sin condiciones**. Su código de salida
+  se ignora (líneas 158-159).
+- Líneas 178-182: `supabase status -o env`; solo lee `API_URL` y `ANON_KEY`.
+- Líneas 202-204: si existe `apps/web/.env.local`, lo copia con `copy /y`
+  sobre `.env.anterior.local` (**una sola generación** de respaldo) y lo
+  reescribe con `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+  Nunca usa la `service_role`. Ambos ficheros están ignorados por git (regla
+  `*.local`).
+- Líneas 216-244: dos `curl` con la anon key a `listar_empresas` y
+  `listar_lotes_importacion`. Son `language sql`, `security invoker` y solo
+  hacen `select … where user_id = auth.uid()`: no escriben nada.
+- Línea 282: `npm run dev --workspace=@tradepilot/web` (`next dev -H
+  127.0.0.1`, puerto 3000) **sin `build:packages`** (§6.1).
+- Línea 141: `npm install`, y no `npm ci`, solo si falta `node_modules`.
+- Si `status` no devuelve datos, el lanzador **recomienda** `supabase stop` y
+  `supabase start` (líneas 324-351). No los ejecuta, pero recrearían
+  contenedores.
+- `Cerrar_TradePilot.bat:39` ejecuta `supabase stop`.
+
+### 14.2 Contenedores y `supabase status` (observado)
+
+- Docker Desktop en marcha (29.8.2). Hay **9 contenedores**, todos del
+  proyecto `tradepilot-r` (`com.supabase.cli.project` y
+  `com.docker.compose.project`), en la red `supabase_network_tradepilot-r`,
+  creados el 2026-10-18. No hay contenedores duplicados ni de otro proyecto.
+- `supabase_db_tradepilot-r`: `running`, `healthy`, 0 reinicios,
+  `unless-stopped`. Volumen original `supabase_db_tradepilot-r` montado en
+  `/var/lib/postgresql/data`.
+- Activos: Auth (healthy; 5 reinicios acumulados al abrir Docker hoy),
+  Kong, REST, Storage, Inbucket/Mailpit, pg_meta y Studio.
+- `supabase_edge_runtime_tradepilot-r`: **exited (255)**, política `no`.
+- El CLI también lista como «stopped» realtime, imgproxy, analytics, vector y
+  pooler, que **no tienen contenedor creado**.
+- Los 9 llevan `com.supabase.cli.workdir` =
+  `%USERPROFILE%\Downloads\TradePilot-R-Windows\tradepilot-r`, que **no es el
+  clon actual**.
+- **Kong monta `magic-link.html` desde esa carpeta** (como plantilla de magic
+  link y de confirmación), y **Studio monta sus `snippets` desde allí**. La
+  plantilla antigua y la del clon tienen el mismo contenido; solo cambian los
+  saltos de línea (CRLF/LF).
+- `supabase status -o json`, ejecutado desde el clon: **exit 0, JSON válido**
+  con 17 propiedades. Incluye `API_URL` y `ANON_KEY` (valores no mostrados ni
+  guardados). La API declarada es `http://127.0.0.1:54321`. Avisó de
+  «Stopped services», `edge_runtime` incluido.
+  - **Disponibilidad declarada frente a comprobada**: Kong estaba sano y el
+    puerto 54321 publicado y escuchando. **No se hizo ninguna petición HTTP**
+    a la API, así que no hay prueba funcional directa.
+
+### 14.3 `edge_runtime` (código 255)
+
+- `docker logs`: solo 2 líneas de arranque del 2026-10-18. **No revelan la
+  causa** de la salida 255. `inspect`: `State.Error` vacío y
+  `OOMKilled=false`.
+- Terminó el 2026-10-21 a las 17:58:56 UTC. El registro de Docker Desktop
+  muestra que su backend se relanzó unos 24 s antes (17:58:32 UTC).
+- **Hipótesis, no demostrada**: un cierre o reinicio no limpio del backend.
+  Con la política `no`, el contenedor no volvió a arrancar. **No hay evidencia
+  suficiente para una causa definitiva.**
+- La app no usa funciones Edge: `supabase/functions` solo contiene `sql/`.
+- No se reinició ni se modificó su configuración.
+
+### 14.4 Código de Supabase CLI v2.121.0
+
+Se leyó el código fuente oficial de esa versión exacta (etiqueta `v2.121.0`,
+commit `8a549dff…`) sin ejecutarlo ni instalar otra versión. El paquete npm
+instalado lanza el **CLI en TypeScript** (`apps/cli`) con el backend «legacy»:
+`config.toml` no tiene `[experimental] stack`, no hay `config.json` ni
+`SUPABASE_EXPERIMENTAL_STACK` (`start/SIDE_EFFECTS.md:3-10`). Según el código:
+
+1. **La base existe y está en marcha**: va a `reportAlreadyRunningStatus()`,
+   que hace `inspect`, un listado por etiqueta y muestra el estado, y termina
+   **sin recrear la pila** (`start.handler.ts` L588, L628-651, L653-706;
+   `SIDE_EFFECTS.md` L222).
+2. **La base está en marcha pero aún no está sana**: devuelve
+   `StatusDbNotReadyError` (exit 1) en vez de recuperar (L671-675).
+3. **`edge_runtime` parado con la base en marcha**: solo se lista en
+   «Stopped services» y se excluye. Esa rama no intenta arrancarlo
+   (L678-691).
+4. **Base parada (recuperación)**: `dockerRemoveAll` elimina y recrea los
+   contenedores del proyecto que encuentra por la etiqueta
+   `com.supabase.cli.project`, **sea cual sea su `workdir`**, con
+   `deleteVolumes=false`, de modo que **los volúmenes se conservan** (L642-647,
+   L1673-1707; `docker-remove-all.ts` L145-156 y L191-196). Con un volumen
+   existente no se aplican migraciones ni seed (`SIDE_EFFECTS.md` L38-58).
+5. **El arranque falla**: el rollback elimina por etiqueta los contenedores y
+   solo borra el volumen si se acaba de crear en ese arranque. Los volúmenes
+   preexistentes se conservan (L1668-1669; `SIDE_EFFECTS.md` L232-244).
+6. **La etiqueta `workdir` antigua no cambia la identificación de la base**,
+   que se hace por el nombre `supabase_db_<project_id>` (`docker-ids.ts`
+   L50-56). La etiqueta solo sirve para limpiar secretos temporales (L66-72;
+   handler L1691-1694).
+
+Además, en la rama de «ya en marcha» no se escribe ningún fichero: la carpeta
+`snippets` se crea después (L826).
+
+Sigue sin comprobar qué imágenes usaría la 2.121.0 si tuviera que recrear la
+pila. **Conclusión operativa**: el código explica por qué un `supabase start`
+puede ser inocuo con la base ya en marcha, pero **no justifica ejecutar el
+lanzador sin precomprobaciones**.
+
+### 14.5 Cortafuegos y puertos (hallazgo de seguridad)
+
+- Los puertos 54321 (Kong/API), 54322 (PostgreSQL), 54323 (Studio) y 54324
+  (Mailpit) están publicados en **todas las interfaces IPv4 e IPv6**
+  (`com.docker.backend`), además de las escuchas locales en `127.0.0.1` y
+  `::1` (`wslrelay`).
+- Red activa: Wi-Fi con perfil Privado. La acción de entrada por defecto es
+  `NotConfigured`, que equivale a bloquear.
+- Hay una **regla local de entrada habilitada** para
+  `com.docker.backend.exe`: Allow, TCP y UDP, **cualquier puerto y cualquier
+  dirección remota**, en los perfiles Privado y Público.
+- No hay reglas de bloqueo para esos puertos ni reglas de directiva de grupo
+  que los afecten.
+- El cortafuegos de Hyper-V/WSL (bloqueo de entrada por defecto) es
+  independiente de esa regla del proceso de Windows. No deben confundirse.
+- **Conclusión**: la configuración **podría permitir conexiones entrantes**
+  desde otros equipos si el resto de la ruta de red lo permite. **No se probó
+  desde otro equipo**, así que el acceso remoto **no está demostrado**.
+  - Riesgo: PostgreSQL local con la contraseña local por defecto y Studio sin
+    autenticación.
+  - No se ha cambiado el cortafuegos ni los puertos: requiere una
+    autorización independiente.
+
+### 14.6 Pendientes, por orden recomendado (ninguno autorizado todavía)
+
+1. Antes de `supabase start`, comprobar que `supabase_db_tradepilot-r` está
+   en marcha y sana y que monta el volumen esperado. Si no, detener el
+   lanzador en lugar de dejar que el CLI recupere la pila (§14.4.4).
+2. Tratar el código de salida de `supabase start` y no continuar como si
+   hubiera ido bien.
+3. Añadir `npm run build:packages` antes de iniciar Next.js (§6.1).
+4. Proteger `.env.local` de sobrescrituras: valorar copias con fecha y una
+   comprobación del origen antes de escribirlo.
+5. Decidir por separado si se desactiva `edge_runtime` en la configuración
+   local. No hacerlo automáticamente.
+6. En una fase posterior, eliminar la dependencia de la plantilla y los
+   `snippets` montados desde Descargas. No detener ni recrear ahora la pila.
+7. Revisar la exposición de los puertos en el cortafuegos (§14.5), en una
+   operación independiente y expresamente autorizada.
+8. Siguen pendientes §6.2 (`fronteras.test.ts`), §6.7 y el resto de la Fase C
+   (§13.6: el recorrido en el navegador y su decisión previa).
 
 ---
 
