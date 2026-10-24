@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-24 10:53 (+02:00) · sesión 3 (ver §12)
+**Último registro**: 2026-10-24 17:29 (+02:00) · sesión 3, Fase B completada (ver §13)
 
 ---
 
@@ -20,7 +20,7 @@
 | Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `5234494`. Después solo hay commits de **este documento**: `1252d18` (sesión 2, publicado) y el de la sesión 3 (local). El último: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | `5234494`. Después solo hay commits de **este documento**: `1252d18` (sesión 2, publicado), `bbb65d0` (sesión 3, plan de despliegue, local) y el de la Fase B (sesión 3, local). El último: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
@@ -28,8 +28,9 @@
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el commit de este documento.
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras el commit local de la sesión 3, la rama va **1 por
-  delante** del remoto; ese commit no está publicado. Sin stash.
+  la sesión 3, §12). Tras los dos commits locales de la sesión 3 (`bbb65d0` y
+  el de la Fase B), la rama va **2 por delante** del remoto; no están
+  publicados. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -43,7 +44,9 @@ Commits de la rama sobre `620cb42`:
 | `f8c28ae` | `supabase/esquema-esperado.txt` regenerado (427 → 435 objetos) |
 | `2c35a8e` | Documentación: `COMO-EMPEZAR.md`, `10_CURRENT_STATUS.md`, `03_DATABASE.md` |
 | `5234494` | Script `build:packages` |
-| (siguiente) | Este documento, anonimizado (sustituye a `fda1199`, `2d3e74e`, `4e3e5d0` y `c9ed89b`, que siguen en la rama de respaldo) |
+| `1252d18` | Este documento, anonimizado (sustituye a `fda1199`, `2d3e74e`, `4e3e5d0` y `c9ed89b`, que siguen en la rama de respaldo). **Publicado** |
+| `bbb65d0` | Este documento: push, compilación limpia y plan de alojamiento (§12). Local |
+| (siguiente) | Este documento: Fase B completada (§13). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -51,7 +54,9 @@ Commits de la rama sobre `620cb42`:
   el contenedor `supabase_db_tradepilot-r` (PostgreSQL 17, `unless-stopped`; se
   arranca solo al abrir Docker Desktop). Su `system_identifier` y los números
   de las Cuentas no se publican (ver §11). 2 Cuentas NYS, 0 operaciones, 18 migraciones (última `20261017120000`). Comprobado de nuevo
-  en solo lectura a las 22:11: sin cambios.
+  en solo lectura a las 22:11: sin cambios. **Desde el 2026-10-24 17:21**: 19
+  migraciones (última `20261018120000`), 0 pendientes; mismas Cuentas y 0
+  operaciones (Fase B, §13).
 - Diagnóstico de solo lectura (2026-10-21 20:09, sobre `620cb42`): **BLOQUEADA**
   por `20261017120000_event_times` (en la base, no en el código) y sus 8 objetos.
   Pendiente: `20261018120000_trade_file_imports` (59 objetos). Informe:
@@ -63,7 +68,8 @@ Commits de la rama sobre `620cb42`:
   y `..._1\tradepilot-r`. Idénticas entre sí salvo `package-lock.json`. Base de
   ambas: `3961c27`. A las 22:11, 0 ficheros modificados hoy en ellas.
 - Copia de seguridad intacta: `%USERPROFILE%\Backups\TradePilot\tradepilot_pg_dumpall_2026-10-18_213427.sql`
-  (624 750 bytes, 18/10/2026 21:34:29).
+  (624 750 bytes, 18/10/2026 21:34:29). Sigue **sin restauración validada**.
+  Copias nuevas del 2026-10-24 en `tradepilot-r\respaldos\` (ver §13.1 y §13.3).
 - Supabase decide qué migraciones aplicar por la **versión** en
   `supabase_migrations.schema_migrations` (`version`, `name`, `statements`). La
   migración rescatada conserva su nombre exacto, así que `migration up` no la
@@ -170,6 +176,14 @@ distinto del de la base real (comprobado; valores no publicados). El volumen ori
 6. Revisar antes de abrir: los contenedores llevan la etiqueta `workdir` de la
    carpeta antigua de Descargas, y `supabase_edge_runtime_tradepilot-r` sale con
    código 255.
+7. `probar-restauracion.ps1` (`Probar_copia_de_seguridad_TradePilot.bat`) **no
+   es aislado**: crea, restaura y borra una base temporal **dentro del
+   PostgreSQL original**. Por eso no se usó en la Fase B (§13.1). Cambiarlo
+   requiere autorización.
+8. Para restaurar una copia en una instancia nueva de la imagen
+   `supabase/postgres`, hay que crear antes el rol `supabase_functions_admin`
+   (lo crea el arranque del CLI, no la imagen). Sin él aparecen 5 errores de
+   propietario o permisos en `supabase_functions` (§13.1).
 
 ## 7. Hecho y expresamente no hecho
 
@@ -185,10 +199,21 @@ parar o reiniciar contenedores de Supabase; `supabase start`, `db reset`,
 restauraciones; abrir la web; ejecutar `.bat`/`.ps1` de TradePilot hoy; abrir o
 mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 
+> Lo anterior describe las sesiones 1 y 2. En la sesión 3 sí se hizo, con
+> autorización expresa de cada paso: el push de la rama (§12), la copia, la
+> prueba aislada de restauración, `Actualizar_TradePilot.bat` y el
+> diagnóstico (§13). Sigue **sin hacerse**: merge, pull request, abrir la web,
+> abrir `.env.local`, `supabase start`, `db reset`, restaurar sobre la
+> original, y crear recursos externos o desplegar.
+
 ## 8. Riesgos para la siguiente sesión
 
 - La base real sigue **BLOQUEADA** para el código de `620cb42`. Con esta rama
-  está LISTA (verificado en la sesión 2, §11).
+  está **al día** desde la Fase B (19/19 migraciones, 435/435 objetos, §13).
+  No ejecutar contra ella código de ramas anteriores.
+- Cualquier prueba funcional en el navegador **escribe en la base real**. Las
+  Operaciones, los eventos de capital y `audit_log` son evidencia inmutable:
+  no se pueden borrar después (AGENTS.md §5). Ver §13.6.
 - Docker Desktop vuelve a levantar los contenedores de Supabase solo, sobre el
   volumen real. Cualquier herramienta que se conecte a `127.0.0.1:54322` habla
   con la base real: **las pruebas SQL nunca van ahí**.
@@ -203,11 +228,13 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    bloqueos, 1 pendiente (`trade_file_imports`).
 3. ~~Push de `claude/tradepilot-r-build024-rescate`.~~ **Hecho** en la sesión 3
    (§12).
-4. **Siguiente recomendado, NO autorizado todavía.** Fase B (cada paso por separado): `Copia_de_seguridad_TradePilot.bat` →
-   (opcional) `Probar_copia_de_seguridad_TradePilot.bat` →
-   `Actualizar_TradePilot.bat` → diagnóstico final (LISTA, 0 pendientes).
-5. Fase C: resolver §6.1, §6.5 y §6.6; después abrir la web y hacer el recorrido de
-   BUILD 024 en el navegador.
+4. ~~Fase B: copia → prueba de la copia → `Actualizar_TradePilot.bat` →
+   diagnóstico final.~~ **Hecha** en la sesión 3 (§13). La prueba de la copia
+   se hizo en una instancia aislada, no con `Probar_copia_de_seguridad_TradePilot.bat`
+   (§6.7).
+5. **Siguiente recomendado, NO autorizado todavía.** Fase C: resolver §6.1,
+   §6.5 y §6.6; después abrir la web y hacer el recorrido de BUILD 024 en el
+   navegador. Objetivos y decisiones en §13.6.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -215,13 +242,13 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 1] respecto a origin (commit local de la sesión 3)
-git -C $r log --oneline 620cb42..HEAD    # 8 commits: a620b51 … 5234494 + 1252d18 + el de la sesión 3
+git -C $r status --short --branch        # limpio; [ahead 2] respecto a origin (bbb65d0 + commit de la Fase B)
+git -C $r log --oneline 620cb42..HEAD    # 9 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + el de la Fase B
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
 # Base real, SOLO LECTURA (solo si el usuario autoriza conectarse):
-docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_tradepilot-r psql -U postgres -d postgres -X -At -c "select count(*) from supabase_migrations.schema_migrations"   # 18
+docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_tradepilot-r psql -U postgres -d postgres -X -At -c "select count(*) from supabase_migrations.schema_migrations"   # 19 (desde la Fase B, §13)
 ```
 
 ## 11. Sesión 2 · 2026-10-22
@@ -385,7 +412,8 @@ sin tener que arrancar Claude, Docker ni la aplicación en el PC.
 
 **Recomendado: Fase B local** (§9.4). Consiste en una copia de seguridad
 reciente, la validación aislada de esa copia, una actualización controlada y el
-diagnóstico posterior. **Todavía NO autorizada.**
+diagnóstico posterior. **Todavía NO autorizada** en el momento de este
+registro (10:53). *Después se autorizó y se completó: ver §13.*
 
 Cada una de estas operaciones requiere **autorización explícita** antes de
 ejecutarse:
@@ -396,6 +424,163 @@ ejecutarse:
 - cambios en contenedores o volúmenes;
 - crear recursos externos, desplegar o transferir datos;
 - hacer push del commit de esta sesión o de cualquier otra rama.
+
+## 13. Sesión 3 (continuación) · 2026-10-24 · Fase B completada
+
+Cada paso tuvo una autorización expresa y separada del usuario: copia → prueba
+aislada → actualización con diagnóstico posterior. Los hechos son comprobados
+salvo donde se indique otra cosa.
+
+### 13.1 Copia de seguridad y prueba aislada de restauración
+
+- **Docker Desktop** estaba cerrado. Lo lanzó Claude (autorizado) con
+  `Start-Process` a las 16:50:05 y el motor respondió a las 16:50:25 (29.8.2).
+  `supabase_db_tradepilot-r` se levantó solo (`unless-stopped`) y quedó
+  `healthy`. Montaje único: el volumen `supabase_db_tradepilot-r` (creado el
+  2026-10-18) en `/var/lib/postgresql/data`. Su `system_identifier` coincide
+  con el de la base original registrado en la sesión 2 (comparado sin
+  mostrarlo).
+- **Copia**: `scripts\windows\respaldo.ps1` (el `.bat` acaba en `pause`),
+  exit 0. Hace `pg_dump -Fc` de la base `postgres` en solo lectura y la verifica
+  sobre el fichero del disco.
+  - `respaldos\tradepilot-20261024-165054.dump`: 585 085 bytes, SHA-256
+    `3D9F0D108F7DA6E2B53F6A8D2A52AA16F4A3DB7D2BD38E024356E9B59CA5335B`.
+  - Recuentos base frente a copia: las 21 tablas de `public` OK.
+  - `pg_restore --list` (con el fichero pasado por la entrada estándar): exit
+    0, formato CUSTOM con gzip, pg_dump 17.11, 917 entradas.
+- **Prueba de restauración en una instancia aislada**. No se usó
+  `probar-restauracion.ps1` porque no es aislado (§6.7).
+  - Contenedor y volumen nuevos, ambos `tp-prueba-restauracion-20261024`.
+    Imagen `supabase/postgres:17.11.0.004`, la misma que la original.
+    `--network none`, sin puertos, sin el volumen original y con un
+    `system_identifier` distinto. El SHA-256 de la copia dentro del contenedor
+    coincide.
+  - **Primer intento** (`tp_restaurada`): `pg_restore` exit 1 con **5 errores**,
+    todos `role "supabase_functions_admin" does not exist`. Eran cambios de
+    propietario o permisos en `supabase_functions` (http_request, hooks,
+    hooks_id_seq, migrations, GRANT USAGE).
+  - El rol se creó **solo en el entorno temporal**. **Segundo intento**
+    (`tp_restaurada2`, `--exit-on-error`): **exit 0, 0 errores, 0 avisos**.
+  - **Integridad, original frente a restaurada**: idénticas en todo lo medido.
+    - Migraciones (18), objetos, tablas, funciones, RLS, políticas, triggers,
+      los 11 esquemas y las extensiones con sus versiones.
+    - Auth (users, identities, 27 tablas, `on_auth_user_created`) y Storage.
+    - Recuentos de las 21 tablas de `public`.
+    - Huella MD5 de todas las filas de 10 tablas críticas: `accounts`,
+      `account_capital_events`, `account_risk_state`, `domain_events`,
+      `profiles`, `prop_firms`, `trades`, `auth.users`, `auth.identities` y
+      `schema_migrations`.
+  - Sin probar: los servicios de Auth, Storage y la API sobre la base
+    restaurada (sin red). Se validó la base, no la aplicación sobre ella.
+  - **Limpieza**: se eliminaron solo ese contenedor y ese volumen, tras
+    comprobar su id, su etiqueta `tradepilot.prueba=restauracion` y su fecha de
+    creación.
+  - La original, antes y después de la prueba: misma foto (migraciones,
+    objetos, bases, recuentos, mismo arranque, 0 reinicios).
+- ⚠️ La copia contiene datos de autenticación (usuarios, sesiones, refresh
+  tokens) y `vault.secrets`. **Es privada**: no se sube a git ni se comparte.
+
+### 13.2 Actualización de la base original
+
+- Revisión previa del código (`Actualizar_TradePilot.bat` →
+  `actualizar.ps1` + `comun.ps1`):
+  - La migración pendiente solo añade: 2 tablas nuevas con índices, RLS,
+    políticas y triggers, y 1 función. No toca tablas existentes.
+  - Los 4 ficheros de funciones, a nivel superior, solo tienen
+    `create or replace function`, 2 `drop function if exists` de firmas
+    antiguas, `comment` y `grant`/`revoke execute`. Sus `insert`, `update` y
+    `delete` están dentro de cuerpos de función.
+  - `127.0.0.1:54322` lo sirven `com.docker.backend` y `wslrelay` (Docker).
+    En Windows no hay otro PostgreSQL. `supabase migration list --local` (solo
+    lectura) vio 18 aplicadas y 1 pendiente.
+- Antes de ejecutar: la copia 165054 existía y su hash coincidía; la base era
+  la original y estaba sin cambios desde la copia.
+- **`Actualizar_TradePilot.bat`: exit 0.** Se ejecutó con `TP_NO_PREGUNTAR=1`
+  (opción del script para la confirmación ya dada) y la entrada desde `nul`
+  (para el `pause`). Supabase CLI 2.121.0.
+  - Migración aplicada: **`20261018120000_trade_file_imports`** (y solo esa).
+  - Funciones aplicadas, cada una en su transacción y todas OK: `funding.sql`,
+    `operations.sql`, `management_intent.sql`, `imports.sql`.
+  - Comprobación del script: mismas filas que antes, más `import_batches` e
+    `imported_trade_rows` nuevas y vacías. Funciones clave disponibles.
+- **Diagnóstico posterior** (`diagnostico.ps1`, solo lectura, exit 0): **19
+  migraciones aplicadas, 0 pendientes, 435/435 objetos, 0 bloqueos, 0
+  avisos**. Informe: `diagnosticos\diagnostico-20261024-172124.txt`.
+  - Su veredicto literal es «LISTA PARA ACTUALIZAR», un texto fijo del script
+    cuando no hay bloqueos. Con 0 pendientes, la base está **al día**: no queda
+    ninguna migración por aplicar.
+- Comprobaciones de solo lectura adicionales:
+  - Importación: 2 tablas, RLS en las 2, 2 políticas, 2 triggers de
+    inmutabilidad, 6 índices, y las funciones `confirmar_importacion`,
+    `listar_lotes_importacion` y `reject_import_mutation`.
+  - Permisos: `anon` no puede ejecutar `confirmar_importacion`,
+    `authenticated` sí, y `authenticated` no inserta directamente en
+    `import_batches`.
+  - Recuentos: `accounts` 2, `account_capital_events` 2, `account_risk_state`
+    2, `domain_events` 2, `profiles` 1, `prop_firms` 1, `trades` 0,
+    `import_batches` 0, `imported_trade_rows` 0.
+  - Las 2 Cuentas: prefijo NYS, `live`, USD, con 1 evento de capital y 1
+    estado de riesgo cada una.
+  - Huellas de `accounts`, `account_capital_events` y `trades`: **idénticas**
+    a las de antes de actualizar.
+- Efecto secundario conocido: el actualizador deja en `/tmp` del contenedor
+  los 4 `.sql` y las 2 copias de verificación. No se han tocado.
+
+### 13.3 Copias disponibles
+
+| Copia | Bytes | SHA-256 | Estado |
+|---|---|---|---|
+| `respaldos\tradepilot-20261024-165054.dump` | 585 085 | `3D9F0D108F7DA6E2B53F6A8D2A52AA16F4A3DB7D2BD38E024356E9B59CA5335B` | Verificada por recuentos **y restauración probada en una instancia aislada** (§13.1) |
+| `respaldos\tradepilot-20261024-172104.dump` | 585 085 | `AB3070B46CC6F7CABA8AAA4787879195A477F1A7D19665877A9E25940E25E8F5` | La hizo el actualizador justo antes de cambiar nada. Verificada por el procedimiento oficial (recuentos). **Sin prueba de restauración** |
+| `%USERPROFILE%\Backups\TradePilot\tradepilot_pg_dumpall_2026-10-18_213427.sql` | 624 750 | — | Intacta. **Sin restauración validada** |
+
+Las tres son anteriores a la migración `20261018120000`.
+
+### 13.4 Estado al cerrar
+
+- Base original: contenedor `supabase_db_tradepilot-r`, volumen original, al
+  día con esta rama. Docker Desktop **sigue abierto**.
+- Git: este commit es local. No se ha hecho push, ni merge, ni pull request.
+- No se ha desplegado la web, ni creado recursos externos, ni transferido
+  datos.
+- Siguen abiertos: §6.1 (el lanzador no compila los paquetes), §6.2
+  (`fronteras.test.ts` en Windows), §6.3 (dos suites 16, opcional), §6.5
+  (`.env.local`), §6.6 (etiquetas `workdir` y `edge_runtime` con código 255),
+  §6.7 y §6.8.
+
+### 13.5 Siguiente paso recomendado: Fase C (NO autorizada todavía)
+
+Validar la aplicación web **local** antes de abordar el alojamiento externo
+(§12, Fase D).
+
+### 13.6 Objetivos de la Fase C (preparados, sin ejecutar)
+
+1. **Revisar `Abrir_TradePilot.bat` y sus scripts** antes de ejecutarlos.
+   Qué arranca (`supabase start`, sobre qué volumen y desde qué carpeta, por
+   §6.6), qué escribe en `.env.local`, y que no ejecuta `migration up` ni
+   seed.
+2. **§6.1**: proponer, y aplicar si se autoriza, `npm run build:packages`
+   antes de la web en el lanzador, sin `migration up`.
+3. **§6.5**: comprobar si existe `apps/web/.env.local` sin abrirlo ni
+   mostrarlo, y cómo lo genera el lanzador (solo URL local y anon key).
+4. **§6.6**: entender por qué los contenedores llevan la etiqueta `workdir`
+   de Descargas y por qué `edge_runtime` sale con 255, y decidir si afecta al
+   arranque.
+5. **Recorrido en el navegador**: login con enlace mágico (correo local de
+   Supabase), ver las 2 Cuentas, pantallas de BUILD 024 (fecha y hora en la
+   apertura, el parcial y el cierre; aviso de registro a posteriori), la
+   navegación móvil y la importación.
+6. **Decisión necesaria antes del paso 5**: el recorrido completo **escribe en
+   la base real**, y Operaciones, eventos de capital y `audit_log` no se
+   pueden borrar. Opciones:
+   - **(a)** solo navegación y lectura sobre la base real;
+   - **(b)** pruebas de escritura en un entorno restaurado y aislado (por
+     ejemplo, la copia 165054);
+   - **(c)** aceptar operaciones de prueba permanentes en las Cuentas reales
+     (no recomendado).
+7. Antes de cualquier escritura en la base real, una copia nueva con
+   `respaldo.ps1`.
+8. Opcional, con autorización: corregir §6.2 y §6.7.
 
 ---
 
