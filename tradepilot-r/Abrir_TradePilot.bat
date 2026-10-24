@@ -26,6 +26,13 @@ REM  a traves de !TP_YO!. Asi el valor se sustituye al ejecutar y no al
 REM  parsear, que es lo unico que sobrevive a una ruta con parentesis.
 set "TP_YO=%~f0"
 
+REM  Identidad de la base de datos ORIGINAL. Supabase nombra contenedor y
+REM  volumen supabase_db_<project_id>, y project_id = "tradepilot-r" en
+REM  supabase/config.toml. Se comprueban antes de tocar nada (paso 7).
+set "TP_DB=supabase_db_tradepilot-r"
+set "TP_VOL=supabase_db_tradepilot-r"
+set "TP_PROY=tradepilot-r"
+
 echo.
 echo   ================================================
 echo      TradePilot - arrancando entorno local
@@ -149,14 +156,40 @@ if not exist "node_modules" (
   echo   [OK] Dependencias ya instaladas
 )
 
-REM --- 7. Base de datos local -----------------------------------------
+REM --- 6b. Compilar los paquetes internos -------------------------------
+REM  La web importa los paquetes de packages\*\dist. Sin compilarlos, una
+REM  instalacion limpia falla con "Module not found". Solo compila TypeScript:
+REM  no toca la base de datos.
 echo.
-echo   [ ] Levantando la base de datos local...
-echo       La PRIMERA vez descarga bastante y puede tardar varios minutos.
+echo   [ ] Compilando los paquetes internos de TradePilot...
+call npm run build:packages
+if errorlevel 1 goto fin_build_error
+echo   [OK] Paquetes internos compilados
+
+REM --- 7. Base de datos local -----------------------------------------
+REM  ANTES de llamar a Supabase se comprueba, solo leyendo, que la base
+REM  ORIGINAL esta en marcha, sana y con su volumen. Si no, se para aqui:
+REM  con la base parada o ausente, `supabase start` (CLI v2.121.0) elimina y
+REM  recrea los contenedores, o crea una base NUEVA y VACIA.
+echo.
+echo   [ ] Comprobando la base de datos original (solo lectura)...
+call :verificar_base
+if errorlevel 1 goto fin_base_no_valida
+echo   [OK] Base de datos original en marcha y sana (!TP_DB!, volumen !TP_VOL!)
+
+REM  Con la base ya en marcha, la CLI v2.121.0 toma la rama "already running":
+REM  solo informa del estado y devuelve 0, sin crear ni recrear contenedores.
+REM  Cualquier otro codigo es un fallo real y el lanzador se detiene.
+echo.
+echo   [ ] Comprobando los servicios de Supabase...
 echo.
 call supabase start
-REM  `supabase start` devuelve error si ya estaba arrancada. No es un fallo:
-REM  lo que decide es si `supabase status` responde, que se comprueba ahora.
+set "TP_COD=!errorlevel!"
+if not "!TP_COD!"=="0" goto fin_start_error
+
+call :verificar_base
+if errorlevel 1 goto fin_base_no_valida
+echo   [OK] La base de datos original sigue sana tras comprobar Supabase
 
 REM --- 8. Leer la configuracion que genera Supabase --------------------
 REM  Se usa la salida "-o env", pensada para maquinas, en vez de leer la
@@ -331,23 +364,109 @@ echo       Esto es lo que ha respondido Supabase:
 echo.
 type "supabase-status.err"
 echo.
-findstr /c:"Stopped services" "supabase-status.err" >nul 2>&1
-if errorlevel 1 goto sin_detalle_supabase
-echo       ^>^> Hay contenedores parados. Ejecuta EN ESTA CARPETA:
-echo              supabase stop
-echo              supabase start
-echo          Eso NO borra tus datos: el borrado exige --no-backup, que no se usa.
-echo          No lo ejecutes desde tu carpeta personal: alli no hay proyecto y
-echo          Supabase crearia uno fantasma con el nombre de esa carpeta.
-echo.
-goto fin_error
 :sin_detalle_supabase
-echo       Prueba a apagarla y volver a arrancar:
-echo           supabase stop
-echo           supabase start
+echo       NO ejecutes "supabase stop" ni "supabase start" para arreglarlo:
+echo       pueden eliminar y recrear los contenedores. Hace falta revisarlo a
+echo       mano antes de intentar recuperar nada. Copia lo que aparece arriba y
+echo       enviaselo a quien te ayuda.
+goto fin_error
+
+REM ===================================================================
+:verificar_base
+REM  Comprueba, SOLO LEYENDO, la identidad, la salud y el volumen de la base
+REM  original. Devuelve 0 si todo cuadra; si no, 1 y el motivo en TP_MOTIVO.
+REM  Cada campo lleva un prefijo (E=, S=...) para que un valor vacio no
+REM  desplace a los demas al partir la linea por "|". Las cadenas entre
+REM  acentos graves son literales de las plantillas de Docker (Go): asi no
+REM  hacen falta comillas dentro de comillas.
+set "TP_MOTIVO="
+set "TP_E="
+set "TP_S="
+set "TP_P="
+set "TP_M="
+set "TP_VN="
+set "TP_VD="
+set "TP_VP="
+docker info >nul 2>&1
+if errorlevel 1 goto vb_sin_docker
+for /f "tokens=1-4 delims=|" %%a in ('docker inspect -f "E={{.State.Status}}|S={{if .State.Health}}{{.State.Health.Status}}{{else}}sin-comprobacion{{end}}|P={{index .Config.Labels `com.supabase.cli.project`}}|M={{range .Mounts}}{{if eq .Destination `/var/lib/postgresql/data`}}{{.Type}}:{{.Name}}{{end}}{{end}}" %TP_DB% 2^>nul') do (
+  set "TP_E=%%a"
+  set "TP_S=%%b"
+  set "TP_P=%%c"
+  set "TP_M=%%d"
+)
+if not defined TP_E goto vb_no_existe
+if /i not "!TP_E!"=="E=running" goto vb_parada
+if /i not "!TP_S!"=="S=healthy" goto vb_no_sana
+if not "!TP_P!"=="P=!TP_PROY!" goto vb_proyecto
+if not "!TP_M!"=="M=volume:!TP_VOL!" goto vb_montaje
+for /f "tokens=1-3 delims=|" %%a in ('docker volume inspect -f "N={{.Name}}|D={{.Driver}}|P={{index .Labels `com.supabase.cli.project`}}" %TP_VOL% 2^>nul') do (
+  set "TP_VN=%%a"
+  set "TP_VD=%%b"
+  set "TP_VP=%%c"
+)
+if not "!TP_VN!"=="N=!TP_VOL!" goto vb_volumen
+if not "!TP_VD!"=="D=local" goto vb_volumen
+if not "!TP_VP!"=="P=!TP_PROY!" goto vb_volumen
+exit /b 0
+:vb_sin_docker
+set "TP_MOTIVO=Docker no responde."
+exit /b 1
+:vb_no_existe
+set "TP_MOTIVO=No existe el contenedor !TP_DB!."
+exit /b 1
+:vb_parada
+set "TP_MOTIVO=La base de datos (!TP_DB!) no esta en marcha: !TP_E:~2!."
+exit /b 1
+:vb_no_sana
+set "TP_MOTIVO=La base de datos (!TP_DB!) esta en marcha pero no esta sana: !TP_S:~2!."
+exit /b 1
+:vb_proyecto
+set "TP_MOTIVO=El contenedor !TP_DB! no pertenece al proyecto !TP_PROY!."
+exit /b 1
+:vb_montaje
+set "TP_MOTIVO=El contenedor !TP_DB! no tiene montado el volumen !TP_VOL! en /var/lib/postgresql/data."
+exit /b 1
+:vb_volumen
+set "TP_MOTIVO=El volumen !TP_VOL! no existe o no es el esperado (local, proyecto !TP_PROY!)."
+exit /b 1
+
+REM ===================================================================
+:fin_base_no_valida
 echo.
-echo       Si sigue fallando, copia lo que aparece arriba y enviaselo a
-echo       quien te ayuda.
+echo   [X] !TP_MOTIVO!
+echo.
+echo       NO he intentado arrancar, recuperar ni reiniciar nada. Tus datos
+echo       no se han tocado.
+echo.
+echo       Si acabas de abrir Docker Desktop, espera un minuto a que la base
+echo       termine de arrancar y vuelve a ejecutar este archivo.
+echo.
+echo       Si sigue fallando, NO ejecutes "supabase start", "supabase stop" ni
+echo       "supabase db reset": con la base parada o ausente pueden recrear los
+echo       contenedores o crear una base NUEVA y VACIA. Hace falta revisarlo a
+echo       mano. Copia este mensaje y enviaselo a quien te ayuda.
+goto fin_error
+
+REM ===================================================================
+:fin_start_error
+echo.
+echo   [X] La comprobacion de Supabase ha terminado con error (codigo !TP_COD!).
+echo.
+echo       No sigo: la web no se arranca. NO ejecutes "supabase stop" ni
+echo       "supabase start" para arreglarlo: pueden eliminar y recrear los
+echo       contenedores. Hace falta revisarlo a mano antes de intentar
+echo       recuperar nada. Copia lo que aparece arriba y enviaselo a quien te
+echo       ayuda.
+goto fin_error
+
+REM ===================================================================
+:fin_build_error
+echo.
+echo   [X] No se han podido compilar los paquetes internos de TradePilot.
+echo.
+echo       La web no se arranca. No se ha tocado la base de datos. Copia el
+echo       error de arriba y enviaselo a quien te ayuda.
 goto fin_error
 
 :fin_error
