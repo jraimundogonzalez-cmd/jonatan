@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-22 19:14 (+02:00) · sesión 2 (ver §11)
+**Último registro**: 2026-10-24 10:53 (+02:00) · sesión 3 (ver §12)
 
 ---
 
@@ -17,17 +17,19 @@
 |---|---|
 | Repositorio | `%USERPROFILE%\Proyectos\tradepilot-r` (clon de `github.com/jraimundogonzalez-cmd/jonatan`) |
 | Aplicación | `%USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r` |
-| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**solo local, sin push**; historia del registro reescrita en la sesión 2, §11) |
+| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `5234494`. El commit que añade **este documento** es el inmediatamente posterior: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | `5234494`. Después solo hay commits de **este documento**: `1252d18` (sesión 2, publicado) y el de la sesión 3 (local). El último: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el commit de este documento.
-- Sin upstream (nunca se ha hecho push). Sin stash.
+- Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
+  la sesión 3, §12). Tras el commit local de la sesión 3, la rama va **1 por
+  delante** del remoto; ese commit no está publicado. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -160,8 +162,8 @@ distinto del de la base real (comprobado; valores no publicados). El volumen ori
    aplicar: es un cambio del lanzador, no validable sin abrirlo.
 2. `fronteras.test.ts` falla en Windows (separador de rutas). Fuera de alcance; arreglarlo requiere autorización.
 3. Dos suites con número 16. Se dejó así a propósito; renumerar es opcional.
-4. Push de la rama de rescate a GitHub (para que BUILD 024 no vuelva a existir
-   solo en un disco). No autorizado todavía.
+4. ~~Push de la rama de rescate a GitHub.~~ **Resuelto** en la sesión 3
+   (`1252d18`, verificado con `git ls-remote`; §12).
 5. `.env.local` del clon nuevo: no existe. Según `10_CURRENT_STATUS.md`,
    `Abrir_TradePilot.bat` lo reescribe (guardando el anterior en
    `.env.anterior.local`). No se ha comprobado aquí.
@@ -197,24 +199,27 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 
 1. Revisar esta rama (`git log 620cb42..HEAD`, `git diff 620cb42..HEAD`) y
    decidir sobre §6.1 a §6.4.
-2. Si se autoriza: `Diagnosticar_TradePilot.bat` desde esta rama (solo lectura).
-   Esperado, sin verificar: LISTA, 0 bloqueos, 1 pendiente (`trade_file_imports`).
-3. Si se autoriza: push de `claude/tradepilot-r-build024-rescate`.
-4. Fase B (cada paso por separado): `Copia_de_seguridad_TradePilot.bat` →
+2. ~~Diagnóstico de solo lectura.~~ **Hecho** en la sesión 2 (§11): LISTA, 0
+   bloqueos, 1 pendiente (`trade_file_imports`).
+3. ~~Push de `claude/tradepilot-r-build024-rescate`.~~ **Hecho** en la sesión 3
+   (§12).
+4. **Siguiente recomendado, NO autorizado todavía.** Fase B (cada paso por separado): `Copia_de_seguridad_TradePilot.bat` →
    (opcional) `Probar_copia_de_seguridad_TradePilot.bat` →
    `Actualizar_TradePilot.bat` → diagnóstico final (LISTA, 0 pendientes).
 5. Fase C: resolver §6.1, §6.5 y §6.6; después abrir la web y hacer el recorrido de
    BUILD 024 en el navegador.
+6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
 
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio, sin upstream
-git -C $r log --oneline 620cb42..HEAD    # 7 commits: a620b51 … 5234494 + este documento
+git -C $r status --short --branch        # limpio; [ahead 1] respecto a origin (commit local de la sesión 3)
+git -C $r log --oneline 620cb42..HEAD    # 8 commits: a620b51 … 5234494 + 1252d18 + el de la sesión 3
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
-git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # vacío = sin push
+git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
+git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
 # Base real, SOLO LECTURA (solo si el usuario autoriza conectarse):
 docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_tradepilot-r psql -U postgres -d postgres -X -At -c "select count(*) from supabase_migrations.schema_migrations"   # 18
 ```
@@ -283,6 +288,115 @@ docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_trade
   (opcional) prueba de la copia → `Actualizar_TradePilot.bat` → diagnóstico
   final (esperado: LISTA, 0 pendientes). Siguen abiertas §6.1–§6.6.
 
+## 12. Sesión 3 · 2026-10-24
+
+### 12.1 Hechos comprobados
+
+- **Estado al empezar**: coincide con §1, §2 y §10 de la sesión 2 (rama,
+  árbol limpio, sin upstream ni stash, HEAD `1252d18`, 7 commits sobre
+  `620cb42`). `ls-remote` vacío: la rama no estaba en origin.
+- **Revisión previa al push**: en `git log -p 620cb42..HEAD` (ficheros y
+  mensajes) no aparecen los números reales de las Cuentas, ninguno de los dos
+  `system_identifier` ni rutas con el usuario de Windows. Tampoco hay `.env`
+  ni copias de seguridad en el rango. `620cb42` ya estaba en origin.
+- **Push completado** (autorizado por el usuario): `git push -u origin
+  claude/tradepilot-r-build024-rescate`, una sola vez, sin `--force`, sin
+  `--all` ni `--mirror`. Se quedó esperando a Git Credential Manager hasta que
+  el usuario inició sesión; después, exit 0. `git ls-remote` devuelve
+  `1252d184bfb527616f13b6c699973185aad7c858` para esa rama. Upstream
+  configurado; local y remoto sincronizados (0/0) antes del commit de esta
+  sesión.
+- `rescate/build024-registro-original` y `rescate/build024-sobre-3961c27`
+  siguen **solo en local** (no están en origin). **No publicarlas.**
+- No se ha creado ningún pull request ni se ha hecho merge.
+- **Compilación limpia SUPERADA**: `git archive 1252d18` en una carpeta
+  temporal fuera del clon, Node 24.21.0, npm 11.19.0. `npm ci` (504 paquetes;
+  el `postinstall` de `esbuild` sigue sin aprobar, como en §5) y `npm run
+  build` (seis paquetes y la web): exit 0, 19 rutas y el middleware. Las dos
+  variables `NEXT_PUBLIC_SUPABASE_*` llevaban **valores ficticios** de prueba
+  (`placeholder`), no credenciales. Demuestra que una instalación limpia
+  compila sin secretos y sin `dist/` previos si el build compila antes los
+  paquetes.
+- **Inspección del código** (solo lectura):
+  - Variables de entorno: solo `NEXT_PUBLIC_SUPABASE_URL` y
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Ninguna referencia a la `service_role`
+    (lo vigila `fronteras.test.ts`).
+  - No hay `localhost`, `127.0.0.1` ni puertos en el código de la app y los
+    paquetes. `actions/auth.ts` calcula el origen del enlace de acceso a
+    partir de `x-forwarded-host`/`host`.
+  - Auth: solo enlace mágico (`signInWithOtp`). `/auth/confirm` solo acepta
+    `token_hash`, que da la plantilla propia
+    `supabase/templates/magic-link.html` (no la de Supabase por defecto).
+  - `supabase/config.toml`: `enable_signup = true` y `site_url`/redirecciones
+    con `localhost:3000`. Solo se aplica a la base local.
+  - Las funciones de `supabase/functions/sql/` (`funding.sql`,
+    `operations.sql`, `management_intent.sql`, `imports.sql`) se cargan como
+    **seed** (`[db.seed] sql_paths`), no como migraciones. Localmente las
+    aplica `actualizar.ps1` con `psql`.
+  - `next.config.mjs`: `bodySizeLimit` de 3 MB (por debajo de los 4,5 MB de
+    Vercel) y `exceljs` como paquete externo. No hay `vercel.json`, ni
+    `engines`/`.nvmrc`, ni `apps/web/public` (sin manifiesto web ni iconos).
+- **Base local original**: en esta sesión **no** se ha conectado nadie. El
+  último diagnóstico autorizado (sesión 2, §11) dio LISTA PARA ACTUALIZAR, 0
+  bloqueos, 0 avisos, 18 migraciones aplicadas y 1 pendiente
+  (`20261018120000_trade_file_imports`). Ese diagnóstico **no autoriza** la
+  actualización. El último recuento de filas (§11): 2 Cuentas NYS, 2 eventos
+  de capital, 0 operaciones. **Revalidarlo** antes de usarlo para una
+  migración.
+- La copia `.sql` de §3 sigue **sin restauración validada**.
+- No se han creado recursos externos, no se ha desplegado ninguna web y no se
+  han migrado datos.
+
+### 12.2 Objetivo actual
+
+Alojar TradePilot R en una URL HTTPS externa, accesible desde ordenador y móvil
+sin tener que arrancar Claude, Docker ni la aplicación en el PC.
+
+### 12.3 Propuesta (NO implantada)
+
+- **Web**: Vercel (Hobby). Directorio raíz `tradepilot-r/apps/web`, los
+  paquetes se compilan antes que `next build`, la versión de Node queda fija y
+  las funciones van a una región de la UE.
+- **Auth y PostgreSQL**: Supabase alojado en la UE. Proyecto propio, con RLS
+  como protección y solo la anon key en Vercel.
+- **Coste inicial estimado: 0 €** con los planes gratuitos. **Pendiente de
+  confirmar** las condiciones y límites vigentes antes de contratar (en Free,
+  la pausa por inactividad y la falta de copias descargables; Pro como
+  alternativa de pago).
+- **Traslado de las dos Cuentas NYS**: en la base nueva el usuario tendrá otro
+  UUID, así que no sirve restaurar el `pg_dumpall`. Opciones:
+  - **A** (preferida): recrearlas desde la web, ya que hay 0 operaciones.
+  - **B**: copiar solo las tablas `public` cambiando el `user_id`.
+
+  No elegida ni verificada.
+
+### 12.4 Bloqueos de despliegue (pendientes)
+
+1. Configurar el monorepo y la compilación automática en Vercel.
+2. Aplicar a la base alojada las migraciones y los cuatro ficheros SQL de
+   funciones, en el orden de `config.toml`.
+3. Configurar Auth en el proyecto alojado: URL del sitio, redirecciones y
+   plantilla de email. Con la plantilla por defecto, el login falla.
+4. Desactivar el registro público después de configurar y comprobar el acceso.
+5. Preparar y probar copias de seguridad remotas.
+6. Elegir y verificar el procedimiento para trasladar las dos Cuentas NYS.
+
+### 12.5 Siguiente paso
+
+**Recomendado: Fase B local** (§9.4). Consiste en una copia de seguridad
+reciente, la validación aislada de esa copia, una actualización controlada y el
+diagnóstico posterior. **Todavía NO autorizada.**
+
+Cada una de estas operaciones requiere **autorización explícita** antes de
+ejecutarse:
+
+- `Actualizar_TradePilot.bat`;
+- migraciones o SQL de escritura;
+- `supabase start`, `db reset` o seed sobre la base original;
+- cambios en contenedores o volúmenes;
+- crear recursos externos, desplegar o transferir datos;
+- hacer push del commit de esta sesión o de cualquier otra rama.
+
 ---
 
 ## PROMPT PARA REANUDAR MAÑANA
@@ -293,7 +407,8 @@ nueva de Claude Code. No tienes acceso a la conversación anterior.
 
 Repositorio: %USERPROFILE%\Proyectos\tradepilot-r
 Aplicación:  %USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r
-Rama:        claude/tradepilot-r-build024-rescate (solo local)
+Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 1252d18;
+             commits posteriores solo locales)
 
 1. Lee primero tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md
    completo. Después tradepilot-r/AGENTS.md y los documentos de contexto que
