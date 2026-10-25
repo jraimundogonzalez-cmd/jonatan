@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-25 11:23 (+01:00) · sesión 3 (continuación), primera ejecución controlada del lanzador (ver §16)
+**Último registro**: 2026-10-25 16:19 (+01:00) · sesión 3 (continuación), protección del lanzador, fases A1 + B (ver §17)
 
 ---
 
@@ -20,19 +20,18 @@
 | Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `ae06815` (corrección de `Abrir_TradePilot.bat`, sesión 3, **local**; §15). Antes: `5234494` y los commits de **este documento** `1252d18` (sesión 2, publicado), `bbb65d0` (plan de despliegue, local), `556bf1b` (Fase B, local) y `35bbbe6` (auditoría de la Fase C, local); después, `ef94ce8` (registro del lanzador, local) y el de la primera ejecución (§16, local). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | `fix: proteger lanzamiento local y configuración` (§17, **local**; su hash: `git log -1 --format=%h -- tradepilot-r/Abrir_TradePilot.bat`). Antes, `ae06815` (corrección de `Abrir_TradePilot.bat`, §15, local) y `baba52e` (primera ejecución, §16). Anteriores: `5234494` y los commits de **este documento** `1252d18` (sesión 2, publicado), `bbb65d0` (plan de despliegue, local), `556bf1b` (Fase B, local) y `35bbbe6` (auditoría de la Fase C, local); después, `ef94ce8` (registro del lanzador, local) y el de la primera ejecución (§16, local). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
-  commit de este documento (`docs: registrar primera ejecución controlada`,
-  §16).
+  commit `fix: proteger lanzamiento local y configuración` (§17).
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras los seis commits locales de la sesión 3
-  (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815`, `ef94ce8` y el de este
-  registro), la rama va **6 por delante** y 0 por detrás del remoto; no están
+  la sesión 3, §12). Tras los siete commits locales de la sesión 3
+  (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815`, `ef94ce8`, `baba52e` y el de
+  §17), la rama va **7 por delante** y 0 por detrás del remoto; no están
   publicados. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
@@ -53,7 +52,8 @@ Commits de la rama sobre `620cb42`:
 | `35bbbe6` | Este documento: auditoría local de la Fase C (§14). Local |
 | `ae06815` | `Abrir_TradePilot.bat`: comprobación de la base original, `build:packages` y código de salida de `supabase start` (§15). Local |
 | `ef94ce8` | Este documento: registro de la corrección del lanzador (§15). Local |
-| (siguiente) | Este documento: primera ejecución controlada del lanzador (§16). Local |
+| `baba52e` | Este documento: primera ejecución controlada del lanzador (§16). Local |
+| (siguiente) | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -291,8 +291,10 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    §13.6. **Auditoría de solo lectura hecha** (§14). **Lanzador corregido**
    en `ae06815` (§14.6.1-3; ver §15). **Primera ejecución controlada hecha**
    (§16): arranque técnico correcto; validación visual con sesión limpia
-   pendiente. Siguiente: resolver los riesgos de §16.6 antes de repetir la
-   apertura, **NO autorizado todavía**.
+   pendiente. **Riesgos 1-4 de §16.6 corregidos en el código** y probados en
+   aislamiento (§17); el lanzador completo con esos cambios no se ha
+   ejecutado. Siguiente: la validación controlada con un perfil de navegador
+   limpio (§17.5), **NO autorizada todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -300,8 +302,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 6] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + commit de la primera ejecución)
-git -C $r log --oneline 620cb42..HEAD    # 13 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + el de la primera ejecución
+git -C $r status --short --branch        # limpio; [ahead 7] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + commit de §17)
+git -C $r log --oneline 620cb42..HEAD    # 14 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + el de §17
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
@@ -1017,6 +1019,110 @@ Auth modificó datos de autenticación de la base original.
    (§14.5; el acceso desde otro equipo sigue sin demostrarse). También
    `.env.local` con una sola copia (§6.5), `fronteras.test.ts` (§6.2) y el
    recorrido funcional, con su decisión previa (§13.6.6).
+
+> Avance (§17): los riesgos 1 a 4 están corregidos en el código y probados
+> en aislamiento. El 5 y el 6 siguen pendientes.
+
+## 17. Sesión 3 (continuación) · 2026-10-25 · Protección del lanzador (fases A1 + B)
+
+Registro hecho el 2026-10-25 a las 16:19 (+01:00). Cambios autorizados:
+modificar el lanzador, crear scripts auxiliares, probarlos en aislamiento y
+actualizar la documentación. **No se ha ejecutado el lanzador completo**, no
+se ha tocado Docker, Supabase, PostgreSQL ni el cortafuegos, y ninguna prueba
+ha llamado a las funciones SQL reales.
+
+### 17.1 Cambios
+
+| Fichero | Cambio |
+|---|---|
+| `Abrir_TradePilot.bat` | `supabase start >nul 2>&1`: su salida (con `SERVICE_ROLE_KEY`, `JWT_SECRET`, claves S3 y la URL de la base) no se ve ni se guarda; se conserva su código de salida y, si no es 0, se para con el código y un resumen de nombre y estado de los contenedores (`:resumen_contenedores`). `supabase status -o env` se lee en memoria con la salida de error a `nul`; ya no se crea ni se muestra `supabase-status.err` (se borra el antiguo). Los pasos 9 y 10 llaman a los dos scripts nuevos y paran si fallan, sin pausa que deje seguir; sin PowerShell, se para. `TP_ANON` se quita del entorno antes de la web. Origen local único `http://localhost:3000` (mensajes, incluido el de puerto ocupado, comprobación y navegador). `TP_NO_ABRIR_NAVEGADOR=1` no abre el navegador |
+| `scripts/windows/escribir-env-local.ps1` (nuevo) | `.env.local`: lo crea si no existe; no lo toca si es local y con la misma clave; respaldo fechado `.env.respaldo-AAAAMMDD-HHMMSS.local` y reescritura si solo cambia la clave; se niega (sin tocar nada) si apunta a otro Supabase, tiene variables de más, repetidas, comentarios o comillas, o no se puede leer. Escritura atómica. Lee la URL y la clave del entorno; no las muestra |
+| `scripts/windows/comprobar-funciones.ps1` (nuevo) | `listar_empresas` (POST `{}`) y `listar_lotes_importacion` (GET), los mismos métodos y cabeceras que el `curl` anterior. Solo vale HTTP 200 con JSON de tipo array; tiempo de espera de 10 s. No muestra la clave, la URL ni los cuerpos |
+| `COMO-EMPEZAR.md` | `127.0.0.1:3000` → `localhost:3000`, con el motivo; la nota que invitaba a «elegir uno» ahora recomienda `localhost`. El buzón local sigue en `127.0.0.1:54324` |
+| `docs/context/10_CURRENT_STATUS.md` | Descripción del lanzador al día |
+| `.gitignore` | Solo el comentario de `supabase-status.err` (la regla se mantiene) |
+
+No se ha cambiado el middleware: con un único origen `localhost` basta para la
+prueba local, y en Vercel `request.url` ya es el dominio real.
+
+Además, se corrigió un aviso de `fin_base_no_valida` introducido en `ae06815`
+que hacía fallar `lanzadores.test.ts` («db reset» en una línea sin la
+negación). Ese test no se ejecutó en §15.
+
+### 17.2 Decisión sobre el origen local
+
+`COMO-EMPEZAR.md` pedía usar `127.0.0.1` porque `localhost` podía resolverse
+primero a `::1`. Se cambia a `localhost` porque Next.js 15.5.28 reescribe
+`127.0.0.1` a `localhost` al redirigir (§16.6.2), así que `127.0.0.1` nunca
+era un origen estable. Next.js sigue escuchando solo en `127.0.0.1` (lo vigila
+`lanzadores.test.ts`); en §16 una petición a `localhost:3000` llegó al
+servidor y respondió 200.
+
+### 17.3 Pruebas (aisladas, en el directorio temporal de la sesión)
+
+- **Bloques reales del `.bat`**, extraídos del fichero, con `supabase.cmd` y
+  `docker.exe` ficticios por delante en el `PATH` (secretos inventados):
+  **23/23**. `start` con códigos 0, 1 y 7: sin secretos en pantalla, el código
+  se conserva, con un código distinto de 0 se para sin llegar a Next.js y
+  muestra el resumen. `status`: lee URL y clave, no muestra nada, borra el
+  `.err` antiguo y no deja ficheros. Navegador: con `=1` no abre; sin
+  definir o con `=0`, abre.
+- **`comprobar-funciones.ps1`** contra un servidor HTTP ficticio en
+  `127.0.0.1` (puerto elegido por el sistema): **65/65**, dos veces seguidas,
+  unos 50 s. Pasan solo 200 con `[]` y 200 con un array no vacío. Se rechazan,
+  cada uno por su motivo: `{}`, cuerpo vacío, texto, `[` roto, 401, 404, 500,
+  uno bien y otro 404, y el tiempo de espera agotado. Mismos métodos, rutas y
+  cabeceras que antes. Faltar la URL o la clave, una URL con credenciales o
+  que no sea http, y que nadie escuche: todo da error. El bloque real del
+  paso 10: con 200 sigue y vacía `TP_ANON`; con 404 va a `fin_funciones`.
+- **`escribir-env-local.ps1`** sobre carpetas temporales con claves
+  ficticias: **29/29** (inexistente, idéntico, otra clave con dos respaldos
+  sucesivos y `.env.anterior.local` intacto, URL alojada, variables de más,
+  falta una clave, repetida, comentario, comillas, espacios, binario,
+  bloqueado por otro proceso, y entrada de Supabase mala). Las pruebas
+  encontraron un fallo real que se corrigió: `[IO.File]::Replace` con `$null`.
+- `git check-ignore`: `.env.respaldo-*.local` ignorado (regla `*.local`).
+- `lanzadores.test.ts`: **8/8**.
+
+Incidencia del arnés: una primera versión del servidor ficticio se bloqueó.
+Elegía un puerto al azar que podía coincidir con servicios de Windows
+(49664-49669), no esperaba al cuerpo del POST y no tenía límite de duración.
+Se detuvieron solo sus dos procesos, por PID. Los resultados de esa versión
+no cuentan.
+
+### 17.4 Sin verificar
+
+- El lanzador completo con estos cambios.
+- Que el `.env.local` real se clasifique como «sin cambios»: lo creó el
+  lanzador anterior con el mismo formato, pero no se ha leído.
+- El comportamiento con la salida real de Supabase CLI 2.121.0 (el formato
+  de `status -o env` es el que ya se leía en §16).
+
+### 17.5 Siguiente paso (NO autorizado)
+
+La fase D del plan: cerrar la pestaña antigua de Chrome; ejecutar el lanzador
+con `TP_NO_ABRIR_NAVEGADOR=1`; abrir un Chrome con un perfil temporal en
+`http://localhost:3000`; y hacer, en solo lectura, una foto de `auth` y de
+los recuentos antes y después.
+
+### 17.6 Riesgos pendientes
+
+1. **Validación con un navegador limpio** (§17.5): el lanzador completo
+   **no se ha vuelto a ejecutar** después de estos cambios.
+2. **Exposición de los puertos 54321-54324** (§14.5): la regla del
+   cortafuegos requiere una autorización aparte. El acceso desde otro equipo
+   sigue sin demostrarse.
+3. **Aviso de los dos lockfiles** de Next.js (§16.6.5): el siguiente cambio
+   previsto (`outputFileTracingRoot`). No se borra el lockfile de la raíz:
+   pertenece a otra aplicación.
+4. **`edge_runtime`** con código 255 (§14.3): no bloquea; se puede aplazar.
+5. **Montajes desde Descargas** (§14.2): se pueden aplazar. **No borrar
+   `%USERPROFILE%\Downloads\TradePilot-R-Windows`** mientras existan los
+   contenedores actuales.
+6. Siguen abiertos `fronteras.test.ts` (§6.2), el recorrido funcional con su
+   decisión previa (§13.6.6) y la tabla de problemas de `COMO-EMPEZAR.md`,
+   que aún recomienda `supabase stop && supabase start` para la plantilla de
+   correo (fuera del alcance de este cambio).
 
 ---
 

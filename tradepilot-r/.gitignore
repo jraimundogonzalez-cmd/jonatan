@@ -5,8 +5,9 @@ dist/
 .next/
 next-env.d.ts
 
-# Salida de error de `supabase status` que captura el lanzador de Windows
-# para poder ensenarla. Es diagnostico efimero, nunca contenido del proyecto.
+# Salida de error de `supabase status` que guardaban versiones anteriores del
+# lanzador de Windows. Ya no se crea (puede llevar claves) y el lanzador borra
+# la que quede; se sigue ignorando por si alguna copia antigua la deja.
 supabase-status.err
 
 # Copias de seguridad de la base local (Copia_de_seguridad_TradePilot.bat y

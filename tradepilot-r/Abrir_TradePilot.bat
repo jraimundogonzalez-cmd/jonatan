@@ -180,12 +180,18 @@ echo   [OK] Base de datos original en marcha y sana (!TP_DB!, volumen !TP_VOL!)
 REM  Con la base ya en marcha, la CLI v2.121.0 toma la rama "already running":
 REM  solo informa del estado y devuelve 0, sin crear ni recrear contenedores.
 REM  Cualquier otro codigo es un fallo real y el lanzador se detiene.
+REM
+REM  Su salida NO se ensena ni se guarda en ningun fichero: con la pila en
+REM  marcha imprime el estado completo, con la clave service_role, el secreto
+REM  JWT, las claves S3 y la URL de la base con su contrasena. Solo cuenta el
+REM  codigo de salida, que la redireccion a nul no altera. Si falla, se ensena
+REM  el codigo y un resumen seguro (nombre y estado de cada contenedor).
 echo.
-echo   [ ] Comprobando los servicios de Supabase...
-echo.
-call supabase start
+echo   [ ] Comprobando los servicios de Supabase (puede tardar un poco)...
+call supabase start >nul 2>&1
 set "TP_COD=!errorlevel!"
 if not "!TP_COD!"=="0" goto fin_start_error
+echo   [OK] Supabase responde ^(codigo 0^)
 
 call :verificar_base
 if errorlevel 1 goto fin_base_no_valida
@@ -199,17 +205,18 @@ REM
 REM  Los nombres API_URL y ANON_KEY estan verificados contra el binario de la
 REM  CLI de Supabase (v2.113), no supuestos. SERVICE_ROLE_KEY tambien viaja en
 REM  esa salida y NO se lee: ninguna linea de abajo la asigna a nada.
+REM
+REM  `for /f` lee esa salida en memoria; nada de ella se ensena ni se escribe
+REM  en disco. La salida de error va a nul: versiones anteriores la guardaban
+REM  en supabase-status.err y la ensenaban con `type`, y puede llevar claves.
+REM  Si queda uno de esos ficheros antiguos, se borra. Si falla, se ensena el
+REM  estado de los contenedores (ver :fin_sin_datos), no lo que dijo el CLI.
 echo.
 echo   [ ] Leyendo la configuracion de la base de datos...
 set "TP_URL="
 set "TP_ANON="
-REM  El error de Supabase se GUARDA, no se tira. Cuando este comando falla no
-REM  escribe nada por la salida normal: el motivo entero viaja por la salida de
-REM  error. Mandarla a nul dejaba al lanzador con cero lineas que leer y un
-REM  mensaje generico que no distinguia "falta un contenedor" de "la carpeta es
-REM  la equivocada". Ahora se ensena tal cual.
-del "supabase-status.err" >nul 2>&1
-for /f "usebackq tokens=1,* delims==" %%A in (`supabase status -o env 2^>supabase-status.err`) do (
+if exist "supabase-status.err" del "supabase-status.err" >nul 2>&1
+for /f "usebackq tokens=1,* delims==" %%A in (`supabase status -o env 2^>nul`) do (
   if /i "%%A"=="API_URL"  set "TP_URL=%%~B"
   if /i "%%A"=="ANON_KEY" set "TP_ANON=%%~B"
 )
@@ -229,52 +236,31 @@ REM  SOLO dos variables. La clave de administracion (service_role) NUNCA se
 REM  lee, ni se escribe, ni se muestra: no aparece en ninguna linea de este
 REM  archivo a proposito.
 REM
-REM  Antes de reescribirlo se guarda el anterior en .env.anterior.local: si
-REM  alguna vez anadiste algo a mano, no se pierde. El nombre termina en
-REM  ".local" a proposito para que git lo ignore igual que el original.
-if exist "apps\web\.env.local" copy /y "apps\web\.env.local" "apps\web\.env.anterior.local" >nul
-> "apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_URL=!TP_URL!
->>"apps\web\.env.local" echo NEXT_PUBLIC_SUPABASE_ANON_KEY=!TP_ANON!
-echo   [OK] Configuracion local escrita en apps\web\.env.local
+REM  Lo decide scripts\windows\escribir-env-local.ps1 (detalle en su
+REM  cabecera): lo crea si no existe, no lo toca si ya es el mismo, guarda un
+REM  respaldo fechado si solo cambia la clave local, y SE NIEGA si apunta a
+REM  otro Supabase, tiene variables de mas o no se puede leer. La URL y la
+REM  clave le llegan por el entorno (TP_URL, TP_ANON), nunca como argumentos.
+REM  Los dos scripts siguientes necesitan PowerShell: sin el, no se sigue.
+where powershell >nul 2>&1
+if errorlevel 1 goto fin_sin_powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\escribir-env-local.ps1"
+if errorlevel 1 goto fin_env
 
 REM --- 10. Comprobar que la base tiene las funciones y esta al dia ------
-REM  Se llama a dos funciones reales: una de siempre (listar_empresas) y otra
-REM  de la ultima actualizacion (listar_lotes_importacion, del importador). Un
-REM  404 significa que la funcion no existe: la base es anterior al codigo.
+REM  scripts\windows\comprobar-funciones.ps1 llama a dos funciones reales de
+REM  solo lectura: una de siempre (listar_empresas) y otra de la ultima
+REM  actualizacion (listar_lotes_importacion, del importador). Solo vale HTTP
+REM  200 con una lista JSON en las dos; cualquier otra cosa para el lanzador
+REM  ANTES de la web, sin pausa que deje seguir. Un 404 significa que la
+REM  funcion no existe: la base es anterior al codigo.
 REM
 REM  La solucion es ACTUALIZAR la base, nunca reiniciarla. `supabase db reset`
 REM  borra todas las cuentas y operaciones; este lanzador no lo propone jamas.
-REM  La segunda llamada va por GET con el parametro en la URL para no tener
-REM  que escapar JSON aqui dentro.
-where curl >nul 2>&1
-if not errorlevel 1 (
-  set "TP_RPC="
-  set "TP_RPC2="
-  for /f "delims=" %%C in ('curl -s -o nul -w "%%{http_code}" -X POST "!TP_URL!/rest/v1/rpc/listar_empresas" -H "apikey: !TP_ANON!" -H "Content-Type: application/json" -d "{}" 2^>nul') do set "TP_RPC=%%C"
-  for /f "delims=" %%C in ('curl -s -o nul -w "%%{http_code}" "!TP_URL!/rest/v1/rpc/listar_lotes_importacion?p_account_id=00000000-0000-0000-0000-000000000000" -H "apikey: !TP_ANON!" 2^>nul') do set "TP_RPC2=%%C"
-  set "TP_FALTA="
-  if "!TP_RPC!"=="404" set "TP_FALTA=1"
-  if "!TP_RPC2!"=="404" set "TP_FALTA=1"
-  if defined TP_FALTA (
-    echo.
-    echo   [!] La base de datos esta en marcha pero NO esta al dia con esta
-    echo       version de TradePilot. Tus datos estan bien: solo faltan las
-    echo       piezas nuevas.
-    echo.
-    echo       Para ponerla al dia SIN borrar nada:
-    echo         1. Cierra esta ventana ^(la base de datos sigue en marcha^).
-    echo         2. Ejecuta Diagnosticar_TradePilot.bat ^(solo lee^).
-    echo         3. Solo si dice LISTA PARA ACTUALIZAR, ejecuta
-    echo            Actualizar_TradePilot.bat ^(hace una copia verificada antes^).
-    echo       Guia completa: COMPROBAR-INSTALACION-WINDOWS.md
-    echo.
-    echo       NO uses "supabase db reset": borraria tus cuentas y operaciones.
-    echo.
-    pause
-  ) else (
-    echo   [OK] Funciones de TradePilot disponibles y al dia
-  )
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\comprobar-funciones.ps1"
+if errorlevel 1 goto fin_funciones
+REM  La clave ya no hace falta: se quita del entorno antes de arrancar la web.
+set "TP_ANON="
 
 REM --- 11. Ultima comprobacion del puerto ------------------------------
 REM  Se repite la comprobacion del paso 2 a proposito: entre medias ha pasado
@@ -292,19 +278,36 @@ if errorlevel 11 goto fin_puerto_ocupado
 REM --- 12. Abrir el navegador cuando la web este lista ------------------
 REM  Puede abrir el 3000 sin dudar: si hemos llegado aqui, el puerto estaba
 REM  libre y Next.js se va a quedar en el.
+REM
+REM  Origen local UNICO: http://localhost:3000. Next.js 15 reescribe
+REM  127.0.0.1 a localhost al construir las URL de la peticion (next-url.js),
+REM  y el middleware redirige con ellas: quien entraba por 127.0.0.1 acababa
+REM  en localhost, que para el navegador es otro sitio, con otras cookies.
+REM  Next.js sigue escuchando solo en 127.0.0.1 (apps\web\package.json); el
+REM  navegador llega igual, porque localhost tambien es esta maquina.
+REM
+REM  TP_NO_ABRIR_NAVEGADOR=1 arranca la web sin abrir el navegador habitual:
+REM  para pruebas con un perfil limpio, porque el habitual puede guardar una
+REM  sesion y renovarla contra la base real nada mas cargar la pagina.
+if "!TP_NO_ABRIR_NAVEGADOR!"=="1" goto navegador_hecho
 REM  Ojo con las comillas: `cmd /c ""%~f0" args"` parece proteger la ruta pero
 REM  no lo hace. cmd empareja las comillas de izquierda a derecha, asi que las
 REM  dos primeras forman una cadena VACIA y la ruta queda FUERA de comillas;
 REM  con parentesis en la ruta, se leen como agrupacion y revienta. Aqui va un
 REM  solo par de comillas, y ademas con expansion retardada.
 start "TradePilot - abriendo navegador" /min "!TP_YO!" --esperar-y-abrir
+:navegador_hecho
 
 REM --- 13. Arrancar la web (esta ventana se queda aqui) -----------------
 echo.
 echo   ================================================
 echo      TradePilot esta arrancando
 echo.
-echo      Se abrira solo en:  http://127.0.0.1:3000
+if "!TP_NO_ABRIR_NAVEGADOR!"=="1" (
+  echo      Abrelo tu en:       http://localhost:3000
+) else (
+  echo      Se abrira solo en:  http://localhost:3000
+)
 echo      Buzon de correo:    http://127.0.0.1:54324
 echo.
 echo      NO CIERRES ESTA VENTANA mientras uses TradePilot.
@@ -327,9 +330,9 @@ REM ===================================================================
 REM  Espera a que la web responda y entonces abre el navegador. La primera
 REM  vez tarda mas porque compila.
 for /l %%i in (1,1,90) do (
-  curl -s -o nul --max-time 2 http://127.0.0.1:3000 >nul 2>&1
+  curl -s -o nul --max-time 2 http://localhost:3000 >nul 2>&1
   if not errorlevel 1 (
-    start "" http://127.0.0.1:3000
+    start "" http://localhost:3000
     exit /b 0
   )
   timeout /t 2 >nul 2>&1
@@ -346,7 +349,7 @@ echo       ventana. Si arrancase igualmente, se iria al puerto 3001 y el
 echo       enlace de acceso que llega por correo dejaria de funcionar.
 echo.
 echo       Que hacer:
-echo         1. Mira si ya tienes TradePilot abierto en http://127.0.0.1:3000
+echo         1. Mira si ya tienes TradePilot abierto en http://localhost:3000
 echo            Si es asi, usalo y cierra esta ventana.
 echo         2. Si no lo usas, ejecuta Cerrar_TradePilot.bat y vuelve a
 echo            intentarlo.
@@ -359,12 +362,10 @@ echo.
 echo       La base de datos no ha devuelto su configuracion en el formato
 echo       esperado. NO he escrito ninguna configuracion a medias.
 echo.
-if not exist "supabase-status.err" goto sin_detalle_supabase
-echo       Esto es lo que ha respondido Supabase:
+echo       Lo que responde Supabase no se ensena porque puede llevar claves.
+echo       Estado de los contenedores:
+call :resumen_contenedores
 echo.
-type "supabase-status.err"
-echo.
-:sin_detalle_supabase
 echo       NO ejecutes "supabase stop" ni "supabase start" para arreglarlo:
 echo       pueden eliminar y recrear los contenedores. Hace falta revisarlo a
 echo       mano antes de intentar recuperar nada. Copia lo que aparece arriba y
@@ -442,10 +443,10 @@ echo.
 echo       Si acabas de abrir Docker Desktop, espera un minuto a que la base
 echo       termine de arrancar y vuelve a ejecutar este archivo.
 echo.
-echo       Si sigue fallando, NO ejecutes "supabase start", "supabase stop" ni
-echo       "supabase db reset": con la base parada o ausente pueden recrear los
-echo       contenedores o crear una base NUEVA y VACIA. Hace falta revisarlo a
-echo       mano. Copia este mensaje y enviaselo a quien te ayuda.
+echo       Si sigue fallando, NO ejecutes "supabase start" ni "supabase stop",
+echo       y nunca "supabase db reset": con la base parada o ausente pueden
+echo       recrear los contenedores o crear una base NUEVA y VACIA. Hace falta
+echo       revisarlo a mano. Copia este mensaje y enviaselo a quien te ayuda.
 goto fin_error
 
 REM ===================================================================
@@ -453,12 +454,56 @@ REM ===================================================================
 echo.
 echo   [X] La comprobacion de Supabase ha terminado con error (codigo !TP_COD!).
 echo.
+echo       Lo que ha escrito Supabase no se ensena porque puede llevar claves.
+echo       Estado de los contenedores:
+call :resumen_contenedores
+echo.
 echo       No sigo: la web no se arranca. NO ejecutes "supabase stop" ni
 echo       "supabase start" para arreglarlo: pueden eliminar y recrear los
 echo       contenedores. Hace falta revisarlo a mano antes de intentar
 echo       recuperar nada. Copia lo que aparece arriba y enviaselo a quien te
 echo       ayuda.
 goto fin_error
+
+REM ===================================================================
+:fin_sin_powershell
+echo.
+echo   [X] No encuentro PowerShell, y hace falta para escribir la
+echo       configuracion y comprobar la base. No arranco la web.
+goto fin_error
+
+REM ===================================================================
+:fin_env
+echo.
+echo   [X] No he escrito la configuracion de la web (el motivo esta arriba).
+echo       No arranco la web. Tus datos y tu configuracion no se han tocado.
+goto fin_error
+
+REM ===================================================================
+:fin_funciones
+echo.
+echo   [X] La comprobacion de las funciones de TradePilot ha fallado (arriba
+echo       se dice cual y por que). No arranco la web.
+echo.
+echo       Si dice HTTP 404, la base esta en marcha pero NO esta al dia con
+echo       esta version. Tus datos estan bien: solo faltan las piezas nuevas.
+echo       Para ponerla al dia SIN borrar nada:
+echo         1. Cierra esta ventana ^(la base de datos sigue en marcha^).
+echo         2. Ejecuta Diagnosticar_TradePilot.bat ^(solo lee^).
+echo         3. Solo si dice LISTA PARA ACTUALIZAR, ejecuta
+echo            Actualizar_TradePilot.bat ^(hace una copia verificada antes^).
+echo       Guia completa: COMPROBAR-INSTALACION-WINDOWS.md
+echo.
+echo       NO uses "supabase db reset": borraria tus cuentas y operaciones.
+goto fin_error
+
+REM ===================================================================
+:resumen_contenedores
+REM  Solo el nombre y el estado de cada contenedor del proyecto: ni
+REM  `inspect`, ni variables de entorno, ni nada de lo que escribe el CLI.
+docker ps -a --filter "label=com.supabase.cli.project=!TP_PROY!" --format "        {{.Names}}  {{.Status}}" 2>nul
+if errorlevel 1 echo         ^(no se ha podido consultar Docker^)
+exit /b 0
 
 REM ===================================================================
 :fin_build_error

@@ -57,7 +57,7 @@ ahí usas TradePilot desde el Escritorio, sin buscar carpetas ni abrir terminale
 
 **Doble clic en `Abrir_TradePilot.bat`.** Él solo comprueba que tienes lo necesario,
 levanta la base de datos, escribe la configuración, arranca la web y te abre el navegador
-en <http://127.0.0.1:3000>.
+en <http://localhost:3000>.
 
 La primera vez tarda varios minutos (descarga la base de datos). Las siguientes, menos de uno.
 
@@ -119,20 +119,22 @@ npm run dev --workspace=@tradepilot/web
 
 ### Abrir
 
-Navega a **<http://127.0.0.1:3000>** en Chrome, Firefox o Safari. Cualquiera vale.
+Navega a **<http://localhost:3000>** en Chrome, Firefox o Safari. Cualquiera vale.
 
-> **Usa `127.0.0.1`, no `localhost`.** El servidor se ata solo a `127.0.0.1`
-> (por seguridad: así no llega nadie de tu red local). `localhost` puede
-> resolverse primero a `::1`, donde no escucha nadie. Con la dirección
-> explícita no hay ambigüedad.
+> **Usa siempre `localhost:3000`.** El servidor sigue atado solo a
+> `127.0.0.1` (por seguridad: así no llega nadie de tu red local), y
+> `localhost` es esta misma máquina: si el navegador prueba antes `::1`, pasa
+> a `127.0.0.1` solo. Next.js reescribe `127.0.0.1` a `localhost` al
+> redirigir, así que quien entraba por `127.0.0.1` acababa igualmente en
+> `localhost` tras la primera redirección.
 >
-> Si antes entrabas por `localhost:3000`, el navegador trata las dos como
-> sitios distintos: tendrás que **volver a iniciar sesión** una vez. No se
-> pierde ningún dato.
+> Si antes entrabas por `127.0.0.1:3000`, el navegador trata las dos como
+> sitios distintos: puede que tengas que **volver a iniciar sesión** una vez.
+> No se pierde ningún dato.
 
 > `localhost` y `127.0.0.1` son la misma máquina, pero el navegador las trata como sitios
-> distintos y la sesión se guarda en una de las dos. Los dos funcionan; **elige uno y
-> quédate con él**. El lanzador abre siempre `localhost`.
+> distintos y la sesión se guarda en una de las dos. **Quédate con `localhost`**: es el
+> que abre siempre el lanzador.
 
 ---
 
@@ -172,7 +174,7 @@ cambiar la carpeta no los borra.
 **No hay usuarios de prueba y no hay contraseñas.** Te creas la cuenta tú, con tu correo,
 la primera vez que entras. Es el mismo formulario para entrar y para darse de alta.
 
-1. En <http://127.0.0.1:3000> escribe tu correo (vale cualquiera, no sale de tu ordenador).
+1. En <http://localhost:3000> escribe tu correo (vale cualquiera, no sale de tu ordenador).
 2. Pulsa **Enviar enlace de acceso**.
 3. Abre **<http://127.0.0.1:54324>** — es el buzón de correo local que trae Supabase.
 4. Verás el mensaje «Entrar en TradePilot». Ábrelo y pulsa el enlace.
@@ -241,7 +243,7 @@ capital.
 | «Failed to fetch» o pantallas vacías | La base de datos no está arrancada | Mira el Terminal 1, o `supabase start` |
 | El enlace del correo no te deja entrar | Falta la plantilla de correo | Comprueba que existe `supabase/templates/magic-link.html` y reinicia con `supabase stop && supabase start` |
 | No llega ningún correo | El buzón local | Ábrelo en <http://127.0.0.1:54324> |
-| Entras y no ves tus datos | Has mezclado `localhost` y `127.0.0.1` | Quédate siempre con `127.0.0.1:3000` |
+| Entras y no ves tus datos | Has mezclado `localhost` y `127.0.0.1` | Quédate siempre con `localhost:3000` |
 | El lanzador dice que la base **no está al día** | Has descargado una versión nueva | Cierra y ejecuta `Actualizar_TradePilot.bat` (no borra nada) |
 | El actualizador se para con «migraciones que este código NO conoce» | Tu base tiene trabajo que esta versión no trae | No sigas: pide ayuda. Ese trabajo hay que recuperarlo |
 

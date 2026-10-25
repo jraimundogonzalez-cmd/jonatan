@@ -48,8 +48,17 @@ código fuente de la CLI (commit f01410e), no ejecutándola.
   transacción por fichero y vuelve a contar filas. Nunca `db reset`.
 - `Copia_de_seguridad_TradePilot.bat`, `Crear_accesos_directos.bat`.
 - `Abrir_TradePilot.bat` ya no propone `supabase db reset`: detecta una base
-  desactualizada (también la del importador) y remite al actualizador. Guarda
-  el `.env.local` anterior en `.env.anterior.local` antes de reescribirlo.
+  desactualizada (también la del importador) y remite al actualizador.
+  Desde el 2026-10-25 (`12_BUILD024_RESCUE_HANDOFF.md` §17) no muestra la
+  salida de `supabase start` ni de `supabase status` (llevan claves);
+  `scripts/windows/escribir-env-local.ps1` gestiona `.env.local` (no lo toca
+  si es igual, respaldo fechado `.env.respaldo-*.local` si cambia la clave
+  local, se niega si apunta a otro Supabase o es ambiguo);
+  `scripts/windows/comprobar-funciones.ps1` exige HTTP 200 con lista JSON y
+  para el lanzador ante cualquier otra cosa; el origen local es
+  `http://localhost:3000`, y `TP_NO_ABRIR_NAVEGADOR=1` evita abrir el
+  navegador. Probado en aislamiento; **el lanzador completo con estos cambios
+  no se ha ejecutado**.
 - `Cerrar_TradePilot.bat` solo para los procesos Next.js de su propia carpeta.
 - Importador endurecido: inspección del ZIP antes de descomprimir (bomba ZIP,
   cifrado, ZIP64), límite de columnas y de longitud de celda, `__proto__`
