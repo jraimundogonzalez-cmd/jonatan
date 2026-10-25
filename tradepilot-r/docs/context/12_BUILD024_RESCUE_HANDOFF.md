@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-25 20:09 (+01:00) · sesión 3 (continuación), push de la rama de trabajo hasta `b78393a` (ver §20)
+**Último registro**: 2026-10-25 · sesión 3 (continuación), preparación de la compilación en Vercel, sin desplegar (ver §21)
 
 ---
 
@@ -20,19 +20,19 @@
 | Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin hasta `b78393a`** el 2026-10-25, §20; antes, en `1252d18`, sesión 3, §12. Los commits posteriores a `b78393a` son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | De código: `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, solo el commit de este documento que registra el push (§20, **local**). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | De código: `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, dos commits **locales**: el de este documento que registra el push (`f01c2d4`, §20) y `build: preparar configuracion de Vercel` (§21). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
-  commit `docs: registrar push de la rama de trabajo` (§20).
+  commit `build: preparar configuracion de Vercel` (§21).
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en
   `b78393abebd4bf743b32270a48f4237694965b2c` (push del 2026-10-25, §20; el
   anterior, en `1252d18`, fue el de §12). Antes del commit de §20 la rama
-  estaba sincronizada (0/0). Con él va **1 por delante** y 0 por detrás;
-  ese commit **no está publicado**. Sin stash.
+  estaba sincronizada (0/0). Con los commits de §20 y §21 va **2 por
+  delante** y 0 por detrás; ninguno de los dos **está publicado**. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -56,7 +56,8 @@ Commits de la rama sobre `620cb42`:
 | `449a360` | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Publicado (§20) |
 | `8db019d` | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Publicado (§20) |
 | `b78393a` | Este documento: validación controlada con un perfil aislado (§19). **Publicado** (§20) |
-| (siguiente) | Este documento: registro del push (§20). Local |
+| `f01c2d4` | Este documento: registro del push (§20). Local |
+| (siguiente) | `apps/web/vercel.json` y `engines.node` en `apps/web/package.json`, con su documentación (§21). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -299,7 +300,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    ejecutado. **Validación controlada con un perfil aislado hecha** (§19):
    lanzador completo correcto y `/login` vista sin sesión; recuentos sin
    cambios. **Rama publicada hasta `b78393a`** (§20). Siguiente: la fase F
-   (alojamiento), **NO autorizada todavía**.
+   (alojamiento): **compilación para Vercel preparada en local** (§21); crear
+   los proyectos externos y desplegar, **NO autorizado todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -307,8 +309,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 1] respecto a origin (solo el commit de §20, sin publicar)
-git -C $r log --oneline 620cb42..HEAD    # 17 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + el de §20
+git -C $r status --short --branch        # limpio; [ahead 2] respecto a origin (los commits de §20 y §21, sin publicar)
+git -C $r log --oneline 620cb42..HEAD    # 18 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + f01c2d4 + el de §21
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # b78393abebd4bf743b32270a48f4237694965b2c (push de §20)
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
@@ -1328,6 +1330,104 @@ registro se confirma en un commit local aparte
   ese commit es local hasta que se autorice otro push.
 - Sin merge, PR ni despliegue; nada tocado en Vercel, Supabase, Docker ni la
   base de datos. La aplicación **sigue sin estar desplegada**.
+
+## 21. Sesión 3 (continuación) · 2026-10-25 · Compilación para Vercel (sin desplegar)
+
+Autorizado: preparar el repositorio en local y confirmarlo en un commit local
+(`build: preparar configuracion de Vercel`). **Sin push**, sin crear proyectos
+de Vercel ni Supabase, sin vincular el repositorio a ninguna cuenta.
+
+### 21.1 Estrategia (contrastada con la documentación oficial de Vercel, consultada el 2026-10-25)
+
+- **Root Directory**: `tradepilot-r/apps/web`. Es la carpeta con `next` en
+  su `package.json`, que es donde el preset de Next.js lo busca. Usar la raíz
+  del monorepo (`tradepilot-r`) no sirve: allí no hay `next` en el
+  `package.json`.
+- **Acceso a los paquetes**: la opción «Include source files outside of the
+  Root Directory in the Build Step» viene activada en los proyectos creados
+  después del 27/08/2020 (Monorepos FAQ). La guía oficial de Turborepo en
+  Vercel usa, con Root Directory `apps/web`, el comando
+  `cd ../.. && turbo run build --filter=web`. La frase «no puedes usar `..`»
+  de *Configuring a Build* se refiere a lo que la app puede leer en
+  ejecución, no a los comandos de la compilación (**inferido** de las dos
+  páginas; se confirma en la primera compilación real).
+- **Instalación**: `cd ../.. && npm ci`, en `tradepilot-r/`. Las órdenes se
+  ejecutan desde el Root Directory («The install path is set by the root
+  directory»). `npm ci` usa exactamente `tradepilot-r/package-lock.json` y
+  falla si no coincide con los `package.json`. El lockfile de NutriPlan, en la
+  raíz de git, no interviene.
+- **Compilación**: `cd ../.. && npm run build`, el script ya existente: los
+  seis paquetes y después `next build` en `apps/web`. La salida queda en
+  `apps/web/.next`, la que espera el preset de Next.js (sin
+  `outputDirectory`). `outputFileTracingRoot` (§18) ya apunta a
+  `tradepilot-r/`.
+- **Node**: `engines.node: "24.x"` en `apps/web/package.json`, el
+  `package.json` del Root Directory (la página de versiones de Node dice que
+  prevalece sobre el ajuste del proyecto). 24.x es la versión por defecto de
+  Vercel y la local (24.21.0).
+- **Región**: `regions: ["fra1"]` (Fráncfort; Hobby admite una sola región).
+  Encaja con un Supabase en `eu-central-1`, pendiente de decidir.
+- `vercel.json` está en `apps/web/`, el directorio raíz del proyecto, que es
+  donde lo busca Vercel. Incluye además `framework: "nextjs"` y `$schema`.
+
+### 21.2 Cambios
+
+- `apps/web/vercel.json` (nuevo).
+- `apps/web/package.json`: solo `engines`. Dependencias, versiones y scripts
+  sin tocar (`dev` y `start` siguen atados a `127.0.0.1`).
+- `10_CURRENT_STATUS.md`: una fila de alojamiento en «Pendiente», y se
+  corrige una frase que decía que el lanzador completo no se había ejecutado
+  (se ejecutó en §19).
+
+### 21.3 Pruebas
+
+- Sintaxis JSON de los dos ficheros: correcta.
+- **Simulación de Vercel en una copia limpia** (`git archive HEAD` en el
+  directorio temporal de la sesión más los dos ficheros nuevos; sin
+  `node_modules`, sin `dist/` y sin `.env.local`). Desde `apps/web`, con las
+  órdenes leídas del propio `vercel.json`:
+  - `cd ../.. && npm ci`: exit 0, 504 paquetes en `tradepilot-r/node_modules`.
+    El lockfile se acepta con `engines` añadido, sin aviso `EBADENGINE`. Sigue
+    el aviso conocido del `postinstall` de `esbuild` sin aprobar (§5).
+  - `cd ../.. && npm run build`, con `NEXT_PUBLIC_SUPABASE_*` **ficticias**:
+    exit 0. Seis `dist/`, `apps/web/.next`, 20 rutas (19 más `/_not-found`)
+    y el middleware. Sin el aviso de los lockfiles.
+- `npm run build` en el monorepo real, con las mismas variables ficticias
+  (que prevalecen sobre `.env.local`; Next.js detecta que el fichero existe,
+  pero no se abrió ni se mostró): exit 0.
+- Los dos lockfiles conservan sus SHA-256 (`d87c1dac…5a2b` y
+  `8e3a31f2…5522`), en el repositorio y en la copia.
+- No se arrancó Docker, Supabase ni PostgreSQL, no se ejecutó el lanzador ni
+  se hizo ninguna petición a la aplicación.
+
+### 21.4 Límites (sin verificar)
+
+- Una compilación local **no demuestra** que Vercel la reproduzca. Se
+  comprobará en la primera compilación real: que el preset reconoce Next.js,
+  que `cd ../..` funciona y que la región sale en el resumen del despliegue.
+- Con `engines` en 24.x, npm puede **avisar** (no falla) a quien use Node 20
+  o 22 en local. `COMO-EMPEZAR.md` sigue pidiendo «Node.js 20 o superior».
+- Un `npm install` futuro puede escribir `engines` en
+  `tradepilot-r/package-lock.json`. Hoy no se ha tocado.
+- La función de Vercel de saltar despliegues sin cambios mira el lockfile y
+  los workspaces de la **raíz de git** (NutriPlan, sin workspaces). Lo más
+  probable es que trate cada cambio como global y compile de más. Se decide
+  al crear el proyecto.
+
+### 21.5 Pendiente en Vercel y Supabase (cada paso con autorización)
+
+1. Decidir planes, región de Supabase (`eu-central-1` para emparejar con
+   `fra1`), SMTP y dominio.
+2. Crear el proyecto de Vercel con Root Directory `tradepilot-r/apps/web`.
+   Comprobar que «Include source files outside of the Root Directory» está
+   activado y que la rama de producción es la correcta.
+3. Variables solo por nombre: `NEXT_PUBLIC_SUPABASE_URL` y
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` (con la clave publicable del proyecto
+   nuevo; la compatibilidad está **pendiente de probar**).
+4. Supabase: proyecto vacío en la UE, esquema (19 migraciones y los 4 SQL de
+   funciones), Auth (Site URL, redirecciones, plantilla, SMTP) y copias.
+5. Primera compilación y despliegue, acceso y, después, desactivar el
+   registro público. Las Cuentas NYS se trasladan en una fase aparte.
 
 ---
 

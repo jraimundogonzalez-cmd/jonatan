@@ -57,8 +57,8 @@ código fuente de la CLI (commit f01410e), no ejecutándola.
   `scripts/windows/comprobar-funciones.ps1` exige HTTP 200 con lista JSON y
   para el lanzador ante cualquier otra cosa; el origen local es
   `http://localhost:3000`, y `TP_NO_ABRIR_NAVEGADOR=1` evita abrir el
-  navegador. Probado en aislamiento; **el lanzador completo con estos cambios
-  no se ha ejecutado**.
+  navegador. Probado en aislamiento y después con una ejecución completa del
+  lanzador y un perfil de navegador limpio (registro §19).
 - `Cerrar_TradePilot.bat` solo para los procesos Next.js de su propia carpeta.
 - Importador endurecido: inspección del ZIP antes de descomprimir (bomba ZIP,
   cifrado, ZIP64), límite de columnas y de longitud de celda, `__proto__`
@@ -186,6 +186,7 @@ Contratos frontend↔RPC:                              16/16 existen
 | Desenlaces `rejected` / `discarded` | Legales; sin RPC que los produzca |
 | Registro de actividad (logging) | 2 `console.*` en toda la app; sin librería |
 | `positions`, `orders`, «multiplicadores» | **No existen como conceptos** |
+| Alojamiento externo (HTTPS) | Compilación para Vercel preparada en el repositorio (`apps/web/vercel.json`, región `fra1`, Node 24.x; registro §21). **Sin desplegar**: faltan los proyectos de Vercel y Supabase, Auth, SMTP y el esquema remoto |
 
 ## 5. BLOQUEADO ⚠️
 
