@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-25 17:53 (+01:00) · sesión 3 (continuación), validación controlada con un perfil aislado (ver §19)
+**Último registro**: 2026-10-25 20:09 (+01:00) · sesión 3 (continuación), push de la rama de trabajo hasta `b78393a` (ver §20)
 
 ---
 
@@ -17,22 +17,22 @@
 |---|---|
 | Repositorio | `%USERPROFILE%\Proyectos\tradepilot-r` (clon de `github.com/jraimundogonzalez-cmd/jonatan`) |
 | Aplicación | `%USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r` |
-| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
+| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin hasta `b78393a`** el 2026-10-25, §20; antes, en `1252d18`, sesión 3, §12. Los commits posteriores a `b78393a` son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `fix: fijar raiz de trazado de Next.js` (§18, **local**; su hash: `git log -1 --format=%h -- tradepilot-r/apps/web/next.config.mjs`). Antes, `449a360` (protección del lanzador, §17, local), `ae06815` (corrección de `Abrir_TradePilot.bat`, §15, local) y `baba52e` (primera ejecución, §16). Anteriores: `5234494` y los commits de **este documento** `1252d18` (sesión 2, publicado), `bbb65d0` (plan de despliegue, local), `556bf1b` (Fase B, local) y `35bbbe6` (auditoría de la Fase C, local); después, `ef94ce8` (registro del lanzador, local) y el de la primera ejecución (§16, local). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | De código: `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, solo el commit de este documento que registra el push (§20, **local**). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
-  commit `docs: registrar validacion con perfil aislado` (§19).
-- Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras los nueve commits locales de la sesión 3
-  (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815`, `ef94ce8`, `baba52e`,
-  `449a360`, `8db019d` y el de §19), la rama va **9 por delante** y 0 por
-  detrás del remoto; no están publicados. Sin stash.
+  commit `docs: registrar push de la rama de trabajo` (§20).
+- Upstream `origin/claude/tradepilot-r-build024-rescate` en
+  `b78393abebd4bf743b32270a48f4237694965b2c` (push del 2026-10-25, §20; el
+  anterior, en `1252d18`, fue el de §12). Antes del commit de §20 la rama
+  estaba sincronizada (0/0). Con él va **1 por delante** y 0 por detrás;
+  ese commit **no está publicado**. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -47,15 +47,16 @@ Commits de la rama sobre `620cb42`:
 | `2c35a8e` | Documentación: `COMO-EMPEZAR.md`, `10_CURRENT_STATUS.md`, `03_DATABASE.md` |
 | `5234494` | Script `build:packages` |
 | `1252d18` | Este documento, anonimizado (sustituye a `fda1199`, `2d3e74e`, `4e3e5d0` y `c9ed89b`, que siguen en la rama de respaldo). **Publicado** |
-| `bbb65d0` | Este documento: push, compilación limpia y plan de alojamiento (§12). Local |
-| `556bf1b` | Este documento: Fase B completada (§13). Local |
-| `35bbbe6` | Este documento: auditoría local de la Fase C (§14). Local |
-| `ae06815` | `Abrir_TradePilot.bat`: comprobación de la base original, `build:packages` y código de salida de `supabase start` (§15). Local |
-| `ef94ce8` | Este documento: registro de la corrección del lanzador (§15). Local |
-| `baba52e` | Este documento: primera ejecución controlada del lanzador (§16). Local |
-| `449a360` | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Local |
-| `8db019d` | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Local |
-| (siguiente) | Este documento: validación controlada con un perfil aislado (§19). Local |
+| `bbb65d0` | Este documento: push, compilación limpia y plan de alojamiento (§12). Publicado (§20) |
+| `556bf1b` | Este documento: Fase B completada (§13). Publicado (§20) |
+| `35bbbe6` | Este documento: auditoría local de la Fase C (§14). Publicado (§20) |
+| `ae06815` | `Abrir_TradePilot.bat`: comprobación de la base original, `build:packages` y código de salida de `supabase start` (§15). Publicado (§20) |
+| `ef94ce8` | Este documento: registro de la corrección del lanzador (§15). Publicado (§20) |
+| `baba52e` | Este documento: primera ejecución controlada del lanzador (§16). Publicado (§20) |
+| `449a360` | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Publicado (§20) |
+| `8db019d` | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Publicado (§20) |
+| `b78393a` | Este documento: validación controlada con un perfil aislado (§19). **Publicado** (§20) |
+| (siguiente) | Este documento: registro del push (§20). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -297,7 +298,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    aislamiento (§17); el lanzador completo con esos cambios no se ha
    ejecutado. **Validación controlada con un perfil aislado hecha** (§19):
    lanzador completo correcto y `/login` vista sin sesión; recuentos sin
-   cambios. Siguiente: la fase F (alojamiento), **NO autorizada todavía**.
+   cambios. **Rama publicada hasta `b78393a`** (§20). Siguiente: la fase F
+   (alojamiento), **NO autorizada todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -305,10 +307,10 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 9] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + commit de §19)
-git -C $r log --oneline 620cb42..HEAD    # 16 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + el de §19
+git -C $r status --short --branch        # limpio; [ahead 1] respecto a origin (solo el commit de §20, sin publicar)
+git -C $r log --oneline 620cb42..HEAD    # 17 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + el de §20
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
-git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
+git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # b78393abebd4bf743b32270a48f4237694965b2c (push de §20)
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
 # Base real, SOLO LECTURA (solo si el usuario autoriza conectarse):
 docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_tradepilot-r psql -U postgres -d postgres -X -At -c "select count(*) from supabase_migrations.schema_migrations"   # 19 (desde la Fase B, §13)
@@ -1282,6 +1284,51 @@ puertos 54321-54324, `edge_runtime`, los montajes desde Descargas y
 `fronteras.test.ts`. La aplicación **no está desplegada**: esta prueba local
 no equivale a tener la URL HTTPS.
 
+*Publicado después, con un push autorizado: ver §20.*
+
+## 20. Sesión 3 (continuación) · 2026-10-25 · Push de la rama de trabajo
+
+Registro hecho el 2026-10-25 a las 20:09 (+01:00). Autorizado por el
+usuario: `git push origin claude/tradepilot-r-build024-rescate`, sin
+`--force` ni `--force-with-lease`, sin otras ramas ni etiquetas. Este
+registro se confirma en un commit local aparte
+(`docs: registrar push de la rama de trabajo`), **sin publicar**.
+
+### 20.1 Comprobaciones previas
+
+- Rama `claude/tradepilot-r-build024-rescate`, HEAD
+  `b78393abebd4bf743b32270a48f4237694965b2c`
+  (`docs: registrar validacion con perfil aislado`), árbol limpio.
+- `origin` apunta a `github.com/jraimundogonzalez-cmd/jonatan`; la rama
+  remota seguía en `1252d18`, así que el push era un avance directo de
+  nueve commits (`bbb65d0` … `b78393a`), todos del mismo autor por commit
+  (`Claude <noreply@anthropic.com>`).
+- Revisión de todas las líneas añadidas y de los mensajes de esos commits:
+  ningún JWT, clave `sb_*`, URL de PostgreSQL con credenciales, ruta
+  personal, nombre de usuario, número de cuenta, identificador largo ni IP
+  privada; ningún `.env`, `.dump`, copia SQL, registro ni diagnóstico. El
+  único correo es `noreply@anthropic.com`.
+
+### 20.2 Push
+
+- Hecho correctamente el 2026-10-25, hacia las 18:06 (+01:00): código de
+  salida 0, `1252d18..b78393a  claude/tradepilot-r-build024-rescate ->
+  claude/tradepilot-r-build024-rescate`. Avance directo, sin forzar.
+- Solo se publicó la rama autorizada. Las ramas `rescate/*` **no** están en
+  `origin` (comprobado con `git ls-remote`).
+
+### 20.3 Después del push
+
+- HEAD local, `origin/claude/tradepilot-r-build024-rescate` y
+  `git ls-remote`: los tres en `b78393abebd4bf743b32270a48f4237694965b2c`.
+- Árbol limpio y rama sincronizada con el remoto: 0 por delante, 0 por
+  detrás. Se volvió a comprobar (con `git fetch` de esa rama) antes de
+  editar este documento.
+- Con el commit de este registro, la rama va 1 por delante y 0 por detrás;
+  ese commit es local hasta que se autorice otro push.
+- Sin merge, PR ni despliegue; nada tocado en Vercel, Supabase, Docker ni la
+  base de datos. La aplicación **sigue sin estar desplegada**.
+
 ---
 
 ## PROMPT PARA REANUDAR MAÑANA
@@ -1292,7 +1339,7 @@ nueva de Claude Code. No tienes acceso a la conversación anterior.
 
 Repositorio: %USERPROFILE%\Proyectos\tradepilot-r
 Aplicación:  %USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r
-Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 1252d18;
+Rama:        claude/tradepilot-r-build024-rescate (en origin hasta b78393a;
              commits posteriores solo locales)
 
 1. Lee primero tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md
