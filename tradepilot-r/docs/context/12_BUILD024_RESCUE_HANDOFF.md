@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-24 19:54 (+02:00) · sesión 3, auditoría local de la Fase C (ver §14)
+**Último registro**: 2026-10-25 09:38 (+01:00) · sesión 3 (continuación), registro del commit del lanzador (ver §15)
 
 ---
 
@@ -20,17 +20,19 @@
 | Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `5234494`. Después solo hay commits de **este documento**: `1252d18` (sesión 2, publicado), `bbb65d0` (sesión 3, plan de despliegue, local), `556bf1b` (sesión 3, Fase B, local) y el de la auditoría de la Fase C (sesión 3, local). El último: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | `ae06815` (corrección de `Abrir_TradePilot.bat`, sesión 3, **local**; §15). Antes: `5234494` y los commits de **este documento** `1252d18` (sesión 2, publicado), `bbb65d0` (plan de despliegue, local), `556bf1b` (Fase B, local) y `35bbbe6` (auditoría de la Fase C, local). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
-- Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el commit de este documento.
+- Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
+  commit de este documento (`docs: registrar corrección del lanzador`, §15).
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras los tres commits locales de la sesión 3 (`bbb65d0`,
-  `556bf1b` y el de la auditoría de la Fase C), la rama va **3 por delante**
-  del remoto; no están publicados. Sin stash.
+  la sesión 3, §12). Tras los cinco commits locales de la sesión 3
+  (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815` y el de este registro), la rama
+  va **5 por delante** y 0 por detrás del remoto; no están publicados. Sin
+  stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -47,7 +49,9 @@ Commits de la rama sobre `620cb42`:
 | `1252d18` | Este documento, anonimizado (sustituye a `fda1199`, `2d3e74e`, `4e3e5d0` y `c9ed89b`, que siguen en la rama de respaldo). **Publicado** |
 | `bbb65d0` | Este documento: push, compilación limpia y plan de alojamiento (§12). Local |
 | `556bf1b` | Este documento: Fase B completada (§13). Local |
-| (siguiente) | Este documento: auditoría local de la Fase C (§14). Local |
+| `35bbbe6` | Este documento: auditoría local de la Fase C (§14). Local |
+| `ae06815` | `Abrir_TradePilot.bat`: comprobación de la base original, `build:packages` y código de salida de `supabase start` (§15). Local |
+| (siguiente) | Este documento: registro de la corrección del lanzador (§15). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -169,6 +173,9 @@ distinto del de la base real (comprobado; valores no publicados). El volumen ori
    aplicar: es un cambio del lanzador, no validable sin abrirlo.
    **Confirmado** leyendo el lanzador (línea 282), en §14.1. Hoy los seis
    `dist` existen y ningún `src` es más reciente.
+   **Corregido en el código** en `ae06815` (§15): el lanzador ejecuta
+   `npm run build:packages` antes de la web y se detiene si falla. **Sin
+   validar** con el lanzador completo.
 2. `fronteras.test.ts` falla en Windows (separador de rutas). Fuera de alcance; arreglarlo requiere autorización.
 3. Dos suites con número 16. Se dejó así a propósito; renumerar es opcional.
 4. ~~Push de la rama de rescate a GitHub.~~ **Resuelto** en la sesión 3
@@ -197,7 +204,9 @@ distinto del de la base real (comprobado; valores no publicados). El volumen ori
    autorización independiente.
 10. **`Abrir_TradePilot.bat` ejecuta `supabase start` sin comprobar nada
     antes y sin mirar su resultado** (§14.1, §14.4). Las correcciones
-    recomendadas están en §14.6.
+    recomendadas están en §14.6. **Corregido en el código** en `ae06815`
+    (§15): comprueba la base original antes y después y trata el código de
+    salida. **Sin validar** con el lanzador completo.
 
 ## 7. Hecho y expresamente no hecho
 
@@ -219,6 +228,10 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 > diagnóstico (§13). Sigue **sin hacerse**: merge, pull request, abrir la web,
 > abrir `.env.local`, `supabase start`, `db reset`, restaurar sobre la
 > original, y crear recursos externos o desplegar.
+>
+> Después (§15) se modificó y confirmó en local `Abrir_TradePilot.bat`
+> (`ae06815`), pero **no se ha ejecutado** el lanzador completo ni se ha
+> publicado el commit.
 
 ## 8. Riesgos para la siguiente sesión
 
@@ -236,7 +249,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
   la red local (§14.5).
 - No ejecutar `supabase start` ni el lanzador si `supabase_db_tradepilot-r`
   está parado: el CLI 2.121.0 eliminaría y recrearía los 9 contenedores
-  (§14.4).
+  (§14.4). Desde `ae06815` el lanzador debería detenerse en ese caso
+  (`:verificar_base`, §15), pero **no se ha comprobado ejecutándolo**.
 - Docker Desktop vuelve a levantar los contenedores de Supabase solo, sobre el
   volumen real. Cualquier herramienta que se conecte a `127.0.0.1:54322` habla
   con la base real: **las pruebas SQL nunca van ahí**.
@@ -257,8 +271,9 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    (§6.7).
 5. **En curso.** Fase C: resolver §6.1, §6.5 y §6.6; después abrir la web y
    hacer el recorrido de BUILD 024 en el navegador. Objetivos y decisiones en
-   §13.6. **Auditoría de solo lectura hecha** (§14). Siguiente: corregir el
-   lanzador según §14.6, **NO autorizado todavía**.
+   §13.6. **Auditoría de solo lectura hecha** (§14). **Lanzador corregido**
+   en `ae06815` (§14.6.1-3; ver §15), sin ejecutar. Siguiente: ejecutar el
+   lanzador de forma controlada (§15.4), **NO autorizado todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -266,8 +281,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 3] respecto a origin (bbb65d0 + 556bf1b + commit de la auditoría de la Fase C)
-git -C $r log --oneline 620cb42..HEAD    # 10 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + el de la auditoría
+git -C $r status --short --branch        # limpio; [ahead 5] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + commit del registro del lanzador)
+git -C $r log --oneline 620cb42..HEAD    # 12 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + el del registro del lanzador
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
@@ -764,6 +779,84 @@ lanzador sin precomprobaciones**.
    operación independiente y expresamente autorizada.
 8. Siguen pendientes §6.2 (`fronteras.test.ts`), §6.7 y el resto de la Fase C
    (§13.6: el recorrido en el navegador y su decisión previa).
+
+> Avance (§15): los puntos 1, 2 y 3 están **implementados en `ae06815`**,
+> sin ejecutar el lanzador completo. Los puntos 4 a 8 siguen pendientes.
+
+## 15. Sesión 3 (continuación) · 2026-10-25 · Corrección del lanzador
+
+Registro hecho el 2026-10-25 a las 09:38 (+01:00). No se ha repetido ninguna
+prueba en este registro; solo se ha comprobado el estado de git.
+
+### 15.1 Commit
+
+| | |
+|---|---|
+| Hash | `ae0681585ae425d6f67f86949701a52d49014b43` |
+| Mensaje | `fix: proteger arranque local de TradePilot` |
+| Autor local | `Claude <noreply@anthropic.com>` |
+| Padre | `35bbbe6` (auditoría de la Fase C, §14) |
+| Alcance | **Solo** `tradepilot-r/Abrir_TradePilot.bat` (137 líneas añadidas, 18 eliminadas) |
+| Publicación | **Local**. No está en el remoto; no se ha hecho push, merge ni pull request |
+
+Tras el commit, el árbol quedó limpio. No es un despliegue: TradePilot R
+**sigue sin estar alojado** en ninguna URL externa (Fase D, §12).
+
+### 15.2 Cambios del lanzador
+
+- Define la identidad esperada de la base original: contenedor y volumen
+  `supabase_db_tradepilot-r` y proyecto `tradepilot-r` (`TP_DB`, `TP_VOL`,
+  `TP_PROY`).
+- Nueva subrutina `:verificar_base`, solo de lectura (`docker info`,
+  `docker inspect`, `docker volume inspect`). Comprueba que Docker responde,
+  que el contenedor existe, está en marcha y `healthy`, que lleva la etiqueta
+  de proyecto esperada y que el volumen esperado está montado en
+  `/var/lib/postgresql/data`.
+- Si cualquier comprobación falla, el lanzador **se detiene** con el motivo.
+  No intenta recuperar, arrancar ni reiniciar servicios.
+- Ejecuta `npm run build:packages` antes de iniciar la web y se detiene si la
+  compilación falla (§6.1).
+- Comprueba el código de salida de `supabase start` (se detiene si no es 0)
+  y vuelve a ejecutar `:verificar_base` antes de continuar (§6.10).
+- Retira la recomendación de ejecutar a mano `supabase stop` y
+  `supabase start` cuando falla la lectura de `supabase status`. Ahora avisa
+  de que **no** se ejecuten y pide revisarlo a mano.
+
+### 15.3 Validaciones realizadas (antes del commit)
+
+- `:verificar_base` se probó **por separado**, con operaciones de solo
+  lectura. Identificó correctamente la base original, rechazó estados e
+  identidades incorrectos y verificó el volumen.
+- `npm run build:packages`: exit 0; compiló los seis paquetes internos. Los
+  ficheros versionados no cambiaron por la compilación.
+- Revisión estática de etiquetas, rutas de error y propagación del código de
+  salida.
+- **El lanzador completo NO se ha ejecutado.** El arranque completo de la
+  aplicación **no está validado**.
+
+### 15.4 Riesgos y pendientes (ninguno autorizado todavía)
+
+1. Ejecutar el lanzador de forma controlada y comprobar el resultado real.
+2. Recorrido funcional en el navegador, **después** de decidir qué acciones
+   pueden escribir de forma permanente en la base original (§13.6.6).
+3. Proteger mejor `.env.local`: sigue pudiendo sobrescribirse con una única
+   copia previa (§6.5, §14.6.4).
+4. Investigar la salida 255 de `edge_runtime`; la causa sigue sin demostrarse
+   (§14.3).
+5. Resolver la dependencia de los contenedores actuales respecto a los
+   ficheros montados desde la carpeta antigua de Descargas (§6.6, §14.6.6).
+6. Revisar la exposición de los puertos 54321-54324 y la regla del
+   cortafuegos; requiere una autorización independiente (§14.5).
+7. Siguen abiertos §6.2 (`fronteras.test.ts` en Windows), §6.3, §6.7 y §6.8.
+
+### 15.5 Estado de git al registrar
+
+- Antes de este registro: rama `claude/tradepilot-r-build024-rescate`, HEAD
+  `ae06815`, **4 por delante** y 0 por detrás de `origin` (en `1252d18`).
+  Sin stash.
+- Esta actualización del documento se confirmó después en un commit local
+  aparte (`docs: registrar corrección del lanzador`), autorizado por el
+  usuario. Con él, la rama va 5 por delante. Sin push.
 
 ---
 
