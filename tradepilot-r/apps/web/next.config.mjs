@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -9,6 +11,11 @@ const nextConfig = {
   // exceljs es una librería de Node: se carga tal cual en el servidor en vez de
   // empaquetarse. En Next 15 esta opción sale de `experimental`.
   serverExternalPackages: ["exceljs"],
+  // Raíz del monorepo de TradePilot R (la carpeta con apps/ y packages/), no
+  // la raíz de git: allí hay otra aplicación con su propio package-lock.json, y
+  // Next.js, sin esta opción, toma el lockfile más alto como raíz y avisa.
+  // Se calcula desde este fichero, no desde el directorio de trabajo.
+  outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
 };
 
 export default nextConfig;

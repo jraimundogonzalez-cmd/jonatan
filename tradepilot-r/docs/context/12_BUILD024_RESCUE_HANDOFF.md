@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-25 16:19 (+01:00) · sesión 3 (continuación), protección del lanzador, fases A1 + B (ver §17)
+**Último registro**: 2026-10-25 17:34 (+01:00) · sesión 3 (continuación), raíz de trazado de Next.js (ver §18)
 
 ---
 
@@ -20,19 +20,19 @@
 | Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin en `1252d18`** en la sesión 3, §12; los commits posteriores son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | `fix: proteger lanzamiento local y configuración` (§17, **local**; su hash: `git log -1 --format=%h -- tradepilot-r/Abrir_TradePilot.bat`). Antes, `ae06815` (corrección de `Abrir_TradePilot.bat`, §15, local) y `baba52e` (primera ejecución, §16). Anteriores: `5234494` y los commits de **este documento** `1252d18` (sesión 2, publicado), `bbb65d0` (plan de despliegue, local), `556bf1b` (Fase B, local) y `35bbbe6` (auditoría de la Fase C, local); después, `ef94ce8` (registro del lanzador, local) y el de la primera ejecución (§16, local). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | `fix: fijar raiz de trazado de Next.js` (§18, **local**; su hash: `git log -1 --format=%h -- tradepilot-r/apps/web/next.config.mjs`). Antes, `449a360` (protección del lanzador, §17, local), `ae06815` (corrección de `Abrir_TradePilot.bat`, §15, local) y `baba52e` (primera ejecución, §16). Anteriores: `5234494` y los commits de **este documento** `1252d18` (sesión 2, publicado), `bbb65d0` (plan de despliegue, local), `556bf1b` (Fase B, local) y `35bbbe6` (auditoría de la Fase C, local); después, `ef94ce8` (registro del lanzador, local) y el de la primera ejecución (§16, local). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
-  commit `fix: proteger lanzamiento local y configuración` (§17).
+  commit `fix: fijar raiz de trazado de Next.js` (§18).
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras los siete commits locales de la sesión 3
-  (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815`, `ef94ce8`, `baba52e` y el de
-  §17), la rama va **7 por delante** y 0 por detrás del remoto; no están
-  publicados. Sin stash.
+  la sesión 3, §12). Tras los ocho commits locales de la sesión 3
+  (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815`, `ef94ce8`, `baba52e`,
+  `449a360` y el de §18), la rama va **8 por delante** y 0 por detrás del
+  remoto; no están publicados. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -53,7 +53,8 @@ Commits de la rama sobre `620cb42`:
 | `ae06815` | `Abrir_TradePilot.bat`: comprobación de la base original, `build:packages` y código de salida de `supabase start` (§15). Local |
 | `ef94ce8` | Este documento: registro de la corrección del lanzador (§15). Local |
 | `baba52e` | Este documento: primera ejecución controlada del lanzador (§16). Local |
-| (siguiente) | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Local |
+| `449a360` | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Local |
+| (siguiente) | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -302,8 +303,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 7] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + commit de §17)
-git -C $r log --oneline 620cb42..HEAD    # 14 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + el de §17
+git -C $r status --short --branch        # limpio; [ahead 8] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + commit de §18)
+git -C $r log --oneline 620cb42..HEAD    # 15 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + el de §18
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
@@ -1123,6 +1124,62 @@ los recuentos antes y después.
    decisión previa (§13.6.6) y la tabla de problemas de `COMO-EMPEZAR.md`,
    que aún recomienda `supabase stop && supabase start` para la plantilla de
    correo (fuera del alcance de este cambio).
+
+> Avance (§18): el punto 3 (aviso de los dos lockfiles) está **resuelto**.
+
+## 18. Sesión 3 (continuación) · 2026-10-25 · Raíz de trazado de Next.js
+
+Registro hecho el 2026-10-25 a las 17:34 (+01:00). Sin lanzador, sin
+Supabase, sin Docker, sin PostgreSQL y sin peticiones HTTP a la aplicación.
+
+### 18.1 Causa
+
+La raíz de git (`%USERPROFILE%\Proyectos\tradepilot-r`) contiene **otra
+aplicación** (NutriPlan: Vite y React, con despliegue en GitHub Pages) con su
+`package.json` y su `package-lock.json`, ambos versionados y en uso. El
+monorepo de TradePilot R está en la subcarpeta `tradepilot-r\`, con su propio
+`package-lock.json` y los workspaces `apps/*` y `packages/*`. Sin indicarle la
+raíz, Next.js toma el lockfile más alto y avisa («inferred your workspace
+root»). **Ninguno de los dos lockfiles sobra.**
+
+### 18.2 Cambio
+
+Solo `apps/web/next.config.mjs`: se importa `fileURLToPath` de `node:url` y se
+añade `outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url))`.
+Las demás opciones (`serverActions.bodySizeLimit`, `serverExternalPackages`)
+no cambian.
+
+- **Ruta efectiva** (comprobada con Node desde un directorio de trabajo
+  ajeno al proyecto): `%USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r\`.
+  Tiene `package.json`, `apps` y `packages`; no es la raíz de git ni
+  `apps/web`, y no está en Descargas.
+
+### 18.3 Pruebas
+
+- `npm run build` desde la raíz del monorepo: compila los seis paquetes con
+  `tsc` y después `next build` (el script no toca Docker, Supabase ni SQL).
+  **Exit 0** en 166 s; 12 páginas estáticas generadas y middleware. **Sin el
+  aviso** de raíz ni de lockfiles. Las dos variables `NEXT_PUBLIC_SUPABASE_*`
+  llevaban valores **ficticios** en el proceso (Next.js les da prioridad
+  sobre `.env.local`), así que la compilación no usó la clave real ni pudo
+  contactar con Supabase.
+- `next dev -H 127.0.0.1 -p 3187`, con los mismos valores ficticios y un
+  límite de 90 s: `Ready in 6.4s`, escuchando **solo** en `127.0.0.1:3187`,
+  **sin el aviso**. No se hizo ninguna petición HTTP. Se detuvo solo su árbol
+  de procesos (por PID); el puerto quedó libre.
+- **Lockfiles intactos**: el SHA-256 de los dos es el mismo antes y después,
+  y git no los marca como modificados.
+- No se repitieron las pruebas del lanzador, las de `.env.local` ni las HTTP
+  ficticias: este cambio no las afecta.
+
+### 18.4 Pendiente y siguiente paso
+
+- Siguen los riesgos 1, 2, 4, 5 y 6 de §17.6. El lanzador completo **no se ha
+  vuelto a ejecutar**, y la aplicación **no está desplegada**.
+- En Vercel, `outputFileTracingRoot` coincide con la raíz del workspace
+  prevista (§12, fase F). Se comprobará al configurar el proyecto.
+- **Siguiente paso recomendado** (NO autorizado): la validación controlada
+  con un perfil de navegador limpio (§17.5).
 
 ---
 
