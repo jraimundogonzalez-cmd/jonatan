@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-25 17:34 (+01:00) · sesión 3 (continuación), raíz de trazado de Next.js (ver §18)
+**Último registro**: 2026-10-25 17:53 (+01:00) · sesión 3 (continuación), validación controlada con un perfil aislado (ver §19)
 
 ---
 
@@ -27,12 +27,12 @@
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
-  commit `fix: fijar raiz de trazado de Next.js` (§18).
+  commit `docs: registrar validacion con perfil aislado` (§19).
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en `1252d18` (push de
-  la sesión 3, §12). Tras los ocho commits locales de la sesión 3
+  la sesión 3, §12). Tras los nueve commits locales de la sesión 3
   (`bbb65d0`, `556bf1b`, `35bbbe6`, `ae06815`, `ef94ce8`, `baba52e`,
-  `449a360` y el de §18), la rama va **8 por delante** y 0 por detrás del
-  remoto; no están publicados. Sin stash.
+  `449a360`, `8db019d` y el de §19), la rama va **9 por delante** y 0 por
+  detrás del remoto; no están publicados. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -54,7 +54,8 @@ Commits de la rama sobre `620cb42`:
 | `ef94ce8` | Este documento: registro de la corrección del lanzador (§15). Local |
 | `baba52e` | Este documento: primera ejecución controlada del lanzador (§16). Local |
 | `449a360` | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Local |
-| (siguiente) | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Local |
+| `8db019d` | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Local |
+| (siguiente) | Este documento: validación controlada con un perfil aislado (§19). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -294,8 +295,9 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    (§16): arranque técnico correcto; validación visual con sesión limpia
    pendiente. **Riesgos 1-4 de §16.6 corregidos en el código** y probados en
    aislamiento (§17); el lanzador completo con esos cambios no se ha
-   ejecutado. Siguiente: la validación controlada con un perfil de navegador
-   limpio (§17.5), **NO autorizada todavía**.
+   ejecutado. **Validación controlada con un perfil aislado hecha** (§19):
+   lanzador completo correcto y `/login` vista sin sesión; recuentos sin
+   cambios. Siguiente: la fase F (alojamiento), **NO autorizada todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
 
 ## 10. Comprobaciones mínimas para reanudar
@@ -303,8 +305,8 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 8] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + commit de §18)
-git -C $r log --oneline 620cb42..HEAD    # 15 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + el de §18
+git -C $r status --short --branch        # limpio; [ahead 9] respecto a origin (bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + commit de §19)
+git -C $r log --oneline 620cb42..HEAD    # 16 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + el de §19
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
 git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 1252d184bfb527616f13b6c699973185aad7c858
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
@@ -1179,7 +1181,106 @@ no cambian.
 - En Vercel, `outputFileTracingRoot` coincide con la raíz del workspace
   prevista (§12, fase F). Se comprobará al configurar el proyecto.
 - **Siguiente paso recomendado** (NO autorizado): la validación controlada
-  con un perfil de navegador limpio (§17.5).
+  con un perfil de navegador limpio (§17.5). *Hecha después: ver §19.*
+
+## 19. Sesión 3 (continuación) · 2026-10-25 · Validación controlada con un perfil aislado
+
+Registro hecho el 2026-10-25 a las 17:53 (+01:00). Autorizado: una ejecución
+del lanzador y una comprobación visual con un perfil de Chrome nuevo. Este
+registro se confirmó después en un commit local aparte
+(`docs: registrar validacion con perfil aislado`), autorizado por el usuario.
+Sin push.
+
+### 19.1 Precondiciones (todas correctas)
+
+- Rama `claude/tradepilot-r-build024-rescate`, HEAD `8db019d`, árbol limpio.
+- `supabase_db_tradepilot-r`: `running`, `healthy`, 0 reinicios, con el
+  volumen original (`local`, del proyecto `tradepilot-r`), que solo usa ese
+  contenedor.
+- `respaldos\tradepilot-20261024-165054.dump`: 585 085 bytes y SHA-256
+  `3D9F0D10…5335B`, los mismos que en §13.3.
+- Puerto 3000 libre. En primer plano, el Chrome habitual no tenía la
+  aplicación abierta; sus pestañas de fondo no se pueden ver (por eso se
+  vigiló el registro del servidor).
+- **Antes** (`diagnostico.ps1`, solo lectura, 17:49): 19 migraciones, 0
+  pendientes, 435/435 objetos, 0 avisos, 0 bloqueos; `accounts` 2,
+  `account_capital_events` 2, `account_risk_state` 2, `domain_events` 2,
+  `profiles` 1, `prop_firms` 1, `rule_profiles` 0, `trades` 0,
+  `import_batches` 0, `imported_trade_rows` 0.
+
+### 19.2 Lanzador (una sola ejecución, 17:49:24)
+
+En una consola visible, con `TP_NO_ABRIR_NAVEGADOR=1`. Su salida pasó además
+por el filtro externo de secretos de §16, por precaución; el registro
+resultante no contiene ningún JWT, clave `sb_*` ni URL de PostgreSQL.
+
+| Fase | Resultado |
+|---|---|
+| Pasos 1-6 | «[OK]» |
+| `build:packages` | «[OK] Paquetes internos compilados» |
+| `:verificar_base`, antes | OK |
+| `supabase start` | «[OK] Supabase responde (codigo 0)», **sin una sola línea de salida del CLI** |
+| `:verificar_base`, después | OK |
+| `supabase status -o env` | «[OK] Configuracion leida correctamente» |
+| `escribir-env-local.ps1` | «Configuracion local ya correcta … (sin cambios)»: el `.env.local` real se clasificó como local e idéntico, sin respaldo ni reescritura |
+| `comprobar-funciones.ps1` | `listar_empresas` y `listar_lotes_importacion`: HTTP 200, lista JSON |
+| Navegador | No se abrió («Abrelo tu en: http://localhost:3000») |
+| Next.js 15.5.28 | `Ready in 5s`; escucha **solo** en `127.0.0.1:3000`. **Sin el aviso** de los lockfiles |
+
+Efecto observado: el `supabase-status.err` antiguo desapareció (lo borró el
+lanzador, como se esperaba).
+
+### 19.3 Comprobación visual
+
+- Ruta elegida: **`/login`**, pública por `PUBLIC_PATHS` del middleware. La
+  página no lee datos, y el formulario solo actúa al enviarlo.
+- Chrome 155 en modo sin ventana, con un **perfil temporal nuevo** (otro
+  `--user-data-dir`, sin cookies, sin sincronización ni extensiones). Dos
+  capturas de `http://localhost:3000/login`.
+  - Escritorio (1280×900): pantalla de inicio de sesión correcta, con
+    «TradePilot R», el campo Email y el botón «Enviar enlace de acceso».
+  - Móvil (390×844): se ve la misma pantalla, pero el campo aparece cortado
+    por la derecha. Lo más probable es que se deba a la captura (Chrome de
+    escritorio tiene un ancho de ventana mínimo y la imagen se recorta a 390
+    px), pero **no está demostrado**. Hay que comprobarlo con emulación de
+    móvil o en un móvil real.
+- El servidor registró **exactamente dos peticiones: `GET /login 200`** (las
+  dos capturas). Ninguna otra ruta, ningún POST y ninguna redirección. No se
+  inició sesión, no se escribió nada y no se pidió ningún enlace.
+
+### 19.4 Cierre
+
+- Ctrl+C en la consola del lanzador (PID 7392) a las 17:52:03: Next.js
+  (PID 13448) terminó y el puerto 3000 quedó libre. Después se cerró esa
+  consola. No se ejecutó `Cerrar_TradePilot.bat`.
+- Se cerró también la ventana inactiva «abriendo navegador» que había dejado
+  la primera ejecución (§16), con `cmd /K` y PID 16896, iniciada a las
+  11:16:03.
+- Los dos procesos de Chrome temporal terminaron solos y su perfil se borró.
+  El Chrome habitual no se tocó.
+- Docker y Supabase siguen en marcha: la base, con la misma hora de arranque,
+  0 reinicios y el volumen original; los 9 contenedores conservan su fecha de
+  creación (nada recreado).
+- **Después** (`diagnostico.ps1`, 17:52): **idéntico** a «antes» en
+  migraciones, objetos y todos los recuentos de dominio.
+
+### 19.5 Sin verificar
+
+- El esquema `auth`: no hay un procedimiento documentado de solo lectura que
+  lo compare, así que no se consultó. Como el perfil no tenía cookies y solo
+  se pidió `/login`, no debería haber renovación de sesión, pero **no está
+  medido**.
+- La vista en móvil (§19.3).
+- El recorrido funcional (inicio de sesión, BUILD 024, importación): sigue
+  pendiente, con su decisión previa (§13.6.6).
+
+### 19.6 Riesgos pendientes
+
+Los de §17.6, salvo el 1 (validación con un navegador limpio), que queda
+**hecho para el arranque y la pantalla pública**. Siguen la exposición de los
+puertos 54321-54324, `edge_runtime`, los montajes desde Descargas y
+`fronteras.test.ts`. La aplicación **no está desplegada**: esta prueba local
+no equivale a tener la URL HTTPS.
 
 ---
 
