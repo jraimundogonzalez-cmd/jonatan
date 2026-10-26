@@ -1,0 +1,28 @@
+# Configuración de Netlify para la web de TradePilot R.
+#
+# El repositorio de git contiene otra aplicación en su raíz (NutriPlan) y el
+# monorepo de TradePilot R en tradepilot-r/, con sus workspaces y su propio
+# package-lock.json. Dos ajustes solo existen en la interfaz de Netlify
+# (Project configuration > Build & deploy > Build settings):
+#   Base directory     tradepilot-r           (instala y compila aquí)
+#   Package directory  tradepilot-r/apps/web  (aquí busca este fichero)
+#
+# Las rutas de este fichero son relativas al Base directory.
+#
+# Sin regla `ignore`: por defecto Netlify omite la compilación si no cambia
+# nada dentro del Base directory, así que un cambio que solo toca NutriPlan no
+# compila (ni gasta créditos), y la primera compilación siempre se hace.
+#
+# SSR, Server Actions, rutas y middleware los gestiona el adaptador oficial de
+# Next.js, que Netlify instala solo: no se fija @netlify/plugin-nextjs.
+# vercel.json es solo para Vercel; Netlify no lo lee.
+
+[build]
+  # Script del monorepo: compila los seis paquetes y después `next build`.
+  command = "npm run build"
+  # El `.next` por defecto apuntaría a tradepilot-r/.next, que no existe.
+  publish = "apps/web/.next"
+
+[build.environment]
+  # Igual que engines.node de apps/web/package.json y la versión local.
+  NODE_VERSION = "24"

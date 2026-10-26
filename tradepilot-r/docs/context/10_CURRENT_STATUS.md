@@ -118,7 +118,7 @@ Contratos frontend↔RPC:                              16/16 existen
 |---|---|
 | Base de datos y RLS | Reconstruible desde cero; 27 políticas |
 | RPC de dominio | Única puerta de escritura; privilegios auditados |
-| Autenticación | Enlace mágico verificado extremo a extremo |
+| Autenticación | Enlace mágico verificado extremo a extremo (local, con `token_hash`). La vía PKCE (`code`) de `/auth/confirm` solo está probada con dobles (registro §22) |
 | Usuarios y perfiles | Alta automática por trigger |
 | Empresas de fondeo y cuentas | Capital, moneda, profit split, tope de riesgo |
 | Gestión de capital | Eventos inmutables + recálculo por trigger |
@@ -186,7 +186,7 @@ Contratos frontend↔RPC:                              16/16 existen
 | Desenlaces `rejected` / `discarded` | Legales; sin RPC que los produzca |
 | Registro de actividad (logging) | 2 `console.*` en toda la app; sin librería |
 | `positions`, `orders`, «multiplicadores» | **No existen como conceptos** |
-| Alojamiento externo (HTTPS) | Compilación para Vercel preparada en el repositorio (`apps/web/vercel.json`, región `fra1`, Node 24.x; registro §21). **Sin desplegar**: faltan los proyectos de Vercel y Supabase, Auth, SMTP y el esquema remoto |
+| Alojamiento externo (HTTPS) | Opción gratuita elegida: Netlify Free + Supabase Free (registro §22). `apps/web/netlify.toml` preparado (Base directory `tradepilot-r` y Package directory `tradepilot-r/apps/web`, que se fijan en la interfaz de Netlify; Node 24). `/auth/confirm` acepta además el `code` del flujo PKCE, necesario con la plantilla de correo predeterminada de Supabase Free. Sigue la compilación para Vercel (`apps/web/vercel.json`, §21). **Sin desplegar**: faltan el sitio de Netlify, el proyecto de Supabase, su Auth (Site URL, redirecciones, desactivar el registro) y el esquema remoto |
 
 ## 5. BLOQUEADO ⚠️
 

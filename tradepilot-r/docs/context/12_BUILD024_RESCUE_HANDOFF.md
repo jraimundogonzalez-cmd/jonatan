@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-25 · sesión 3 (continuación), preparación de la compilación en Vercel, sin desplegar (ver §21)
+**Último registro**: 2026-10-26 · sesión 4, login PKCE y configuración de Netlify gratuitos, sin desplegar (ver §22)
 
 ---
 
@@ -17,22 +17,22 @@
 |---|---|
 | Repositorio | `%USERPROFILE%\Proyectos\tradepilot-r` (clon de `github.com/jraimundogonzalez-cmd/jonatan`) |
 | Aplicación | `%USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r` |
-| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin hasta `b78393a`** el 2026-10-25, §20; antes, en `1252d18`, sesión 3, §12. Los commits posteriores a `b78393a` son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
+| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin hasta `8e45ca6`** el 2026-10-26, §22.1; antes, en `b78393a` (§20) y en `1252d18` (§12). Los commits posteriores a `8e45ca6` son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | De código: `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, dos commits **locales**: el de este documento que registra el push (`f01c2d4`, §20) y `build: preparar configuracion de Vercel` (§21). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | De código: `build: preparar autenticacion y Netlify gratuitos` (§22; local, sin publicar). Antes, `8e45ca6` (Vercel, §21, publicado en §22.1) y `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, dos commits **locales**: el de este documento que registra el push (`f01c2d4`, §20) y `build: preparar configuracion de Vercel` (§21). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
-  commit `build: preparar configuracion de Vercel` (§21).
+  commit `build: preparar autenticacion y Netlify gratuitos` (§22).
 - Upstream `origin/claude/tradepilot-r-build024-rescate` en
-  `b78393abebd4bf743b32270a48f4237694965b2c` (push del 2026-10-25, §20; el
-  anterior, en `1252d18`, fue el de §12). Antes del commit de §20 la rama
-  estaba sincronizada (0/0). Con los commits de §20 y §21 va **2 por
-  delante** y 0 por detrás; ninguno de los dos **está publicado**. Sin stash.
+  `8e45ca6410e78fb6f17b0e70fbdc7d0c9450b527` (push del 2026-10-26, §22.1;
+  antes, `b78393a` en §20 y `1252d18` en §12). Antes del commit de §22 la
+  rama estaba sincronizada (0/0). Con él va **1 por delante** y 0 por
+  detrás; **no está publicado**. Sin stash.
 - `node_modules/`, `packages/*/dist/` y `apps/web/.next/` existen en local
   (ignorados por git) por `npm ci` y los builds de hoy.
 
@@ -56,8 +56,9 @@ Commits de la rama sobre `620cb42`:
 | `449a360` | Lanzador sin secretos en pantalla, `escribir-env-local.ps1`, `comprobar-funciones.ps1`, origen `localhost` y `TP_NO_ABRIR_NAVEGADOR`, con su documentación (§17). Publicado (§20) |
 | `8db019d` | `next.config.mjs`: `outputFileTracingRoot` en la raíz del monorepo (aviso de los dos lockfiles, §18). Publicado (§20) |
 | `b78393a` | Este documento: validación controlada con un perfil aislado (§19). **Publicado** (§20) |
-| `f01c2d4` | Este documento: registro del push (§20). Local |
-| (siguiente) | `apps/web/vercel.json` y `engines.node` en `apps/web/package.json`, con su documentación (§21). Local |
+| `f01c2d4` | Este documento: registro del push (§20). Publicado (§22.1) |
+| `8e45ca6` | `apps/web/vercel.json` y `engines.node` en `apps/web/package.json`, con su documentación (§21). Publicado (§22.1) |
+| (siguiente) | `/auth/confirm` con `code` PKCE, sus tests, `apps/web/netlify.toml` y la documentación (§22). Local |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -299,7 +300,9 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    aislamiento (§17); el lanzador completo con esos cambios no se ha
    ejecutado. **Validación controlada con un perfil aislado hecha** (§19):
    lanzador completo correcto y `/login` vista sin sesión; recuentos sin
-   cambios. **Rama publicada hasta `b78393a`** (§20). Siguiente: la fase F
+   cambios. **Rama publicada hasta `8e45ca6`** (§22.1). **Login PKCE y
+   `netlify.toml` preparados en local** (§22); el alojamiento elegido pasa a
+   ser Netlify Free + Supabase Free. Siguiente: la fase F
    (alojamiento): **compilación para Vercel preparada en local** (§21); crear
    los proyectos externos y desplegar, **NO autorizado todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
@@ -309,10 +312,10 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 2] respecto a origin (los commits de §20 y §21, sin publicar)
-git -C $r log --oneline 620cb42..HEAD    # 18 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + f01c2d4 + el de §21
+git -C $r status --short --branch        # limpio; [ahead 1] respecto a origin (el commit de §22, sin publicar)
+git -C $r log --oneline 620cb42..HEAD    # 19 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + f01c2d4 + 8e45ca6 + el de §22
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
-git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # b78393abebd4bf743b32270a48f4237694965b2c (push de §20)
+git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 8e45ca6410e78fb6f17b0e70fbdc7d0c9450b527 (push de §22.1)
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
 # Base real, SOLO LECTURA (solo si el usuario autoriza conectarse):
 docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_tradepilot-r psql -U postgres -d postgres -X -At -c "select count(*) from supabase_migrations.schema_migrations"   # 19 (desde la Fase B, §13)
@@ -1429,6 +1432,134 @@ de Vercel ni Supabase, sin vincular el repositorio a ninguna cuenta.
 5. Primera compilación y despliegue, acceso y, después, desactivar el
    registro público. Las Cuentas NYS se trasladan en una fase aparte.
 
+> Después (§22) se eligió un alojamiento gratuito alternativo: Netlify Free +
+> Supabase Free. La configuración de Vercel se conserva.
+
+## 22. Sesión 4 · 2026-10-26 · Login PKCE y Netlify gratuitos (sin desplegar)
+
+Registro hecho el 2026-10-26 hacia las 10:25 (+01:00). Presupuesto: 0 €, sin
+dominio ni SMTP de pago. Cada paso tuvo su autorización expresa.
+
+### 22.1 Push de §20 y §21
+
+Autorizado: `git push origin claude/tradepilot-r-build024-rescate`, sin forzar.
+Antes: HEAD `8e45ca6`, remoto en `b78393a`, árbol limpio, dos commits
+pendientes (`f01c2d4` y `8e45ca6`). En el diff no había secretos ni copias de
+seguridad: la búsqueda solo encontró la frase «sin secretos» de §2. Resultado:
+`b78393a..8e45ca6`, avance directo. Después, `git ls-remote`, HEAD y upstream
+coincidían en `8e45ca6410e78fb6f17b0e70fbdc7d0c9450b527` y el árbol seguía
+limpio. Ninguna otra rama ni etiqueta.
+
+### 22.2 Auditoría de alojamiento gratuito (solo lectura)
+
+Fuentes oficiales consultadas el 2026-10-26. Hechos que justifican el cambio:
+
+- **Netlify Free**: 300 créditos al mes con tope duro y sin recarga («You'll
+  never be charged»). Consumo: despliegue en producción 15, GB-hora de
+  cómputo 10, GB de tráfico 20, 10 000 peticiones 2. Si se agotan, se pausan
+  **todos** los proyectos de la cuenta hasta el ciclo siguiente. HTTPS gratis
+  en `*.netlify.app`. Las funciones van en `cmh` (Ohio): cambiar de región es
+  solo para Pro y Enterprise. Límites: 60 s y 6 MB de cuerpo, unos 4,5 MB en
+  binario.
+  - **Pendiente**: el Self-Serve Subscription Agreement (§5) menciona tarifas
+    por exceso en el tramo gratuito, al contrario que la documentación de
+    créditos.
+- **Supabase Free**: 2 proyectos, 500 MB, pausa tras unos 7 días con poca
+  actividad y **sin copias automáticas** (recomiendan `supabase db dump`).
+  Correo predeterminado: solo a miembros del equipo del proyecto, 2 correos
+  por hora y sin garantía.
+- **Bloqueo resuelto aquí**: desde el 3 de junio de 2026, los proyectos Free
+  nuevos con el correo predeterminado **no pueden personalizar plantillas**.
+  La plantilla propia (`token_hash`) no se puede usar allí. La predeterminada
+  manda un enlace de Supabase que vuelve a la app con `?code=` (flujo PKCE).
+- Cloudflare no se investigó: Netlify no presentó ninguna incompatibilidad
+  importante.
+
+### 22.3 Cambios
+
+| Fichero | Cambio |
+|---|---|
+| `apps/web/app/auth/confirm/route.ts` | Además de `token_hash` + `type` (sin cambios, y con prioridad si llegan ambos), acepta `code` y llama a `exchangeCodeForSession(code)` con el cliente SSR de siempre (`lib/supabase/server.ts`). Cualquier fallo → `/auth/auth-code-error`, sin el motivo ni el código. `next` sigue pasando por `sanitizeRedirectTarget`. Sin registros |
+| `apps/web/test/auth/confirm.test.ts` (nuevo) | 12 tests con dobles del cliente y de `redirect()`: `code` válido, sin `next`, caducado o usado, `next` externo (`https://…` y `//…`), `code` vacío, `token_hash` como antes, `token_hash` inválido o sin `type`, prioridad de `token_hash`, sin parámetros, `?error=…` de Supabase, y que no se registra nada ni aparece el código en el destino |
+| `apps/web/test/auth/confirm-cookies.test.ts` (nuevo) | 3 tests con el **cliente SSR real** (`@supabase/ssr` 0.5.2 → auth-js 2.112.0). Solo se sustituyen las cookies de `next/headers`, `redirect()` y `fetch`, con URL y clave ficticias y sin red. Comprueban que el verificador se lee de la cookie, se envía a `/auth/v1/token?grant_type=pkce`, la sesión queda en la cookie de sesión y el verificador se borra. Sin la cookie (otro navegador), no hay petición ni sesión. Con un código rechazado (404), tampoco hay sesión |
+| `apps/web/netlify.toml` (nuevo) | `command = "npm run build"`, `publish = "apps/web/.next"` y `NODE_VERSION = "24"`, más los comentarios con los dos ajustes de la interfaz |
+| `docs/context/10_CURRENT_STATUS.md` | Filas de Autenticación y Alojamiento |
+
+Comprobado en la librería instalada (no supuesto):
+- `createServerClient` fija `flowType: "pkce"`.
+- `signInWithOtp` guarda el verificador en `sb-<ref>-auth-token-code-verifier`, además de en una ranura por flujo.
+- En el servidor, `exchangeCodeForSession` sin `flowId` lee esa clave fija.
+- El parámetro `sb_flow_id` solo se añade con `experimental.appendPkceFlowIdToRedirects`, que no se usa, así que no se lee.
+- Supabase devuelve los fallos de enlace como `?error=…`, sin `code`.
+
+### 22.4 Decisiones de Netlify (contrastadas con la documentación)
+
+- **Base directory `tradepilot-r`** y **Package directory
+  `tradepilot-r/apps/web`**: se fijan **en la interfaz**. El Package directory
+  solo existe allí («can only be set in the Netlify UI»), y el `base` de un
+  `netlify.toml` solo manda si el fichero está en la raíz del repositorio,
+  que es la de NutriPlan. Netlify busca el `netlify.toml` primero en el
+  Package directory.
+- **Instalación**: Netlify ejecuta `npm install` en el Base directory, donde
+  están los workspaces y `tradepilot-r/package-lock.json`. El lockfile de
+  NutriPlan queda fuera. No se usa `npm ci`.
+- **Publish `apps/web/.next`**: las rutas son relativas al Base directory. El
+  `.next` por defecto apuntaría a `tradepilot-r/.next`, que no existe. Según
+  el código del adaptador (`plugin-context.ts`, `verification.ts`),
+  `PUBLISH_DIR` es relativo al repositorio, y el adaptador falla si no
+  encuentra `BUILD_ID` o si el publish coincide con el Base directory.
+- **Sin regla `ignore`**: por defecto Netlify omite la compilación si no
+  cambia nada dentro del Base directory. Así, los cambios que solo tocan
+  NutriPlan no compilan y la primera compilación siempre se hace. Una regla
+  propia con `$CACHED_COMMIT_REF` tendría que resolver el primer despliegue y
+  los clones superficiales, y no aporta nada.
+- **Adaptador**: el automático. No se instala ni se fija
+  `@netlify/plugin-nextjs`.
+- **Node 24**: `NODE_VERSION` en `[build.environment]`. Las funciones usan la
+  versión de la compilación.
+- `vercel.json` no cambia; Netlify no lo lee.
+
+### 22.5 Pruebas (2026-10-26)
+
+| Comprobación | Resultado |
+|---|---|
+| `vitest run test/auth` | **15/15** |
+| `npm run typecheck` (raíz del monorepo) | **exit 0** |
+| `vitest run` (toda la web) | **152/153**: el único fallo es `fronteras.test.ts` en Windows (§6.2), igual que antes (137/138 + 15 nuevos) |
+| `npm run build` (raíz del monorepo), con `NEXT_PUBLIC_SUPABASE_URL=https://proyecto-ficticio.invalid` y una clave ficticia | **exit 0**: 20 rutas (`/auth/confirm` dinámica) y middleware |
+| ↳ valores incrustados | La URL y la clave ficticias aparecen en 9 ficheros de `.next`; la URL local `127.0.0.1:54321`, en 0. Así que no se usó `.env.local`. El dominio `.invalid` no resuelve: no se pudo contactar con Supabase. `.env.local` no se abrió |
+| `netlify.toml` | Leído con `smol-toml` 1.8.0, ya instalado en otro paquete global y usado sin instalar nada. Script de validación: **15/15**. Claves exactas, sin `base`, `ignore` ni plugins. `npm run build` existe en el Base directory con workspaces y lockfile. El publish contiene `BUILD_ID` y `required-server-files.json` y es distinto del Base directory. `relativeAppDir` de Next.js = `apps/web`. No hay otro `netlify.toml`. `vercel.json` sigue ahí |
+| `git diff --check` | Sin errores (solo los avisos de CRLF de `core.autocrlf`) |
+| Lockfiles | SHA-256 sin cambios (`d87c1dac…5a2b` y `8e3a31f2…5522`) |
+| `apps/web/.env.local` | Misma fecha y tamaño; no se abrió |
+
+No se ejecutó Docker, Supabase, PostgreSQL ni el lanzador. No se hizo
+ninguna petición a la app ni se envió ningún correo.
+
+### 22.6 Sin verificar
+
+- El intercambio contra un Supabase real con la plantilla predeterminada: que
+  el enlace llegue con `?code=` y que la sesión se mantenga. Solo está probado
+  con dobles. Se comprobará en el primer acceso alojado.
+- La primera compilación en Netlify: el Base y el Package directory, el
+  publish, el `npm install` y Node 24. También `exceljs` como paquete externo,
+  `node:crypto` y el middleware como Edge Function.
+- El login local con `token_hash` sigue igual en el código, pero no se ha
+  vuelto a recorrer en el navegador.
+
+### 22.7 Pendiente (cada paso con autorización)
+
+1. Push de este commit.
+2. Supabase Free en la UE (`eu-central-1`, recomendado): esquema (19
+   migraciones y los 4 SQL de funciones), Site URL y redirecciones a la URL
+   `netlify.app`, y desactivar el registro tras el primer acceso.
+3. Sitio de Netlify con los ajustes de §22.4, las dos variables
+   `NEXT_PUBLIC_SUPABASE_*` (en la interfaz, nunca en git) y la rama de
+   producción elegida.
+4. Copias de seguridad manuales del proyecto remoto. Riesgos aceptados:
+   2 correos por hora, enlace en el mismo navegador donde se pidió, pausa por
+   inactividad, funciones en EE. UU. y créditos de Netlify.
+
 ---
 
 ## PROMPT PARA REANUDAR MAÑANA
@@ -1439,7 +1570,7 @@ nueva de Claude Code. No tienes acceso a la conversación anterior.
 
 Repositorio: %USERPROFILE%\Proyectos\tradepilot-r
 Aplicación:  %USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r
-Rama:        claude/tradepilot-r-build024-rescate (en origin hasta b78393a;
+Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 8e45ca6;
              commits posteriores solo locales)
 
 1. Lee primero tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md
