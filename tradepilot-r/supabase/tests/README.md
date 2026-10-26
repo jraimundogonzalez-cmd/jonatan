@@ -56,6 +56,29 @@ rescató sin renombrarla para que siga siendo idéntica a la original.
 La suite 15 necesita `-v operations_sql=...` porque **reaplica el propio
 fichero de funciones** para demostrar que las firmas superadas se eliminan.
 
+### Suite 17 — permisos de un proyecto nuevo (base propia)
+
+`17_permisos_y_aislamiento.sql` **no** se ejecuta sobre la base de arriba:
+`00_local_test_setup.sql` concede todo a `authenticated` y escondería un
+permiso que falte. Necesita otra base desechable, preparada como un proyecto
+Supabase nuevo sin permisos de tabla por defecto, y se corrige sola como la
+16 (`SUITE 17 · TODO CORRECTO`, exit 0):
+
+```bash
+createdb tradepilot_permisos
+psql -d tradepilot_permisos -f 00_supabase_proyecto_nuevo_setup.sql
+for f in ../migrations/*.sql; do psql -d tradepilot_permisos -v ON_ERROR_STOP=1 -f "$f"; done
+for f in funding operations management_intent imports; do
+  psql -d tradepilot_permisos -v ON_ERROR_STOP=1 -f ../functions/sql/$f.sql
+done
+psql -d tradepilot_permisos -f 17_permisos_y_aislamiento.sql
+```
+
+Comprueba la matriz exacta de permisos de la migración `20261026120000`, que
+las 26 RPC de la aplicación funcionan con ella, que RLS sigue bloqueando las
+escrituras sobre datos ajenos aunque el GRANT exista, y el aislamiento de la
+idempotencia de `registrar_operacion` entre usuarios y sin sesión.
+
 **No uses `-q`**: varias comprobaciones se leen en la etiqueta del comando
 (`UPDATE 0`, `DELETE 0`), que el modo silencioso suprime.
 

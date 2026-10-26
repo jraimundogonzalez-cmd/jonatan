@@ -444,6 +444,17 @@ $$;
 revoke execute on function public.crear_operacion_nucleo(
   uuid, text, text, text, timestamptz, numeric, uuid, numeric, text, jsonb, uuid, text, text
 ) from public, authenticated;
+-- `anon` recibe EXECUTE por los privilegios por defecto de Supabase. Existe en
+-- Supabase y no en el entorno de tests SQL: se revoca solo donde existe, como
+-- en imports.sql.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke execute on function public.crear_operacion_nucleo(
+      uuid, text, text, text, timestamptz, numeric, uuid, numeric, text, jsonb, uuid, text, text
+    ) from anon;
+  end if;
+end $$;
 
 create or replace function public.registrar_operacion(
   p_account_id uuid,
@@ -475,17 +486,24 @@ declare
   v_trade public.trades;
   r record;
 begin
-  if p_idempotency_key is not null then
-    select * into v_existing from public.trades
-      where account_id = p_account_id and idempotency_key = p_idempotency_key;
-    if found then
-      return v_existing;
-    end if;
-  end if;
-
+  -- La propiedad va PRIMERO. Bajo SECURITY DEFINER no hay RLS: si la búsqueda
+  -- por idempotencia fuera antes, quien conociera la Cuenta y la clave de otro
+  -- usuario recibiría su Operación entera. Sin sesión, `auth.uid()` es nulo y
+  -- tampoco casa ninguna Cuenta.
   select * into v_account from public.accounts where id = p_account_id and user_id = auth.uid();
   if not found then
     raise exception 'OPERATIONS_ERROR:ACCOUNT_NOT_FOUND:no existe una Cuenta % del usuario actual', p_account_id;
+  end if;
+
+  -- Reintento legítimo: misma Cuenta, misma clave → la misma Operación. La
+  -- idempotencia sigue siendo por Cuenta; `user_id` es defensa en profundidad.
+  if p_idempotency_key is not null then
+    select * into v_existing from public.trades
+      where account_id = p_account_id and idempotency_key = p_idempotency_key
+        and user_id = auth.uid();
+    if found then
+      return v_existing;
+    end if;
   end if;
 
   if p_side not in ('long','short') then

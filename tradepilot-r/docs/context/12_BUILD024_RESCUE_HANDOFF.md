@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-26 · sesión 4, login PKCE y configuración de Netlify gratuitos, sin desplegar (ver §22)
+**Último registro**: 2026-10-26 · sesión 4, permisos explícitos y propiedad en `registrar_operacion`, validados en PostgreSQL 17 desechable y confirmados en un commit local (ver §23; antes, §22)
 
 ---
 
@@ -1560,6 +1560,99 @@ ninguna petición a la app ni se envió ningún correo.
    2 correos por hora, enlace en el mismo navegador donde se pidió, pausa por
    inactividad, funciones en EE. UU. y créditos de Netlify.
 
+## 23. Sesión 4 (continuación) · 2026-10-26 · Permisos explícitos y propiedad en `registrar_operacion`
+
+### 23.1 Hechos previos
+
+- `198c360` **publicado** (push del 2026-10-26; `origin` = HEAD, 0/0). Lo que
+  §1, §2 y §10 dicen de que es local quedó desfasado.
+- Proyecto Supabase Free creado por el usuario desde el panel: nombre
+  `tradepilot-r-free-eu`, región `eu-central-1`, plan Free, `ACTIVE_HEALTHY`,
+  creado con «exponer automáticamente nuevas tablas» **desactivado** y la API
+  de datos activa. CLI 2.121.0 autenticada (sin token en el repositorio). El
+  repositorio **no está vinculado** (no hay `project-ref` en `supabase/.temp`).
+  Sin esquema, sin migraciones, sin usuarios.
+- Auditoría de solo lectura de las 19 migraciones y los 4 SQL: instalables en
+  un proyecto vacío, sin extensiones, sin datos, sin `localhost` ni secretos.
+  Los 4 SQL **no** los instala `db push` (son `[db.seed]`). No usar nunca
+  `config push` (el `config.toml` local lleva `localhost` y registro abierto).
+
+### 23.2 Riesgos A y B
+
+- **A**: según la documentación de Supabase, con esa opción desactivada las
+  tablas nuevas de `public` no reciben select/insert/update/delete para anon,
+  authenticated ni service_role. Ninguna migración concedía permisos de tabla;
+  las RPC `SECURITY INVOKER` (`listar_empresas`, `crear_cuenta`…) habrían
+  fallado con 42501. `EXECUTE` de funciones sigue llegando por PUBLIC (defecto
+  global de PostgreSQL). Los tests SQL lo ocultaban: `00_local_test_setup.sql`
+  concede todo a `authenticated`.
+- **B**: `registrar_operacion` (SECURITY DEFINER) buscaba por clave de
+  idempotencia y devolvía la fila **antes** de comprobar la propiedad de la
+  Cuenta. Explotarlo exigía conocer `account_id` y clave ajenos (UUID
+  invisibles por RLS); la interfaz no envía clave al abrir. Riesgo real bajo,
+  defecto real.
+- Menor: `crear_operacion_nucleo` no se revocaba a `anon`.
+
+### 23.3 Cambios (commit `fix: asegurar permisos y propiedad de operaciones`, local)
+
+| Fichero | Cambio |
+|---|---|
+| `supabase/migrations/20261026120000_explicit_authenticated_grants.sql` | Nueva. Solo `authenticated`: SELECT en 12 tablas, INSERT en 5 (`prop_firms`, `accounts`, `account_capital_events`, `account_risk_state`, `domain_events`), UPDATE de columna `accounts(current_capital, peak_capital)`. Sin TRUNCATE, nada a anon/service_role, sin REVOKE ni políticas. Derivado de las 26 RPC que usa la aplicación y de los triggers y subconsultas RLS que se ejecutan como invocador |
+| `supabase/functions/sql/operations.sql` | `registrar_operacion`: propiedad primero; la búsqueda por clave filtra además `user_id = auth.uid()`. Misma firma. `crear_operacion_nucleo`: revocado también a `anon` (bloque `pg_roles`, como `imports.sql`) |
+| `supabase/esquema-esperado.txt` | Una línea de cabecera (`# migracion 20261026120000_…`). Editada a mano (el script de generación necesita herramientas Unix); comprobada en 23.4 contra una base real: inventario idéntico, 435 objetos |
+| `supabase/tests/00_supabase_proyecto_nuevo_setup.sql` | Nuevo. Réplica de un proyecto nuevo: roles anon/authenticated/service_role, sin permisos de tabla; solo lo que la documentación dice que sobrevive (truncate/references/trigger, update de secuencias, EXECUTE) |
+| `supabase/tests/17_permisos_y_aislamiento.sql` | Nueva suite autocomprobante: matriz exacta de permisos, RLS en 23 tablas, EXECUTE, las 26 RPC, aislamiento de idempotencia (A/B/anon/otra Cuenta), RLS frente a escrituras con GRANT y permisos denegados sin GRANT |
+| `supabase/tests/README.md` | Cómo ejecutar la suite 17 en su propia base |
+| `apps/web/test/security/permisos-sql.test.ts` | Guardas estáticas (6): forma de la migración, orden propiedad → idempotencia, revocación a anon |
+
+### 23.4 Pruebas
+
+| Prueba | Resultado |
+|---|---|
+| `permisos-sql.test.ts` + `lanzadores.test.ts` (Vitest) | **14/14 pasan**. Las guardas nuevas fallan sobre `operations.sql` de `198c360` (comprobado) |
+| `tsc --noEmit` de `apps/web` | exit 0 |
+| `git diff --check` | limpio |
+| Lockfiles y `.env.local` | sin cambios (hash de lockfiles; `.env.local` solo por fecha, sin abrirlo) |
+| **Suite 17** (base propia con `00_supabase_proyecto_nuevo_setup.sql`, 20 migraciones y 4 SQL) | **PASA**: exit 0, `SUITE 17 · TODO CORRECTO`. Instalación sin un solo error en una base sin permisos genéricos |
+| Suite 17 como control | Con el esquema de `198c360` **falla** en `[0a]` (faltan los 17 permisos). Con el árbol nuevo pero el `registrar_operacion` de `198c360` **falla** en `[2c]`: **B recibió la Operación de A** — el riesgo B era real y explotable |
+| Regresión 01–16 (`00_local_test_setup`, orden del README, 15 con `-v operations_sql`) | Ejecutada con el árbol nuevo y con `198c360`, cada una en su base. Las dos suites 16 autocomprobantes en verde en ambos. Salidas comparadas tras normalizar UUID y horas: 3 397 líneas, **6 distintas y todas explicadas**: número de línea del `RAISE` de `ACCOUNT_NOT_FOUND` en `registrar_operacion` (03 `[18]`, mismo error), un UUID truncado en un extracto (15) y dos etiquetas `DO` del nuevo `revoke … from anon` al reaplicar `operations.sql` (15). 156 `ERROR` esperados en cada lado |
+| Carreras `14_race_*` (dos sesiones simultáneas, tras la regresión) | **Pasan**: esperas de B 3.106 / 3.005 / 3.017 / 3.015 / 3.083 / 3.038 s (carreras reales), errores tipados esperados y Σ `trade_pnl` = `pnl_amount` en las seis |
+| Inventario de esquema | Base limpia con `00_local_test_setup` + 20 migraciones + 4 SQL, `scripts/esquema/objetos.sql`: **435 objetos, idénticos** a `esquema-esperado.txt`; su cabecera = las 20 migraciones |
+| Carreras `11_concurrency_*` y `12_concurrency_*` | No ejecutadas (no afectadas por el cambio; no se pidieron) |
+
+### 23.5 Entorno SQL desechable (2026-10-26, ya eliminado)
+
+- Docker **parado** todo el tiempo (arrancarlo levantaría el contenedor
+  original `supabase_db_tradepilot-r`, `unless-stopped`). No se usó.
+- Binarios oficiales de EDB `postgresql-17.11-5-windows-x64-binaries.zip`
+  (381 531 864 bytes), descargados al directorio temporal de la sesión con
+  autorización expresa. SHA-256
+  `80379B2C04D51C30225532E0AE04509899141E9957ED096FE749D7FD9DF8F82F`,
+  idéntico al valor indicado y al `.sha256` oficial; `unzip -t` sin errores;
+  verificado **antes** de extraer.
+- Clúster nuevo con `initdb` (sin instalación global, sin servicio, sin
+  cambios de PATH), `listen_addresses = '127.0.0.1'`, puerto 55432
+  comprobado libre, sin sockets Unix, `pg_hba` solo `host 127.0.0.1/32 trust`
+  (sin contraseñas). Antes de ejecutar SQL se comprobó: el PID del puerto era
+  el `postgres.exe` del directorio temporal, `data_directory` temporal,
+  `system_identifier` nuevo.
+- Al terminar: `pg_ctl stop` sobre ese directorio de datos, PID terminado,
+  puerto libre, ningún `postgres.exe` en marcha; borrados binarios, ZIP,
+  clúster, copias y resultados. Ni la base original ni el proyecto remoto se
+  tocaron.
+
+### 23.6 Pendiente (cada paso con autorización)
+
+1. Push del commit de §23.
+2. Instalación remota (20 migraciones + 4 SQL en el orden de `config.toml`) y
+   matriz de permisos en el remoto con `has_table_privilege` /
+   `has_function_privilege` (la misma que comprueba la suite 17 en `[0]`).
+   Comprobar además `has_schema_privilege('authenticated','public','usage')`:
+   no se concede en la migración porque el defecto de PostgreSQL lo da a
+   PUBLIC; sin verificar en el remoto.
+3. Auth del proyecto remoto (Site URL, redirecciones, desactivar registro
+   tras el primer acceso), sitio de Netlify y copias (§22.7).
+
 ---
 
 ## PROMPT PARA REANUDAR MAÑANA
@@ -1570,8 +1663,8 @@ nueva de Claude Code. No tienes acceso a la conversación anterior.
 
 Repositorio: %USERPROFILE%\Proyectos\tradepilot-r
 Aplicación:  %USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r
-Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 8e45ca6;
-             commits posteriores solo locales)
+Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 198c360;
+             el commit de §23 es solo local)
 
 1. Lee primero tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md
    completo. Después tradepilot-r/AGENTS.md y los documentos de contexto que

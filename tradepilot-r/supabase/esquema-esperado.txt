@@ -20,6 +20,7 @@
 # migracion 20260803121600_operations_outcome
 # migracion 20261017120000_event_times
 # migracion 20261018120000_trade_file_imports
+# migracion 20261026120000_explicit_authenticated_grants
 migracion:20260803120300_account_capital_events|columna|account_capital_events.account_id uuid
 migracion:20260803120300_account_capital_events|columna|account_capital_events.amount numeric(18,4)
 migracion:20260803120300_account_capital_events|columna|account_capital_events.created_at timestamp with time zone
