@@ -40,6 +40,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { background: var(--bg); color: var(--fg); }
 body { font-family: var(--body); font-size: 15px; line-height: 1.5; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
@@ -113,13 +114,39 @@ tr:last-child td { border-bottom: none; }
 .sheet-back { position: fixed; inset: 0; background: rgba(8, 12, 20, 0.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--surface); color: var(--fg); width: 100%; max-width: 760px; max-height: 92vh; overflow-y: auto; border-radius: 14px 14px 0 0; padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 12px; }
 .sheet pre { white-space: pre-wrap; font-family: var(--body); background: var(--sunken); border-radius: 8px; padding: 12px; margin: 0; overflow-wrap: anywhere; }
-.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 0.9rem; }
+.kv { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 4px 12px; font-size: 0.9rem; }
+@media (max-width: 520px) { .kv { grid-template-columns: 1fr; } .kv dd { margin-bottom: 6px; } }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
 .levels { display: grid; gap: 8px; }
 .levels div { display: grid; grid-template-columns: 9.5rem 1fr; gap: 10px; font-size: 0.88rem; }
 @media (max-width: 520px) { .levels div { grid-template-columns: 1fr; gap: 2px; } }
 .muted { color: var(--muted); }
+.panel > *, .cats > *, section.view > *, .list > *, details.cat > * { min-width: 0; }
+.kv dd { min-width: 0; }
+ul.senders { margin: 0; padding-left: 18px; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.toolbar { padding-block: 4px; border-block: 1px solid var(--line); }
+.counter { font-size: 0.92rem; font-variant-numeric: tabular-nums; text-align: right; }
+.cats { display: grid; gap: 8px; }
+details.cat { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+details.cat.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+details.cat > summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; gap: 2px; }
+details.cat > summary::-webkit-details-marker { display: none; }
+details.cat > summary::after { content: "Ver remitentes ▾"; font-size: 0.76rem; color: var(--accent); }
+details.cat[open] > summary::after { content: "Ocultar remitentes ▴"; }
+details.cat > .table-wrap { margin: 0 10px 10px; }
+.cat-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cat-head input { width: 18px; height: 18px; }
+.cat-name { font-weight: 600; }
+tr.excluded td { opacity: 0.55; }
+tr.excluded td:first-child { opacity: 1; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.stat { background: var(--sunken); border-radius: 8px; padding: 10px 12px; display: grid; }
+.stat b { font-family: var(--display); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 0.8rem; color: var(--muted); }
+.preview { border-color: var(--warn); }
+input.num-input { width: 5rem; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+details.panel > summary, details.small > summary, details.notice > summary { cursor: pointer; }
 .small { font-size: 0.82rem; }
 </style>
 
@@ -170,8 +197,18 @@ label.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9re
   <section class="view" id="v-limpieza" hidden>
     <div class="panel">
       <h2>Limpieza y organización</h2>
-      <p class="lede">Primero se analiza y se propone; nada cambia hasta que apruebes. Archivar y etiquetar se pueden deshacer desde el historial. Los remitentes protegidos (bancos, facturas, nóminas, organismos oficiales, avisos de seguridad) nunca se proponen para papelera o spam.</p>
+      <p class="lede">Analizar solo lee tu correo. Después eliges categorías, excluyes excepciones, ves una vista previa y confirmas. Las únicas acciones posibles son etiquetar y archivar, y las dos se pueden deshacer desde el historial. Nada se elimina ni se marca como spam.</p>
       <div class="row"><button id="scan-btn" class="primary">Analizar bandeja de entrada</button><span class="status" id="scan-status"></span></div>
+      <details class="small">
+        <summary>Límites del conector de Gmail</summary>
+        <ul>
+          <li>No puede leer la carpeta de spam: el agente no la revisa ni la limpia.</li>
+          <li>No puede crear filtros ni cancelar suscripciones: solo te da la regla para que la crees tú.</li>
+          <li>Cada búsqueda devuelve como máximo 50 conversaciones y no pagina; el análisis divide la bandeja por fechas.</li>
+          <li>No hay borrado definitivo en este agente. Archivar solo quita la etiqueta «Recibidos».</li>
+          <li>Enviados: el análisis anterior devolvió 0 conversaciones. <button type="button" class="ghost" id="sent-btn">Comprobar ahora</button> <span id="sent-out"></span></li>
+        </ul>
+      </details>
     </div>
     <div id="scan-out" class="view"></div>
   </section>
@@ -186,8 +223,8 @@ label.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9re
       <h2>Permisos por niveles</h2>
       <div class="levels">
         <div><b>Lectura y búsqueda</b><span>Permitidas mientras Gmail esté conectado. No cambian nada.</span></div>
-        <div><b>Etiquetar y archivar</b><span>Solo al pulsar «Aplicar» tras revisar la propuesta. Reversible desde este historial.</span></div>
-        <div><b>Spam y papelera</b><span>Nunca preseleccionados; necesitan una confirmación aparte. Papelera es reversible 30 días. El borrado definitivo no existe en este agente.</span></div>
+        <div><b>Etiquetar y archivar</b><span>Solo tras elegir categorías, ver el resumen y confirmar. Remitentes protegidos y conversaciones con reembolsos, facturas, pagos o avisos de seguridad nunca se archivan en bloque. Reversible desde este historial.</span></div>
+        <div><b>Spam y papelera</b><span>La limpieza no los ofrece: nada se marca como spam ni se mueve a la papelera en bloque. El borrado definitivo no existe en este agente.</span></div>
         <div><b>Filtros y bajas</b><span>El conector no puede crear filtros ni cancelar suscripciones: el agente te da la regla exacta y el enlace, y lo haces tú en Gmail.</span></div>
         <div><b>Borradores</b><span>Se guardan en Gmail solo cuando lo pides. Puedes editarlos allí.</span></div>
         <div><b>Envío</b><span>Nunca automático. Se muestran destinatario, asunto y texto completo, y hace falta marcar la confirmación.</span></div>
@@ -479,7 +516,7 @@ async function runWaiting(out, inSearch) {
   const th = p.threads || [];
   if (!th.length) {
     idle(st);
-    out.append(h("div", { class: "notice warn" }, "Gmail no tiene ningún correo enviado desde esta cuenta en el último año. Si escribes a empresas desde otra dirección, otra app o un formulario web, esas conversaciones no están aquí y no puedo saber si te han contestado. Si envías desde aquí a partir de ahora, esta sección las detectará."));
+    out.append(h("div", { class: "notice warn" }, "El conector no devuelve ningún correo enviado del último año. Eso no prueba que no hayas enviado nada: puede que escribas desde otra app, otro alias u otra cuenta, o que el conector no vea esos mensajes. Sin enviados visibles no puedo saber si te han contestado; queda pendiente de verificar."));
     return;
   }
   busy(st, `Revisando ${th.length} conversaciones…`);
@@ -549,18 +586,50 @@ ${items.map(i => `- id=${i.id} | de=${i.from} | asunto=${i.subject}\n<correo>${i
 }
 
 // ---------- 4. cleanup & organisation ----------
+// Single source of truth: SCAN.catSel (selected categories) + per-sender g.excluded/g.action/g.label + SCAN.done (what really ran).
+// Everything shown (counters, preview, confirmation) is derived from computePlan(SCAN), so controls cannot drift apart.
 const LABEL_SET = ["Acción pendiente", "Esperando respuesta", "Empresas y trámites", "Facturas y pagos", "Personal", "Publicidad"];
 const CATS = {
-  spam_fraude: "Spam o fraude", publicidad_no_deseada: "Publicidad no deseada", publicidad_conservar: "Publicidad que interesa",
-  servicio_cuenta: "Servicios y cuentas", facturas_pagos: "Facturas y pagos", banco_finanzas: "Banco e inversión",
-  trabajo_oficial: "Trabajo y organismos", seguridad_cuenta: "Seguridad de cuenta", personal: "Personal",
+  publicidad_no_deseada: "Publicidad no deseada", publicidad_conservar: "Publicidad que interesa", seguridad_cuenta: "Seguridad de cuenta",
+  banco_finanzas: "Banco e inversión", servicio_cuenta: "Servicios y cuentas", facturas_pagos: "Facturas y pagos", trabajo_oficial: "Trabajo y organismos",
+  personal: "Personal", spam_fraude: "Posible spam o fraude",
 };
-const CAT_LABEL = { publicidad_no_deseada: "Publicidad", publicidad_conservar: "Publicidad", servicio_cuenta: "Empresas y trámites", facturas_pagos: "Facturas y pagos", banco_finanzas: "Empresas y trámites", trabajo_oficial: "Empresas y trámites", seguridad_cuenta: "Empresas y trámites", personal: "Personal", spam_fraude: "" };
-const ACTIONS = {
-  mantener: "Dejar como está", etiquetar: "Etiquetar", archivar: "Etiquetar y archivar", papelera: "Mover a papelera", spam: "Marcar como spam",
-};
-const PROTECT_RX = /(factura|invoice|recibo|receipt|n[oó]mina|salario|payroll|banco|bank|bbva|santander|caixa|sabadell|bankinter|ing\.|openbank|myinvestor|trade ?republic|xtb|hacienda|aeat|agenciatributaria|seg-social|seguridad social|dgt\.|\.gob\.es|\.gov|ayuntamiento|juzgado|notar|seguro|insurance|contrato|contract|pago|payment|billing|security|seguridad|accounts?\.google|accountprotection|verif|contraseñ|password|2fa|c[oó]digo)/i;
+const CAT_ORDER = ["publicidad_no_deseada", "publicidad_conservar", "seguridad_cuenta", "banco_finanzas", "servicio_cuenta", "facturas_pagos", "trabajo_oficial", "personal", "spam_fraude", "sin_clasificar"];
+const SELECTABLE = new Set(CAT_ORDER.slice(0, 7));
+const PROTECTED_CATS = new Set(["seguridad_cuenta", "banco_finanzas", "servicio_cuenta", "facturas_pagos", "trabajo_oficial"]);
+const CAT_LABEL = { publicidad_no_deseada: "Publicidad", publicidad_conservar: "Publicidad", servicio_cuenta: "Empresas y trámites", facturas_pagos: "Facturas y pagos", banco_finanzas: "Empresas y trámites", trabajo_oficial: "Empresas y trámites", seguridad_cuenta: "Empresas y trámites" };
+const ACTIONS = { mantener: "No tocar", etiquetar: "Solo etiquetar (sigue en la bandeja)", archivar: "Etiquetar y archivar" };
+const PROTECTED_SENDERS = new Set([
+  "noreply-accounts@google.com", "no-reply@accounts.google.com", "no-reply@google.com", "noreply@github.com", "support@mail.xtb.com",
+  "email@news.traderepublic.com", "info@account.traderepublic.com", "comunicaciones@myinvestor.es", "notificaciones@myinvestor.es", "myblog@myinvestor.es",
+  "invoice@mail.anthropic.com", "invoice+statements@mail.anthropic.com", "failed-payments@mail.anthropic.com",
+  "info@tradelocker.com", "global@admiralmarkets.com", "account-security-noreply@accountprotection.microsoft.com", "billing@zoom.us", "no-reply@notify.docker.com", "welcome@supabase.com",
+]);
+const PROTECTED_DOMAINS = ["google.com", "github.com", "xtb.com", "traderepublic.com", "myinvestor.es", "anthropic.com", "tradelocker.com", "admiralmarkets.com", "microsoft.com", "zoom.us", "docker.com", "supabase.com"];
+const INTEREST_SENDERS = [/@myfxbook\.com$/, /@([a-z0-9-]+\.)*claude\.com$/, /^vehiculosocasion@coches\.net$/];
+// Sender looks like a bank, administration, billing or account service.
+const PROTECT_RX = /(factura|invoice|recibo|receipt|n[oó]mina|salario|payroll|banco|bank|bbva|santander|caixa|sabadell|bankinter|openbank|hacienda|aeat|agenciatributaria|seg-social|\.gob\.es|\.gov|ayuntamiento|juzgado|notar|seguro|insurance|billing|security|seguridad|accountprotection|verif)/i;
+// A single conversation looks transactional even if its sender is commercial: never touched in bulk.
+const HOLD_RX = /(reembolso|refund|devoluci[oó]n|factura|invoice|recibo|receipt|n[oó]mina|salario|pago|payment|cargo |cobro|tu pedido|your order|order #|order no|n[ºo°.]? ?de pedido|pedido n[ºo°.]|enviado|shipped|entregado|delivered|seguimiento del env|tracking|incidencia|reclamaci|disputa|dispute|cancelad|cancelaci|cancelled|canceled|suscripci[oó]n|subscription|contraseñ|password|c[oó]digo de|verification|verific|inicio de sesi|sign.?in|seguridad|security|cuenta (suspendida|bloqueada|pausada)|paused|pausado)/i;
 let SCAN = null;
+
+function senderProtection(addr, cat) {
+  if (PROTECTED_SENDERS.has(addr)) return "remitente de la lista protegida";
+  const d = domainOf(addr);
+  if (PROTECTED_DOMAINS.some(p => d === p || d.endsWith("." + p))) return "dominio protegido (" + baseDomain(d) + ")";
+  if (PROTECT_RX.test(addr)) return "parece banco, administración o facturación";
+  if (PROTECTED_CATS.has(cat)) return "categoría protegida";
+  return null;
+}
+function allowedActions(g) {
+  if (!SELECTABLE.has(g.cat)) return ["mantener"];
+  return g.protection ? ["mantener", "etiquetar"] : ["mantener", "etiquetar", "archivar"];
+}
+function defaultAction(g) {
+  if (!SELECTABLE.has(g.cat)) return "mantener";
+  const want = g.cat === "publicidad_no_deseada" ? "archivar" : "etiquetar";
+  return allowedActions(g).includes(want) ? want : "etiquetar";
+}
 
 async function scanInbox(onProgress) {
   const found = new Map(); let truncatedDays = 0;
@@ -584,156 +653,310 @@ async function scanInbox(onProgress) {
 function groupThreads(threads) {
   const groups = new Map();
   for (const t of threads) {
-    const m = (t.messages || [])[0] || {};
+    const msgs = t.messages || [];
+    const m = msgs[0] || {};
     const addr = addrOf(m.sender);
-    if (!groups.has(addr)) groups.set(addr, { key: addr, domain: domainOf(addr), ids: [], subjects: [] });
-    const g = groups.get(addr); g.ids.push(t.id); if (g.subjects.length < 4 && m.subject) g.subjects.push(m.subject);
+    if (!groups.has(addr)) groups.set(addr, { key: addr, domain: domainOf(addr), threads: [] });
+    const text = msgs.map(x => (x.subject || "") + " " + (x.snippet || "")).join(" ");
+    const hold = HOLD_RX.exec(text);
+    groups.get(addr).threads.push({ id: t.id, subject: m.subject || "(sin asunto)", held: hold ? hold[0].trim() : null });
   }
-  return [...groups.values()].sort((a, b) => b.ids.length - a.ids.length);
+  return [...groups.values()].sort((a, b) => b.threads.length - a.threads.length);
 }
 
 async function runScan() {
   const out = clear($("#scan-out")), st = $("#scan-status"), btn = $("#scan-btn");
   btn.disabled = true;
   try {
-    busy(st, "Leyendo la bandeja de entrada…");
+    busy(st, "Leyendo la bandeja de entrada (solo lectura)…");
     let scan;
-    try { scan = await scanInbox(n => busy(st, `Leídas ${n} conversaciones…`)); }
+    try { scan = await scanInbox(n => busy(st, `Leídas ${n} conversaciones (solo lectura)…`)); }
     catch (e) { idle(st); out.append(errorBox(gmErrorText(e))); return; }
+    try { await getLabels(true); } catch { /* labels are only needed for the preview */ }
     const groups = groupThreads(scan.threads);
     if (!groups.length) { idle(st); out.append(h("div", { class: "notice ok" }, "Tu bandeja de entrada está vacía.")); return; }
     busy(st, `Clasificando ${groups.length} remitentes…`);
-    const top = groups.slice(0, 80);
-    let cls = [];
+    let cls = [], clsError = null;
     try {
-      cls = await ask(`Clasifica remitentes de la bandeja de entrada de una persona en España para limpiarla sin perder nada importante. ${UNTRUSTED}
-Categorías: spam_fraude (fraude, phishing, remitentes desconocidos sospechosos), publicidad_no_deseada (marketing masivo y repetitivo de tiendas/plataformas), publicidad_conservar (boletines que probablemente le interesan: cursos, aficiones, servicios que usa), servicio_cuenta (notificaciones de servicios que usa: GitHub, Docker, Supabase…), facturas_pagos, banco_finanzas (bancos, brókers, inversión), trabajo_oficial (empresa, gestoría, nóminas, administración), seguridad_cuenta (avisos de inicio de sesión, verificación, contraseñas), personal (personas).
-Acción recomendada: "archivar" para publicidad repetitiva (se guarda con etiqueta, sale de la bandeja), "spam" solo si es claramente fraude o spam auténtico, "etiquetar" para servicios, facturas, banco, trabajo y personal, "mantener" si dudas. Nunca recomiendes "papelera". Sé prudente: ante la duda entre publicidad y algo útil, elige etiquetar.
-Responde solo JSON: [{"key":"remitente","categoria":"…","accion":"…","motivo":"máx. 12 palabras"}]
-${top.map(g => `- ${g.key} (${g.ids.length} correos) asuntos: ${g.subjects.map(s => "«" + trunc(s, 70) + "»").join(" ")}`).join("\n")}`, "default");
-    } catch (e) { out.append(h("div", { class: "notice warn" }, sampleErrorText(e) + " Te muestro los remitentes sin clasificar; elige tú la acción.")); }
+      cls = await ask(`Clasifica remitentes de la bandeja de entrada de una persona en España para organizarla sin perder nada importante. ${UNTRUSTED}
+Categorías: publicidad_no_deseada (marketing masivo y repetitivo de tiendas y plataformas), publicidad_conservar (boletines o alertas que probablemente le interesan: cursos, aficiones, alertas que ha configurado), servicio_cuenta (notificaciones de servicios que usa: GitHub, Docker, Supabase…), facturas_pagos, banco_finanzas (bancos, brókers, inversión), trabajo_oficial (empresa, gestoría, nóminas, administración), seguridad_cuenta (avisos de inicio de sesión, verificación, contraseñas), personal (personas), spam_fraude (fraude o phishing evidente).
+Si dudas, usa "dudoso". No propongas acciones: solo la categoría.
+Responde solo JSON: [{"key":"remitente","categoria":"…","motivo":"máx. 12 palabras"}]
+${groups.slice(0, 80).map(g => `- ${g.key} (${g.threads.length} correos) asuntos: ${g.threads.slice(0, 4).map(t => "«" + trunc(t.subject, 70) + "»").join(" ")}`).join("\n")}`, "default");
+    } catch (e) { clsError = sampleErrorText(e); }
     const byKey = new Map((Array.isArray(cls) ? cls : []).map(c => [String(c.key).toLowerCase(), c]));
     for (const g of groups) {
       const c = byKey.get(g.key) || {};
-      g.cat = CATS[c.categoria] ? c.categoria : null;
+      g.cat = CATS[c.categoria] ? c.categoria : "sin_clasificar";
+      if (INTEREST_SENDERS.some(rx => rx.test(g.key))) g.cat = "publicidad_conservar";
       g.reason = c.motivo || "";
-      g.protected = PROTECT_RX.test(g.key) || g.subjects.some(s => PROTECT_RX.test(s)) || ["facturas_pagos", "banco_finanzas", "trabajo_oficial", "seguridad_cuenta"].includes(g.cat);
-      let act = ACTIONS[c.accion] ? c.accion : "mantener";
-      if (act === "papelera") act = "archivar";
-      if (g.protected && (act === "spam" || act === "archivar")) act = "etiquetar";
-      g.action = act;
-      g.label = CAT_LABEL[g.cat] || (act === "archivar" ? "Publicidad" : "Empresas y trámites");
-      g.selected = act === "archivar" || act === "etiquetar";
+      g.protection = senderProtection(g.key, g.cat);
+      g.action = defaultAction(g);
+      g.label = CAT_LABEL[g.cat] || "Empresas y trámites";
+      g.excluded = false;
     }
-    SCAN = { groups, total: scan.threads.length, truncatedDays: scan.truncatedDays, at: new Date() };
-    idle(st, `${scan.threads.length} conversaciones de ${groups.length} remitentes`);
+    SCAN = { groups, total: scan.threads.length, truncatedDays: scan.truncatedDays, at: new Date(), catSel: new Set(), open: new Set(), done: {}, showPreview: false, clsError, running: false };
+    idle(st, `${scan.threads.length} conversaciones de ${groups.length} remitentes. Gmail no se ha modificado.`);
     renderScan();
   } finally { btn.disabled = false; }
 }
 
+// Pure: what would run right now. opts.only = sender key, opts.limit = max conversations (test mode).
+function computePlan(scan, opts = {}) {
+  const items = [], included = [], excluded = [], kept = [], held = [], protectedIn = [];
+  let alreadyDone = 0;
+  for (const g of scan.groups) {
+    if (!scan.catSel.has(g.cat) || !SELECTABLE.has(g.cat)) continue;
+    if (opts.only && g.key !== opts.only) continue;
+    if (g.excluded) { excluded.push(g); continue; }
+    if (g.action === "mantener" || !allowedActions(g).includes(g.action)) { kept.push(g); continue; }
+    included.push(g);
+    if (g.protection) protectedIn.push(g);
+    for (const t of g.threads) if (t.held) held.push({ g, t });
+    let ids = [];
+    for (const t of g.threads) {
+      if (t.held) continue;
+      const d = scan.done[t.id] || {};
+      const needLabel = d.label !== g.label;
+      const needArchive = g.action === "archivar" && !d.archived;
+      if (!needLabel && !needArchive) { alreadyDone++; continue; }
+      ids.push({ id: t.id, needLabel, needArchive });
+    }
+    if (opts.limit) ids = ids.slice(0, opts.limit);
+    if (ids.length) items.push({ g, action: g.action, label: g.label, ids });
+  }
+  const toLabel = items.reduce((a, it) => a + it.ids.filter(x => x.needLabel).length, 0);
+  const toArchive = items.reduce((a, it) => a + it.ids.filter(x => x.needArchive).length, 0);
+  const affected = items.reduce((a, it) => a + it.ids.length, 0);
+  const labelNames = [...new Set(items.filter(it => it.ids.some(x => x.needLabel)).map(it => it.label))];
+  const existing = new Set((S.labels || []).map(l => l.name.toLowerCase()));
+  return {
+    items, included, excluded, kept, held, protectedIn, alreadyDone, affected, toLabel, toArchive,
+    labelsUse: labelNames.filter(n => existing.has(n.toLowerCase())), labelsCreate: labelNames.filter(n => !existing.has(n.toLowerCase())),
+  };
+}
+
+function catStats(gs) {
+  const n = gs.reduce((a, g) => a + g.threads.length, 0);
+  const heldN = gs.reduce((a, g) => a + g.threads.filter(t => t.held).length, 0);
+  const by = {};
+  for (const g of gs) if (!g.excluded && g.action !== "mantener") by[g.action] = (by[g.action] || 0) + g.threads.filter(t => !t.held).length;
+  return { n, heldN, by };
+}
+function proposalText(st) {
+  const parts = [];
+  if (st.by.archivar) parts.push(`${st.by.archivar} etiquetar y archivar`);
+  if (st.by.etiquetar) parts.push(`${st.by.etiquetar} solo etiquetar`);
+  if (st.heldN) parts.push(`${st.heldN} retenidas para revisión`);
+  return parts.length ? parts.join(" · ") : "Sin acciones propuestas";
+}
+
 function renderScan() {
+  if (!SCAN) return;
   const out = clear($("#scan-out"));
+  const plan = computePlan(SCAN);
   const { groups } = SCAN;
-  const tally = {}; for (const g of groups) if (g.selected && g.action !== "mantener") tally[g.action] = (tally[g.action] || 0) + g.ids.length;
-  const nSel = Object.values(tally).reduce((a, b) => a + b, 0);
-  const catTally = {}; for (const g of groups) { const k = g.cat ? CATS[g.cat] : "Sin clasificar"; catTally[k] = (catTally[k] || 0) + g.ids.length; }
+  const byCat = new Map(CAT_ORDER.map(c => [c, []]));
+  for (const g of groups) byCat.get(g.cat).push(g);
 
   out.append(h("div", { class: "panel" },
-    h("h2", null, "Informe del análisis"),
-    h("p", { class: "small muted" }, `Analizado el ${fmtDateTime(SCAN.at)}. ${SCAN.total} conversaciones en la bandeja de entrada. La carpeta de spam no es accesible para el agente.`),
+    h("h2", null, "1. Resumen del análisis"),
+    h("p", { class: "small muted" }, `Analizado el ${fmtDateTime(SCAN.at)}: ${SCAN.total} conversaciones de ${groups.length} remitentes en la bandeja de entrada. El análisis solo ha leído; Gmail no se ha modificado.`),
+    SCAN.clsError ? h("div", { class: "notice warn" }, SCAN.clsError + " Los remitentes quedan «Sin clasificar» y no se pueden seleccionar.") : null,
     SCAN.truncatedDays ? h("div", { class: "notice warn" }, `En ${SCAN.truncatedDays} días con más de 50 correos solo se han leído los 50 más recientes.`) : null,
-    h("div", { class: "tally" }, Object.entries(catTally).sort((a, b) => b[1] - a[1]).map(([k, v]) => h("span", null, h("b", null, v), " " + k)))));
+    h("div", { class: "notice" }, "La carpeta de spam no es accesible para el agente: no se ha revisado ni limpiado.")));
 
-  const rows = groups.map((g, i) => {
-    const sel = h("select", { id: "act-" + i, "aria-label": "Acción para " + g.key, onchange: e => { g.action = e.target.value; g.selected = g.action !== "mantener"; renderScan(); } },
-      Object.entries(ACTIONS).filter(([k]) => !(g.protected && (k === "spam" || k === "papelera"))).map(([k, v]) => h("option", { value: k, selected: g.action === k }, v)));
-    const lab = h("select", { id: "lab-" + i, "aria-label": "Etiqueta para " + g.key, disabled: !(g.action === "etiquetar" || g.action === "archivar"), onchange: e => { g.label = e.target.value; } },
-      LABEL_SET.concat((S.labels || []).filter(l => l.type === "USER" && !LABEL_SET.includes(l.name)).map(l => l.name)).map(n => h("option", { value: n, selected: g.label === n }, n)));
-    return h("tr", null,
-      h("td", null, h("input", { type: "checkbox", id: "sel-" + i, checked: g.selected, disabled: g.action === "mantener", "aria-label": "Incluir " + g.key, onchange: e => { g.selected = e.target.checked; renderScan(); } })),
-      h("td", null, h("div", { class: "mono" }, g.key), g.protected ? h("span", { class: "pill info" }, "Protegido") : null, g.reason ? h("div", { class: "ex" }, g.reason) : null),
-      h("td", { class: "num" }, g.ids.length),
-      h("td", null, h("span", { class: "pill " + (g.cat === "spam_fraude" ? "bad" : g.cat === "publicidad_no_deseada" ? "warn" : "") }, g.cat ? CATS[g.cat] : "Sin clasificar"), h("div", { class: "ex" }, g.subjects.slice(0, 2).map(s => "«" + trunc(s, 60) + "»").join(" "))),
-      h("td", null, h("div", { class: "row" }, sel, lab)));
-  });
+  const toolbar = h("div", { class: "row toolbar" },
+    h("button", { id: "sel-all", type: "button", disabled: SCAN.running, onclick: () => { for (const c of SELECTABLE) if (byCat.get(c).length) SCAN.catSel.add(c); renderScan(); } }, "Seleccionar todo"),
+    h("button", { id: "sel-none", type: "button", disabled: SCAN.running, onclick: () => { SCAN.catSel.clear(); renderScan(); } }, "Desmarcar todo"),
+    h("span", { class: "counter grow", id: "sel-count", "data-count": plan.affected, "aria-live": "polite" },
+      h("b", null, plan.affected), ` ${plan.affected === 1 ? "conversación seleccionada" : "conversaciones seleccionadas"}`,
+      plan.alreadyDone ? h("span", { class: "muted" }, ` · ${plan.alreadyDone} ya aplicadas`) : null));
+
+  const catList = h("div", { class: "cats" });
+  for (const cat of CAT_ORDER) {
+    const gs = byCat.get(cat); if (!gs.length) continue;
+    const st = catStats(gs);
+    const selectable = SELECTABLE.has(cat);
+    const on = SCAN.catSel.has(cat);
+    const cb = h("input", { type: "checkbox", id: "cat-" + cat, checked: on, disabled: !selectable || SCAN.running, "aria-label": "Seleccionar categoría " + (CATS[cat] || "Sin clasificar") });
+    cb.addEventListener("change", e => { e.target.checked ? SCAN.catSel.add(cat) : SCAN.catSel.delete(cat); if (e.target.checked) SCAN.open.add(cat); renderScan(); });
+    const det = h("details", { class: "cat" + (on ? " on" : ""), id: "det-" + cat, open: on || SCAN.open.has(cat) });
+    det.addEventListener("toggle", () => { det.open ? SCAN.open.add(cat) : SCAN.open.delete(cat); });
+    const name = CATS[cat] || "Sin clasificar";
+    det.append(
+      h("summary", null,
+        h("span", { class: "cat-head" }, cb, h("span", { class: "cat-name" }, name), h("span", { class: "pill" }, `${st.n} conv.`),
+          PROTECTED_CATS.has(cat) ? h("span", { class: "pill info" }, "Protegida: no se archiva") : null,
+          !selectable ? h("span", { class: "pill warn" }, "Solo revisión manual") : null),
+        h("span", { class: "cat-prop small muted" }, selectable ? proposalText(st) : (cat === "sin_clasificar" ? "Sin confianza suficiente para proponer nada" : "El agente no actúa sobre esta categoría"))),
+      senderTable(gs, selectable));
+    catList.append(det);
+  }
   out.append(h("div", { class: "panel" },
-    h("h2", null, "Propuesta por remitente"),
-    h("p", { class: "lede" }, "Revisa cada fila. Solo se aplican las marcadas. Archivar mantiene el correo con su etiqueta y sus adjuntos; solo lo saca de la bandeja de entrada."),
-    h("div", { class: "table-wrap" }, h("table", null,
-      h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "Remitente"), h("th", null, "Correos"), h("th", null, "Tipo y ejemplos"), h("th", null, "Acción"))),
-      h("tbody", null, rows))),
+    h("h2", null, "2. Elige qué organizar"),
+    h("p", { class: "lede" }, "Tras cada análisis no hay nada seleccionado. Marca una categoría para incluir sus acciones y despliégala para excluir remitentes concretos. Las conversaciones que parecen reembolsos, facturas, pedidos, pagos o avisos de seguridad se retienen siempre, aunque vengan de un remitente comercial."),
+    toolbar, catList,
     h("div", { class: "row" },
-      h("div", { class: "tally grow" }, nSel ? Object.entries(tally).map(([k, v]) => h("span", null, h("b", null, v), " " + ACTIONS[k].toLowerCase())) : h("span", { class: "muted" }, "Nada seleccionado")),
-      h("button", { class: "primary", disabled: !nSel, onclick: confirmApply }, `Revisar y aplicar (${nSel})`))));
+      h("button", { id: "preview-btn", type: "button", disabled: !plan.affected || SCAN.running, onclick: () => { SCAN.showPreview = true; renderScan(); $("#preview")?.scrollIntoView({ behavior: "smooth", block: "start" }); } }, "Ver vista previa (no modifica Gmail)"),
+      h("button", { id: "apply-btn", type: "button", class: "primary", disabled: !plan.affected || SCAN.running, onclick: () => confirmApply({}) }, `Aplicar acciones seleccionadas (${plan.affected})`))));
 
-  const filterable = groups.filter(g => g.action === "archivar" || g.action === "spam");
-  if (filterable.length) {
-    const byDom = new Map(); for (const g of filterable) { const d = baseDomain(g.domain); if (!byDom.has(d)) byDom.set(d, { d, action: g.action, n: 0 }); byDom.get(d).n += g.ids.length; }
-    const rules = [...byDom.values()].sort((a, b) => b.n - a.n);
-    const archiveDoms = rules.filter(r => r.action === "archivar").map(r => r.d);
-    const spamDoms = rules.filter(r => r.action === "spam").map(r => r.d);
-    const rule1 = archiveDoms.length ? `from:(${archiveDoms.join(" OR ")})` : null;
-    const rule2 = spamDoms.length ? `from:(${spamDoms.join(" OR ")})` : null;
-    out.append(h("div", { class: "panel" },
-      h("h2", null, "Reglas para que no vuelva a pasar"),
-      h("p", { class: "lede" }, "El conector de Gmail no permite crear filtros ni darte de baja automáticamente. Copia la regla y créala tú en Gmail: Configuración → Ver todos los ajustes → Filtros y direcciones bloqueadas → Crear un filtro → pega la regla en «De» o en «Contiene las palabras»."),
-      rule1 ? h("div", { class: "card" }, h("h3", null, "Publicidad: saltar bandeja y etiquetar «Publicidad»"), h("p", { class: "mono" }, rule1), h("div", { class: "actions" }, h("button", { onclick: e => copyText(rule1, e.target) }, "Copiar regla"))) : null,
-      rule2 ? h("div", { class: "card" }, h("h3", null, "Spam: eliminar o enviar a spam"), h("p", { class: "mono" }, rule2), h("div", { class: "actions" }, h("button", { onclick: e => copyText(rule2, e.target) }, "Copiar regla"))) : null,
-      h("p", { class: "small muted" }, "Para darte de baja de una lista, abre uno de sus correos en Gmail y usa el enlace «Cancelar suscripción» que aparece junto al remitente. No lo hagas en correos que parezcan fraude: márcalos como spam.")));
-  }
+  if (SCAN.showPreview) out.append(renderPreview(plan));
+  out.append(filterRulesPanel(plan));
 }
 
-function confirmApply() {
-  const sel = SCAN.groups.filter(g => g.selected && g.action !== "mantener");
-  const byAct = {}; for (const g of sel) (byAct[g.action] = byAct[g.action] || []).push(g);
-  const risky = (byAct.papelera || []).length + (byAct.spam || []).length > 0;
-  const labelsNeeded = [...new Set(sel.filter(g => g.action === "etiquetar" || g.action === "archivar").map(g => g.label))];
-  const go = h("button", { class: risky ? "danger" : "primary", disabled: risky }, "Aplicar ahora");
-  const chk = risky ? h("label", { class: "check" }, h("input", { type: "checkbox", id: "risky-ok", onchange: e => { go.disabled = !e.target.checked; } }), h("span", null, "Entiendo que se moverán conversaciones a spam o a la papelera. La papelera se vacía sola a los 30 días.")) : null;
-  openSheet("Confirmar cambios en tu correo", [
-    h("p", null, "Esto es exactamente lo que se va a hacer:"),
-    h("div", { class: "list" }, Object.entries(byAct).map(([k, gs]) => h("div", { class: "card" },
-      h("h3", null, `${ACTIONS[k]}: ${gs.reduce((a, g) => a + g.ids.length, 0)} conversaciones`),
-      h("p", { class: "small muted" }, gs.map(g => `${g.key} (${g.ids.length})${k === "etiquetar" || k === "archivar" ? " → " + g.label : ""}`).join(" · "))))),
-    labelsNeeded.length ? h("p", { class: "small" }, "Si no existen, se crearán las etiquetas: " + labelsNeeded.join(", ") + ".") : null,
-    h("p", { class: "small muted" }, "No se borra nada de forma definitiva. Cada grupo queda en el historial con un botón para deshacer."),
-    chk,
-    h("div", { class: "row" }, h("button", { onclick: closeSheet }, "Cancelar"), go),
+function senderTable(gs, selectable) {
+  const labelNames = LABEL_SET.concat((S.labels || []).filter(l => l.type === "USER" && !LABEL_SET.includes(l.name)).map(l => l.name));
+  const rows = gs.map(g => {
+    const sid = cssId(g.key);
+    const inc = h("input", { type: "checkbox", id: "inc-" + sid, checked: !g.excluded, disabled: !selectable || SCAN.running, "aria-label": "Incluir " + g.key });
+    inc.addEventListener("change", e => { g.excluded = !e.target.checked; renderScan(); });
+    const act = h("select", { id: "act-" + sid, disabled: !selectable || SCAN.running, "aria-label": "Acción para " + g.key },
+      allowedActions(g).map(k => h("option", { value: k, selected: g.action === k }, ACTIONS[k])));
+    act.addEventListener("change", e => { g.action = e.target.value; renderScan(); });
+    const lab = h("select", { id: "lab-" + sid, disabled: !selectable || g.action === "mantener" || SCAN.running, "aria-label": "Etiqueta para " + g.key },
+      labelNames.map(n => h("option", { value: n, selected: g.label === n }, n)));
+    lab.addEventListener("change", e => { g.label = e.target.value; renderScan(); });
+    const heldTs = g.threads.filter(t => t.held);
+    return h("tr", { class: g.excluded ? "excluded" : null },
+      h("td", null, inc),
+      h("td", null, h("div", { class: "mono" }, g.key),
+        g.protection ? h("div", null, h("span", { class: "pill info", title: g.protection }, "Protegido"), h("span", { class: "ex" }, " " + g.protection)) : null,
+        heldTs.length ? h("div", { class: "ex" }, `Retenidas: ${heldTs.map(t => "«" + trunc(t.subject, 50) + "»").slice(0, 3).join(" ")}${heldTs.length > 3 ? " …" : ""}`) : null,
+        g.reason ? h("div", { class: "ex" }, g.reason) : null),
+      h("td", { class: "num" }, g.threads.length - heldTs.length, heldTs.length ? h("div", { class: "ex" }, `+${heldTs.length} ret.`) : null),
+      h("td", null, h("div", { class: "row" }, act, lab)));
+  });
+  return h("div", { class: "table-wrap" }, h("table", null,
+    h("thead", null, h("tr", null, h("th", null, "Incl."), h("th", null, "Remitente"), h("th", null, "Conv."), h("th", null, "Acción y etiqueta"))),
+    h("tbody", null, rows)));
+}
+const cssId = s => s.replace(/[^a-z0-9]/gi, "_");
+
+function planSummary(plan, title) {
+  return h("div", { class: "list" },
+    h("div", { class: "stats" },
+      stat(plan.affected, "conversaciones afectadas"), stat(plan.toLabel, "se etiquetarán"), stat(plan.toArchive, "se archivarán"), stat(plan.held.length, "retenidas (no se tocan)")),
+    h("dl", { class: "kv" },
+      h("dt", null, "Remitentes incluidos"), h("dd", null, plan.items.length ? h("ul", { class: "senders small" }, plan.items.map(it => h("li", null, `${it.g.key} (${it.ids.length}: ${it.action === "archivar" ? "etiquetar «" + it.label + "» y archivar" : "etiquetar «" + it.label + "»"})`))) : "ninguno"),
+      h("dt", null, "Remitentes excluidos"), h("dd", null, plan.excluded.length || plan.kept.length ? plan.excluded.concat(plan.kept).map(g => g.key).join(" · ") : "ninguno"),
+      h("dt", null, "Etiquetas que se usarán"), h("dd", null, plan.labelsUse.join(", ") || "ninguna"),
+      h("dt", null, "Etiquetas que se crearán"), h("dd", null, plan.labelsCreate.join(", ") || "ninguna")),
+    plan.protectedIn.length ? h("div", { class: "notice" }, `Remitentes protegidos incluidos solo para etiquetar (no se archivan): ${plan.protectedIn.map(g => g.key).join(", ")}.`) : null,
+    plan.held.length ? h("details", { class: "notice warn" }, h("summary", null, `${plan.held.length} conversaciones retenidas por su contenido. No se tocan; revísalas tú en Gmail.`),
+      h("ul", { class: "small" }, plan.held.map(x => h("li", null, `${x.g.key}: «${trunc(x.t.subject, 80)}» (contiene «${x.t.held}»)`)))) : null,
+    plan.alreadyDone ? h("p", { class: "small muted" }, `${plan.alreadyDone} conversaciones ya se aplicaron en esta sesión y no se repetirán.`) : null);
+}
+const stat = (n, label) => h("div", { class: "stat" }, h("b", null, n), h("span", null, label));
+
+function renderPreview(plan) {
+  const senders = plan.items.map(it => it.g.key);
+  const pick = h("select", { id: "test-sender", "aria-label": "Remitente para la prueba" }, senders.map(k => h("option", { value: k }, k)));
+  const lim = h("input", { type: "number", id: "test-limit", min: "1", max: "10", value: "2", "aria-label": "Número de conversaciones de prueba", class: "num-input" });
+  return h("div", { class: "panel preview", id: "preview" },
+    h("div", { class: "row" }, h("h2", { class: "grow" }, "3. Vista previa"), h("span", { class: "pill warn" }, "Calculada · Gmail no se ha modificado")),
+    planSummary(plan),
+    senders.length ? h("div", { class: "card" },
+      h("h3", null, "Probar primero con pocas conversaciones"),
+      h("p", { class: "small muted" }, "Ejecuta de verdad la acción sobre un solo remitente y un número limitado de conversaciones. Después compruébalo en Gmail y, si está bien, aplica el resto."),
+      h("div", { class: "row" }, pick, lim, h("button", { id: "test-btn", type: "button", disabled: SCAN.running, onclick: () => confirmApply({ only: pick.value, limit: Math.max(1, Math.min(10, parseInt(lim.value, 10) || 1)) }) }, "Probar con este remitente"))) : null,
+    h("div", { class: "row" }, h("button", { type: "button", onclick: () => { SCAN.showPreview = false; renderScan(); } }, "Ocultar vista previa")));
+}
+
+function filterRulesPanel(plan) {
+  const archiveDoms = [...new Set(plan.items.filter(it => it.action === "archivar").map(it => baseDomain(it.g.domain)))];
+  if (!archiveDoms.length) return h("span", { hidden: true });
+  const rule = `from:(${archiveDoms.join(" OR ")})`;
+  return h("details", { class: "panel" },
+    h("summary", null, "Opcional: regla para que no vuelva a acumularse"),
+    h("p", { class: "small" }, "El agente no crea filtros: el conector de Gmail no lo permite y además requiere tu autorización aparte. Si quieres, créalo tú en Gmail → Configuración → Ver todos los ajustes → Filtros y direcciones bloqueadas → Crear un filtro, pegando esta regla en «De». Revisa antes que no afecte a pedidos o reembolsos de esas tiendas."),
+    h("p", { class: "mono" }, rule),
+    h("div", { class: "actions" }, h("button", { type: "button", onclick: e => copyText(rule, e.target) }, "Copiar regla")));
+}
+
+function confirmApply(opts) {
+  const plan = computePlan(SCAN, opts);
+  if (!plan.affected) return;
+  const ok = h("input", { type: "checkbox", id: "confirm-ok" });
+  const go = h("button", { class: "primary", id: "confirm-go", disabled: true }, opts.only ? `Ejecutar prueba (${plan.affected})` : `Aplicar acciones seleccionadas (${plan.affected})`);
+  ok.addEventListener("change", () => { go.disabled = !ok.checked; });
+  openSheet(opts.only ? "Confirmar prueba en Gmail" : "Confirmar cambios en Gmail", [
+    h("p", null, opts.only ? `Prueba real limitada a ${opts.only}, máximo ${opts.limit} conversaciones.` : "Esto es exactamente lo que se va a hacer en tu Gmail:"),
+    planSummary(plan),
+    h("p", { class: "small muted" }, "Nada se elimina. Archivar solo quita la etiqueta Bandeja de entrada; el correo, su etiqueta y sus adjuntos se conservan. Cada remitente queda en el historial con un botón para deshacer."),
+    h("label", { class: "check" }, ok, h("span", null, "He revisado el resumen y quiero aplicar estas acciones.")),
+    h("div", { class: "row" }, h("button", { id: "confirm-cancel", onclick: closeSheet }, "Cancelar"), go),
   ]);
-  go.addEventListener("click", () => applyPlan(sel, labelsNeeded));
+  go.addEventListener("click", () => applyPlan(plan));
 }
 
-async function applyPlan(sel, labelsNeeded) {
+async function applyPlan(plan) {
   const body = $("#sheet");
-  const st = h("div", { class: "status" }); clear(body).append(h("h2", { id: "sheet-title" }, "Aplicando cambios"), st);
+  SCAN.running = true; renderScan();
+  let stop = false;
+  const st = h("div", { class: "status" });
+  const stopBtn = h("button", { id: "stop-btn", onclick: () => { stop = true; stopBtn.disabled = true; stopBtn.textContent = "Deteniendo…"; } }, "Detener");
+  clear(body).append(h("h2", { id: "sheet-title" }, "Aplicando en Gmail"), st, stopBtn);
   const labelIds = {};
-  try { for (const n of labelsNeeded) { busy(st, "Preparando etiqueta " + n + "…"); labelIds[n] = await ensureLabel(n); } }
-  catch (e) { body.append(errorBox("No se pudo crear la etiqueta: " + gmErrorText(e) + " No se ha cambiado ningún correo."), h("button", { onclick: closeSheet }, "Cerrar")); return; }
-  let done = 0, total = sel.reduce((a, g) => a + g.ids.length, 0); const results = [];
-  for (const g of sel) {
-    const lid = labelIds[g.label];
-    const okIds = [], failIds = []; let lastErr = null;
-    await pmap(g.ids, async id => {
-      try {
-        if (g.action === "etiquetar") await gmWrite("label_thread", { threadId: id, labelIds: [lid] });
-        else if (g.action === "archivar") { await gmWrite("label_thread", { threadId: id, labelIds: [lid] }); await gmWrite("unlabel_thread", { threadId: id, labelIds: ["INBOX"] }); }
-        else if (g.action === "papelera") await gmWrite("trash_thread", { threadId: id });
-        else if (g.action === "spam") await gmWrite("mark_thread_spam", { threadId: id });
-        okIds.push(id);
-      } catch (e) { failIds.push(id); lastErr = e; }
-      done++; busy(st, `${done} de ${total} conversaciones…`);
-    }, 3);
-    await logAction({ kind: g.action, title: `${ACTIONS[g.action]}: ${g.key}${lid ? " → " + g.label : ""}`, count: g.ids.length, ok: okIds.length, fail: failIds.length, threadIds: okIds, labelId: lid || null, error: lastErr ? gmErrorText(lastErr) : null });
-    results.push({ g, ok: okIds.length, fail: failIds.length, err: lastErr });
-    if (okIds.length) g.ids = g.ids.filter(id => !okIds.includes(id));
-  }
-  SCAN.groups = SCAN.groups.filter(g => !(g.ids.length === 0));
-  for (const g of SCAN.groups) if (sel.includes(g)) g.selected = false;
-  const fails = results.filter(r => r.fail);
-  idle(st);
-  body.append(h("div", { class: "notice " + (fails.length ? "warn" : "ok") }, fails.length ? `Hecho con errores: ${fails.reduce((a, r) => a + r.fail, 0)} conversaciones no se pudieron cambiar. ${gmErrorText(fails[0].err)}` : `Hecho. ${total} conversaciones actualizadas. Puedes deshacerlo desde el historial.`),
-    h("div", { class: "row" }, h("button", { class: "primary", onclick: () => { closeSheet(); location.hash = "#historial"; } }, "Ver historial"), h("button", { onclick: closeSheet }, "Cerrar")));
+  const results = [];
+  try {
+    const needed = [...new Set(plan.items.filter(it => it.ids.some(x => x.needLabel)).map(it => it.label))];
+    try { for (const n of needed) { busy(st, "Preparando etiqueta «" + n + "»…"); labelIds[n] = await ensureLabel(n); if (!labelIds[n]) throw { code: "tool_error", message: "Gmail no devolvió el identificador de la etiqueta" }; } }
+    catch (e) { idle(st); stopBtn.remove(); body.append(errorBox("No se pudo preparar la etiqueta: " + gmErrorText(e) + " No se ha cambiado ninguna conversación."), h("button", { onclick: closeSheet }, "Cerrar")); return; }
+    const total = plan.affected; let n = 0;
+    for (const it of plan.items) {
+      const r = { g: it.g, action: it.action, label: it.label, labeled: [], archived: [], failed: [], skipped: 0 };
+      results.push(r);
+      const lid = labelIds[it.label] || (S.labels || []).find(l => l.name === it.label)?.id;
+      await pmap(it.ids, async x => {
+        if (stop) { r.skipped++; return; }
+        const d = SCAN.done[x.id] = SCAN.done[x.id] || {};
+        try {
+          if (x.needLabel) { await gmWrite("label_thread", { threadId: x.id, labelIds: [lid] }); d.label = it.label; d.labelId = lid; r.labeled.push(x.id); }
+          // Archive only once the label is confirmed, so nothing leaves the inbox unlabelled.
+          if (x.needArchive) { await gmWrite("unlabel_thread", { threadId: x.id, labelIds: ["INBOX"] }); d.archived = true; r.archived.push(x.id); }
+        } catch (e) { r.failed.push({ id: x.id, err: gmErrorText(e), code: e && e.code }); }
+        n++; busy(st, `${n} de ${total} conversaciones…`);
+      }, 3);
+      const ok = it.ids.length - r.failed.length - r.skipped;
+      await logAction({
+        kind: it.action, title: `${it.action === "archivar" ? "Etiquetar y archivar" : "Etiquetar"}: ${it.g.key} → ${it.label}`,
+        count: it.ids.length, ok, fail: r.failed.length, skipped: r.skipped,
+        threadIds: [...new Set(r.labeled.concat(r.archived))], labeledIds: r.labeled, archivedIds: r.archived, labelId: lid || null,
+        error: r.failed.length ? r.failed[0].err : null,
+      });
+    }
+  } finally { SCAN.running = false; }
+  stopBtn.remove(); idle(st);
+  const okN = results.reduce((a, r) => a + r.labeled.length + r.archived.filter(id => !r.labeled.includes(id)).length, 0);
+  const failN = results.reduce((a, r) => a + r.failed.length, 0);
+  const skipN = results.reduce((a, r) => a + r.skipped, 0);
+  const ambiguous = results.some(r => r.failed.some(f => f.code === "server_unavailable" || f.code === "upstream_error"));
+  const cls = failN || skipN ? "warn" : "ok";
+  const headline = failN || skipN
+    ? `Completado parcialmente: ${okN} conversaciones cambiadas, ${failN} con error${skipN ? `, ${skipN} sin intentar (detenido)` : ""}.`
+    : `Hecho en Gmail: ${okN} conversaciones cambiadas.`;
+  body.append(h("div", { class: "notice " + cls }, headline),
+    h("div", { class: "table-wrap" }, h("table", null,
+      h("thead", null, h("tr", null, h("th", null, "Remitente"), h("th", null, "Etiquetadas"), h("th", null, "Archivadas"), h("th", null, "Errores"))),
+      h("tbody", null, results.map(r => h("tr", null, h("td", { class: "mono" }, r.g.key), h("td", { class: "num" }, r.labeled.length), h("td", { class: "num" }, r.archived.length), h("td", { class: "num" }, r.failed.length + (r.skipped ? ` (+${r.skipped} sin intentar)` : ""))))))),
+    failN ? h("p", { class: "small" }, "Primer error: " + results.find(r => r.failed.length).failed[0].err + (ambiguous ? " Gmail no confirmó algunas operaciones: puede que sí se aplicaran. Al reintentar solo se repiten las pendientes y repetirlas no duplica nada." : " Las conversaciones con error no se han archivado.")) : null,
+    h("div", { class: "row" },
+      h("button", { class: "primary", onclick: () => { closeSheet(); location.hash = "#historial"; } }, "Ver historial y deshacer"),
+      h("button", { onclick: closeSheet }, failN || skipN ? "Cerrar y revisar lo pendiente" : "Cerrar")));
   renderScan();
+}
+
+async function checkSent(btn) {
+  const out = $("#sent-out"); btn.disabled = true; busy(out, "Consultando (solo lectura)…");
+  try {
+    const p = await gm("search_threads", { query: "in:sent", pageSize: 5, view: "THREAD_VIEW_METADATA_ONLY" }, false);
+    const sent = ((await gm("list_labels", {}, false)).labels || []).find(l => l.labelId === "SENT") || {};
+    const n = (p.threads || []).length;
+    idle(out, `El conector devuelve ${n ? "al menos " + n : "0"} conversaciones en «Enviados» y la etiqueta SENT indica ${sent.messagesTotal ?? "?"} mensajes. ` +
+      (n ? "El seguimiento de respuestas tiene datos." : "Esto no prueba que no hayas enviado correos: puede que envíes desde otra app, otro alias u otra cuenta, o que el conector no vea esos mensajes. Queda pendiente de verificar; mientras tanto «Esperando respuesta» no tiene datos."));
+  } catch (e) { idle(out, gmErrorText(e)); }
+  finally { btn.disabled = false; }
 }
 
 // ---------- 5. composer ----------
@@ -857,8 +1080,9 @@ ${threadForPrompt(t, 5)}`, "default");
 function openSheet(title, kids) { fillSheet(title, kids); $("#sheet-back").hidden = false; document.body.style.overflow = "hidden"; }
 function fillSheet(title, kids) { clear($("#sheet")).append(h("h2", { id: "sheet-title" }, title), ...kids); }
 function closeSheet() { $("#sheet-back").hidden = true; document.body.style.overflow = ""; }
-$("#sheet-back").addEventListener("click", e => { if (e.target.id === "sheet-back") closeSheet(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet-back").hidden) closeSheet(); });
+// While actions run in Gmail the sheet stays open, so the result is always seen.
+$("#sheet-back").addEventListener("click", e => { if (e.target.id === "sheet-back" && !(SCAN && SCAN.running)) closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet-back").hidden && !(SCAN && SCAN.running)) closeSheet(); });
 
 // ---------- 6. audit log ----------
 function logCol() { return S.db && S.uid ? S.db.collection("data/users/" + S.uid + "/log") : null; }
@@ -868,33 +1092,40 @@ async function logAction(entry) {
   if (!col) { S.memLog.unshift({ id: "m" + doc.at, ...doc }); renderLog(S.memLog); return; }
   try { await col.add(doc); } catch (e) { S.memLog.unshift({ id: "m" + doc.at, ...doc, unsaved: true }); renderLog(S.memLog); }
 }
-const UNDO_TEXT = { archivar: "Devolver a la bandeja", etiquetar: "Quitar etiqueta", papelera: "Sacar de la papelera", spam: "No es spam" };
+const UNDO_TEXT = { archivar: "Devolver a la bandeja y quitar etiqueta", etiquetar: "Quitar etiqueta", papelera: "Sacar de la papelera", spam: "No es spam" };
 async function undo(entry, btn) {
-  btn.disabled = true; const t = btn.textContent; btn.textContent = "Deshaciendo…";
-  let fail = 0;
-  await pmap(entry.threadIds || [], async id => {
-    try {
-      if (entry.kind === "archivar") { await gmWrite("label_thread", { threadId: id, labelIds: ["INBOX"] }); if (entry.labelId) await gmWrite("unlabel_thread", { threadId: id, labelIds: [entry.labelId] }); }
-      else if (entry.kind === "etiquetar") await gmWrite("unlabel_thread", { threadId: id, labelIds: [entry.labelId] });
-      else if (entry.kind === "papelera") await gmWrite("untrash_thread", { threadId: id });
-      else if (entry.kind === "spam") await gmWrite("unmark_thread_spam", { threadId: id });
-    } catch { fail++; }
-  }, 3);
+  btn.disabled = true; btn.textContent = "Deshaciendo…";
+  let fail = 0, done = 0;
+  const archived = entry.archivedIds || (entry.kind === "archivar" ? entry.threadIds : []) || [];
+  const labeled = entry.labeledIds || ((entry.kind === "archivar" || entry.kind === "etiquetar") ? entry.threadIds : []) || [];
+  const steps = [];
+  if (entry.kind === "archivar" || entry.kind === "etiquetar") {
+    for (const id of archived) steps.push(() => gmWrite("label_thread", { threadId: id, labelIds: ["INBOX"] }));
+    if (entry.labelId) for (const id of labeled) steps.push(() => gmWrite("unlabel_thread", { threadId: id, labelIds: [entry.labelId] }));
+  } else if (entry.kind === "papelera") for (const id of entry.threadIds || []) steps.push(() => gmWrite("untrash_thread", { threadId: id }));
+  else if (entry.kind === "spam") for (const id of entry.threadIds || []) steps.push(() => gmWrite("unmark_thread_spam", { threadId: id }));
+  await pmap(steps, async f => { try { await f(); done++; } catch { fail++; } }, 3);
+  for (const id of archived) if (SCAN && SCAN.done[id]) delete SCAN.done[id];
+  for (const id of labeled) if (SCAN && SCAN.done[id]) delete SCAN.done[id];
   const col = logCol();
-  if (col && !String(entry.id).startsWith("m")) { try { await col.doc(entry.id).update({ undone: true, undoneAt: Date.now(), undoFail: fail }); } catch { } }
-  else { entry.undone = true; renderLog(S.memLog); }
-  if (fail) { btn.textContent = `${fail} no se pudieron deshacer`; } else btn.textContent = "Deshecho";
+  if (col && !String(entry.id).startsWith("m")) { try { await col.doc(entry.id).update({ undone: !fail, undoneAt: Date.now(), undoFail: fail }); } catch { } }
+  else { entry.undone = !fail; entry.undoFail = fail; renderLog(S.memLog); }
+  await logAction({ kind: "deshacer", title: "Deshacer: " + (entry.title || entry.kind), count: steps.length, ok: done, fail, threadIds: [] });
+  btn.textContent = fail ? `Deshecho parcialmente: ${fail} operaciones fallaron` : "Deshecho";
+  if (fail) btn.disabled = false;
+  if (SCAN) renderScan();
 }
 function renderLog(entries) {
   const out = clear($("#log-out"));
   if (!entries.length) { out.append(h("p", { class: "muted small" }, "Todavía no hay acciones registradas. Cuando archives, etiquetes o guardes un borrador, aparecerá aquí con opción de deshacer.")); return; }
   if (!logCol()) out.append(h("div", { class: "notice warn" }, "El historial no se puede guardar en esta vista; solo se conserva mientras la página esté abierta."));
   for (const e of entries) {
-    const canUndo = UNDO_TEXT[e.kind] && !e.undone && (e.threadIds || []).length > 0 && (e.kind !== "etiquetar" || e.labelId);
+    const canUndo = UNDO_TEXT[e.kind] && !e.undone && ((e.threadIds || []).length > 0 || (e.archivedIds || []).length > 0) && (e.kind !== "etiquetar" || e.labelId);
     out.append(h("div", { class: "card" },
       h("div", { class: "head" }, h("div", { class: "grow" }, h("div", { class: "subj" }, e.title || e.kind), h("div", { class: "meta" }, fmtDateTime(new Date(e.at)))),
-        h("span", { class: "pill " + (e.undone ? "" : e.fail ? "warn" : "ok") }, e.undone ? "Deshecho" : e.fail ? `${e.ok} bien · ${e.fail} con error` : `${e.ok} ${e.ok === 1 ? "hecho" : "hechos"}`)),
+        h("span", { class: "pill " + (e.undone ? "" : e.fail ? "warn" : "ok") }, e.undone ? "Deshecho" : e.fail || e.skipped ? `Parcial: ${e.ok} bien · ${e.fail} con error${e.skipped ? " · " + e.skipped + " sin intentar" : ""}` : `${e.ok} ${e.ok === 1 ? "hecho" : "hechos"}`)),
       e.error ? h("p", { class: "small muted" }, e.error) : null,
+      e.undoFail ? h("p", { class: "small muted" }, `Al deshacer fallaron ${e.undoFail} operaciones.`) : null,
       canUndo ? h("div", { class: "actions" }, h("button", { onclick: ev => undo(e, ev.target) }, UNDO_TEXT[e.kind])) : null));
   }
 }
@@ -913,6 +1144,7 @@ $("#search-form").addEventListener("submit", e => { e.preventDefault(); const q 
 $("#waiting-btn").addEventListener("click", async e => { e.target.disabled = true; try { await runWaiting($("#waiting-out"), false); } finally { e.target.disabled = false; } });
 $("#action-btn").addEventListener("click", async e => { e.target.disabled = true; try { await runNeedsAction($("#action-out"), false); } finally { e.target.disabled = false; } });
 $("#scan-btn").addEventListener("click", runScan);
+$("#sent-btn").addEventListener("click", e => checkSent(e.target));
 
 (async function boot() {
   const c = window.claude;
