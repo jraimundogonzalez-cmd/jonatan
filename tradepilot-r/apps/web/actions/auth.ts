@@ -6,19 +6,12 @@
 // es una decisión ya aprobada del blueprint (Zero Friction, I16: nunca dos
 // formularios distintos para "entrar" y "darse de alta"), no una omisión de
 // esta entrega.
-import { headers } from "next/headers";
+import { obtenerOrigenCanonico, VARIABLE_ORIGEN } from "@/lib/config/origen";
 import { createClient } from "@/lib/supabase/server";
 import { validateEmail } from "@/lib/validation/email";
 import { sanitizeRedirectTarget } from "@/lib/validation/redirect";
 
 export type SignInResult = { ok: true } | { ok: false; message: string };
-
-async function getOrigin(): Promise<string> {
-  const headerList = await headers();
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
-  const protocol = headerList.get("x-forwarded-proto") ?? "https";
-  return `${protocol}://${host}`;
-}
 
 export async function signInWithMagicLink(rawEmail: string, redirectTo?: string): Promise<SignInResult> {
   const validation = validateEmail(rawEmail);
@@ -26,7 +19,14 @@ export async function signInWithMagicLink(rawEmail: string, redirectTo?: string)
     return { ok: false, message: validation.message };
   }
 
-  const origin = await getOrigin();
+  // El origen del enlace es configuración del servidor (lib/config/origen.ts),
+  // nunca las cabeceras Host / x-forwarded-host, que las escribe el cliente.
+  const origen = obtenerOrigenCanonico();
+  if (!origen.ok) {
+    console.error(`[auth] ${origen.error}: ${VARIABLE_ORIGEN} ${origen.motivo}. No se envía el enlace de acceso.`);
+    return { ok: false, message: "El acceso no está disponible: falta configurar la dirección del sitio." };
+  }
+  const origin = origen.origen;
   const next = sanitizeRedirectTarget(redirectTo);
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({

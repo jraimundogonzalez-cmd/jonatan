@@ -22,10 +22,18 @@ saltan incluso ejecutando como propietario, cuando RLS ya no protege.
 
 ## A.2 Auditoría de privilegios
 
-De las 12 funciones `SECURITY DEFINER` ejecutables por `authenticated`:
-- **9 validan `auth.uid()`** explícitamente.
-- **3 son funciones de trigger**, imposibles de invocar directamente
-  (comprobado: *«trigger functions can only be called as triggers»*).
+De las 13 funciones `SECURITY DEFINER` ejecutables por `authenticated`:
+- **10 son invocables por RPC y las 10 validan `auth.uid()`** explícitamente.
+- **3 son funciones de trigger** (`funding_aplicar_compliance_flag`,
+  `handle_new_user`, `trades_audit_trigger`), imposibles de invocar
+  directamente (comprobado: *«trigger functions can only be called as
+  triggers»*).
+
+Cifra actualizada el 2026-11-18 contando la última definición de cada función
+en las migraciones y en los cuatro ficheros de `supabase/functions/sql/`, y
+contrastada con el catálogo de una base desechable el 2026-11-17. Al escribir
+este apartado (2026-10-01, `3961c27`) eran 12 y 9: la 13.ª,
+`confirmar_importacion`, la añadió el importador (2026-10-18, `63f3604`).
 
 `crear_operacion_nucleo` tiene el `EXECUTE` **revocado** a `public` y
 `authenticated`: era una tercera puerta de creación de operaciones y se cerró.
@@ -72,6 +80,51 @@ No es un almacén de secretos: es configuración pública.
 
 `service_role` **nunca** se lee, ni se escribe, ni se muestra. El lanzador de
 Windows lo evita explícitamente.
+
+Desde el 2026-11-17 (confirmado el 2026-11-18 en la rama `claude/tradepilot-r-build024-verification`, §24 del traspaso) existe una tercera variable,
+`TP_SITE_URL`, **de servidor** (sin `NEXT_PUBLIC_`, no llega al navegador). No
+es un secreto: es el origen canónico de la web (A.6). Obligatoria en
+producción; en `next dev` vale por defecto `http://localhost:3000`.
+
+## A.6 Origen del enlace de acceso y redirecciones (2026-11-17)
+
+- **Antes**: el enlace mágico se construía con las cabeceras `Host` /
+  `x-forwarded-host` de la petición, que escribe el cliente. Si la lista de
+  redirecciones de Supabase Auth aceptaba ese dominio (basta un comodín como
+  `*.netlify.app`), un atacante podía pedir un enlace para el correo de otra
+  persona con un `Host` suyo: el código PKCE llegaba a su servidor y, con el
+  verificador en su navegador, abría la sesión de la víctima.
+- **Ahora**: `apps/web/lib/config/origen.ts` toma el origen de `TP_SITE_URL`
+  (https, o http solo en localhost; sin credenciales, ruta, consulta ni
+  fragmento). Sin un valor válido no se envía el enlace; nunca se recurre a
+  las cabeceras. **Requisito de despliegue**: `TP_SITE_URL` igual a la Site URL
+  de Supabase, y Redirect URLs exactas, sin comodines.
+- **Redirecciones**: `sanitizeRedirectTarget` aceptaba `/\dominio` y
+  `/<TAB>/dominio`, que el navegador resuelve a otro dominio (redirección
+  abierta tras el login). Ahora resuelve el destino con el analizador WHATWG,
+  exige el mismo origen y rechaza barra invertida, caracteres de control y sus
+  variantes codificadas. 41 tests; 19 de ellos fallaban con el código anterior.
+
+## A.7 Cabeceras HTTP (2026-11-17)
+
+En `apps/web/next.config.mjs`, para todas las respuestas:
+
+| Cabecera | Valor | Estado |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | aplicada |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | aplicada |
+| `X-Frame-Options` | `DENY` | aplicada |
+| `Permissions-Policy` | sin cámara, micrófono, ubicación, pagos ni USB | aplicada |
+| `Content-Security-Policy` | `frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'` | aplicada |
+| `Content-Security-Policy-Report-Only` | política completa (`default-src 'self'`, scripts y estilos `'self' 'unsafe-inline'`, `connect-src 'self'`) | **solo informe**, solo en producción |
+| `Strict-Transport-Security` | — | **PENDIENTE**: hasta tener el dominio HTTPS definitivo |
+
+La política completa necesita `'unsafe-inline'` porque Next.js App Router
+inyecta scripts en línea y varias páginas usan `style={{…}}`; quitarlo exige
+nonces generados en el middleware. Comprobado en Chromium contra `next start`:
+`/login` sin violaciones (aplicada ni informe) y la web no se deja incrustar
+desde otro origen. Las páginas con sesión **no** se han recorrido bajo la
+política: pasarla a aplicada exige hacerlo antes.
 
 ---
 

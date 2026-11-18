@@ -7,7 +7,7 @@
 > Este documento **no autoriza nada**. Las operaciones permitidas las fija el
 > mensaje del usuario de cada sesión.
 
-**Último registro**: 2026-10-26 · sesión 4, permisos explícitos y propiedad en `registrar_operacion`, validados en PostgreSQL 17 desechable y confirmados en un commit local (ver §23; antes, §22)
+**Último registro**: 2026-11-18 · sesión 5 (continuación), cierre documental y tests de la estabilización; todo confirmado y publicado en la rama `claude/tradepilot-r-build024-verification` (§24.8, §24.9). 2026-11-17 · sesión 5, verificación técnica de `01a0105` en un entorno aislado y primera tanda de estabilización (§24). Antes: 2026-10-26 · sesión 4, permisos explícitos y propiedad en `registrar_operacion`, validados en PostgreSQL 17 desechable y confirmados entonces en un commit local (§23; antes, §22), publicado después como `01a0105`
 
 ---
 
@@ -17,14 +17,20 @@
 |---|---|
 | Repositorio | `%USERPROFILE%\Proyectos\tradepilot-r` (clon de `github.com/jraimundogonzalez-cmd/jonatan`) |
 | Aplicación | `%USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r` |
-| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin hasta `8e45ca6`** el 2026-10-26, §22.1; antes, en `b78393a` (§20) y en `1252d18` (§12). Los commits posteriores a `8e45ca6` son solo locales hasta nueva autorización. Historia del registro reescrita en la sesión 2, §11, antes del push) |
+| Rama de trabajo | `claude/tradepilot-r-build024-rescate` (**publicada en origin hasta `01a0105`**, comprobado con `git ls-remote` el 2026-11-17, §24.1; la fecha de ese push no consta en el repositorio: PENDIENTE. Antes, publicada hasta `8e45ca6` el 2026-10-26 (§22.1), `b78393a` (§20) y `1252d18` (§12). Historia del registro reescrita en la sesión 2, §11, antes del push). **Es la referencia protegida**: la sesión 5 trabaja en `claude/tradepilot-r-build024-verification` (§24) |
 | Respaldo del registro | `rescate/build024-registro-original` (solo local, **no publicar**): la historia anterior del registro, con los identificadores sin anonimizar (`c9ed89b`). No borrar. |
 | Partió de | `620cb42` (`claude/tradepilot-r-position-manager-mwbovl`, sin cambios) |
-| Último commit de trabajo | De código: `build: preparar autenticacion y Netlify gratuitos` (§22; local, sin publicar). Antes, `8e45ca6` (Vercel, §21, publicado en §22.1) y `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, dos commits **locales**: el de este documento que registra el push (`f01c2d4`, §20) y `build: preparar configuracion de Vercel` (§21). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
+| Último commit de trabajo | **`01a0105`** `fix: asegurar permisos y propiedad de operaciones` (§23; **publicado**). Antes, de código: `198c360` `build: preparar autenticacion y Netlify gratuitos` (§22; publicado). Antes, `8e45ca6` (Vercel, §21, publicado en §22.1) y `8db019d` (`fix: fijar raiz de trazado de Next.js`, §18). Antes, `449a360` (protección del lanzador, §17) y `ae06815` (corrección de `Abrir_TradePilot.bat`, §15). Último publicado: `b78393a` (este documento, validación con perfil aislado, §19); **todos los commits hasta él están publicados** (§20). Después, dos commits **locales**: el de este documento que registra el push (`f01c2d4`, §20) y `build: preparar configuracion de Vercel` (§21). El último de este documento: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md` |
 | Rama auxiliar | `rescate/build024-sobre-3961c27` (solo local): BUILD 024, navegación y lint reconstruidos sobre su base real `3961c27` (`f2a8545`, `ce6fa48`, `a437b0c`). Prueba de procedencia; no trabajar sobre ella. |
 | Worktrees | solo la principal (la temporal se eliminó) |
 
 ## 2. Estado de git al cerrar
+
+> **Estado comprobado el 2026-11-17 (§24.1)**: `origin/claude/tradepilot-r-build024-rescate`
+> en `01a010572c198949776daab08cae8a3db71fe797` (`01a0105`); 20 commits sobre
+> `620cb42`. Las líneas siguientes son el estado al cerrar la sesión 3/4 y se
+> conservan como historia: los commits de §22 (`198c360`) y §23 (`01a0105`)
+> que allí figuran como locales están publicados.
 
 - Rama `claude/tradepilot-r-build024-rescate`, árbol **limpio** tras el
   commit `build: preparar autenticacion y Netlify gratuitos` (§22).
@@ -58,7 +64,8 @@ Commits de la rama sobre `620cb42`:
 | `b78393a` | Este documento: validación controlada con un perfil aislado (§19). **Publicado** (§20) |
 | `f01c2d4` | Este documento: registro del push (§20). Publicado (§22.1) |
 | `8e45ca6` | `apps/web/vercel.json` y `engines.node` en `apps/web/package.json`, con su documentación (§21). Publicado (§22.1) |
-| (siguiente) | `/auth/confirm` con `code` PKCE, sus tests, `apps/web/netlify.toml` y la documentación (§22). Local |
+| `198c360` | `/auth/confirm` con `code` PKCE, sus tests, `apps/web/netlify.toml` y la documentación (§22). Publicado (§23.1) |
+| `01a0105` | Permisos explícitos de `authenticated`, propiedad antes que idempotencia en `registrar_operacion`, suite 17 y guardas estáticas (§23). **Publicado** (comprobado el 2026-11-17, §24.1) |
 
 ## 3. Contexto ya verificado (no repetir)
 
@@ -302,7 +309,9 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
    lanzador completo correcto y `/login` vista sin sesión; recuentos sin
    cambios. **Rama publicada hasta `8e45ca6`** (§22.1). **Login PKCE y
    `netlify.toml` preparados en local** (§22); el alojamiento elegido pasa a
-   ser Netlify Free + Supabase Free. Siguiente: la fase F
+   ser Netlify Free + Supabase Free. **2026-11-17**: rama publicada hasta
+   `01a0105`, verificada en un entorno aislado y primera tanda de
+   estabilización hecha en otra rama, confirmada el 2026-11-18 (§24). Siguiente: la fase F
    (alojamiento): **compilación para Vercel preparada en local** (§21); crear
    los proyectos externos y desplegar, **NO autorizado todavía**.
 6. Fase D (alojamiento externo): ver el plan y los bloqueos de §12.
@@ -312,10 +321,10 @@ mostrar `.env.local`; modificar las carpetas antiguas o la copia de seguridad.
 ```powershell
 $r = "$env:USERPROFILE\Proyectos\tradepilot-r"
 git -C $r branch --show-current          # claude/tradepilot-r-build024-rescate
-git -C $r status --short --branch        # limpio; [ahead 1] respecto a origin (el commit de §22, sin publicar)
-git -C $r log --oneline 620cb42..HEAD    # 19 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + f01c2d4 + 8e45ca6 + el de §22
+git -C $r status --short --branch        # limpio y sincronizado con origin en 01a0105 (2026-11-17, §24.1). Antes: [ahead 1] por el commit de §22
+git -C $r log --oneline 620cb42..HEAD    # 20 commits: a620b51 … 5234494 + 1252d18 + bbb65d0 + 556bf1b + 35bbbe6 + ae06815 + ef94ce8 + baba52e + 449a360 + 8db019d + b78393a + f01c2d4 + 8e45ca6 + 198c360 (§22) + 01a0105 (§23)
 git -C $r show HEAD:tradepilot-r/supabase/migrations/20261017120000_event_times.sql | Out-Null  # existe
-git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 8e45ca6410e78fb6f17b0e70fbdc7d0c9450b527 (push de §22.1)
+git -C $r ls-remote --heads origin claude/tradepilot-r-build024-rescate   # 01a010572c198949776daab08cae8a3db71fe797 (comprobado el 2026-11-17, §24.1; antes 8e45ca6, push de §22.1)
 git -C $r ls-remote --heads origin 'rescate/*'                            # vacío: las ramas de respaldo no se publican
 # Base real, SOLO LECTURA (solo si el usuario autoriza conectarse):
 docker exec -e PGOPTIONS='-c default_transaction_read_only=on' supabase_db_tradepilot-r psql -U postgres -d postgres -X -At -c "select count(*) from supabase_migrations.schema_migrations"   # 19 (desde la Fase B, §13)
@@ -1427,6 +1436,15 @@ de Vercel ni Supabase, sin vincular el repositorio a ninguna cuenta.
 3. Variables solo por nombre: `NEXT_PUBLIC_SUPABASE_URL` y
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` (con la clave publicable del proyecto
    nuevo; la compatibilidad está **pendiente de probar**).
+   **Añadido el 2026-11-18 (§24.8)**: además, `TP_SITE_URL`, variable de
+   **servidor** (sin prefijo `NEXT_PUBLIC_`) y **obligatoria en producción**
+   con el código de §24.4 (DEC-014, pendiente de aprobación). Su valor es el
+   origen canónico definitivo de la aplicación (`https://` + dominio, sin ruta
+   ni barra final) y debe coincidir con la Site URL de Supabase Auth y figurar
+   exacto en sus Redirect URLs, sin comodines. Sin ella la página de acceso no
+   envía enlaces; si no coincide con el dominio por el que entra el usuario,
+   el enlace PKCE falla. El dominio aún no está elegido: no hay valor que
+   anotar aquí.
 4. Supabase: proyecto vacío en la UE, esquema (19 migraciones y los 4 SQL de
    funciones), Auth (Site URL, redirecciones, plantilla, SMTP) y copias.
 5. Primera compilación y despliegue, acceso y, después, desactivar el
@@ -1556,6 +1574,16 @@ ninguna petición a la app ni se envió ningún correo.
 3. Sitio de Netlify con los ajustes de §22.4, las dos variables
    `NEXT_PUBLIC_SUPABASE_*` (en la interfaz, nunca en git) y la rama de
    producción elegida.
+   **Añadido el 2026-11-18 (§24.8)**: además, `TP_SITE_URL`, variable de
+   **servidor** (sin prefijo `NEXT_PUBLIC_`) y **obligatoria en producción**
+   con el código de §24.4 (DEC-014, pendiente de aprobación). Su valor es el
+   origen canónico definitivo de la aplicación (`https://` + dominio, sin ruta
+   ni barra final) y debe coincidir con la Site URL de Supabase Auth y figurar
+   exacto en sus Redirect URLs, sin comodines (también la URL `netlify.app`
+   del punto 2, si es la que se usa como dominio canónico). Sin ella la página
+   de acceso no envía enlaces; si no coincide con el dominio por el que entra
+   el usuario, el enlace PKCE falla. El dominio aún no está elegido: no hay
+   valor que anotar aquí.
 4. Copias de seguridad manuales del proyecto remoto. Riesgos aceptados:
    2 correos por hora, enlace en el mismo navegador donde se pidió, pausa por
    inactividad, funciones en EE. UU. y créditos de Netlify.
@@ -1593,7 +1621,7 @@ ninguna petición a la app ni se envió ningún correo.
   defecto real.
 - Menor: `crear_operacion_nucleo` no se revocaba a `anon`.
 
-### 23.3 Cambios (commit `fix: asegurar permisos y propiedad de operaciones`, local)
+### 23.3 Cambios (commit `fix: asegurar permisos y propiedad de operaciones`, entonces local; publicado después como `01a0105`, §24.1)
 
 | Fichero | Cambio |
 |---|---|
@@ -1643,7 +1671,8 @@ ninguna petición a la app ni se envió ningún correo.
 
 ### 23.6 Pendiente (cada paso con autorización)
 
-1. Push del commit de §23.
+1. ~~Push del commit de §23.~~ **Hecho**: `01a0105` está en origin (comprobado con
+   `git ls-remote` el 2026-11-17, §24.1; fecha del push PENDIENTE).
 2. Instalación remota (20 migraciones + 4 SQL en el orden de `config.toml`) y
    matriz de permisos en el remoto con `has_table_privilege` /
    `has_function_privilege` (la misma que comprueba la suite 17 en `[0]`).
@@ -1655,6 +1684,167 @@ ninguna petición a la app ni se envió ningún correo.
 
 ---
 
+## 24. Sesión 5 · 2026-11-17 · Verificación de `01a0105` y estabilización (confirmada el 2026-11-18)
+
+Sesión en un contenedor Linux de Claude Code Web, no en el Windows del
+usuario. Sin acceso a la base original, al proyecto Supabase remoto, a Docker
+ni a datos NYS. Sin commits ni push: los cambios de §24.4 están en el árbol de
+la rama `claude/tradepilot-r-build024-verification`, pendientes de revisión.
+
+### 24.1 Estado de partida
+
+- `git ls-remote`: `origin/claude/tradepilot-r-build024-rescate` en
+  `01a010572c198949776daab08cae8a3db71fe797`. **El commit de §23 está
+  publicado**; lo que §1, §2, §10, §23.3, §23.6 y el prompt decían de que era
+  local quedó desfasado (corregido en esta sesión, conservando el texto
+  histórico). La fecha del push no consta: PENDIENTE.
+- Rama `claude/tradepilot-r-build024-verification` creada desde esa
+  referencia, **sin upstream** (se quitó para que un push accidental no
+  escriba en la referencia). La referencia no se ha tocado.
+
+### 24.2 Verificación técnica de `01a0105` (antes de cambiar nada)
+
+Node 24.22.3 / npm 11.19.1 (binario oficial, SHA-256 comprobado con
+`SHASUMS256.txt`, sin instalación global; el contenedor traía Node 22).
+`npm ci` con el lockfile intacto (509 paquetes).
+
+| Comprobación | Resultado |
+|---|---|
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0 · 212 ficheros, 0 errores, 0 avisos |
+| `npm run test` | **456/456** (48 ficheros, 7 paquetes), 0 omitidos |
+| Suites SQL 01–16 (PostgreSQL 16.15 desechable, `00_local_test_setup`, orden del README) | todas exit 0; las dos suites 16 en verde; **156** `ERROR:` esperados, igual que §23.4, reproducidos en una segunda base |
+| Carreras 11 y 12 (justo tras su suite de siembra) y las seis de la 14 | B esperó 3,006–3,016 s en todas; mismo `id`, una sola fila, errores tipados esperados; Σ `trade_pnl` = `pnl_amount` en las seis |
+| Suite 17 (base propia con `00_supabase_proyecto_nuevo_setup`) | instalación sin errores, `SUITE 17 · TODO CORRECTO` |
+| Inventario de esquema (lógica de `generar-esquema-esperado.sh`, sin escribir en el repositorio) | 435 objetos, idéntico byte a byte a `esquema-esperado.txt` |
+| `npm run build` (URL `.invalid` y clave ficticias) | exit 0 · 20 rutas + middleware; valores ficticios en 9 ficheros, ninguna URL local |
+
+Clúster desechable: `initdb` nuevo, solo `127.0.0.1:55432`, sin socket Unix,
+`system_identifier` propio; parado y borrado al terminar.
+
+### 24.3 Auditoría (solo lectura)
+
+- `npm audit`: 21 avisos; **4 en producción** (`next`, `postcss` dentro de
+  next, `exceljs`, `uuid`), 17 solo de desarrollo (vitest/tinypool/vite/
+  esbuild/typescript-eslint y sus globs, js-yaml). `exceljs` solo usa
+  `uuid.v4()` sin `buf`: el aviso de uuid no le alcanza. `postcss` solo
+  procesa el CSS propio al compilar.
+- Next 15.5.29 (rama 15.5, 2026-11-03) corrige tres avisos moderados que
+  `npm audit` aún no listaba: GHSA-f3mh-rxg3-f5g2 (cookies HttpOnly en rutas
+  Edge; el middleware fija cookies y no queda claro si está incluido),
+  GHSA-pc58-hwjq-p385 (no aplica) y GHSA-7qx7-33qx-rqx2 (`/_next/image`).
+- npm 11.19: el `postinstall` de esbuild **sí** se ejecuta (aviso, no bloqueo,
+  mientras `strict-allow-scripts` siga en `false`); comprobado porque
+  `bin/esbuild` quedó como binario nativo.
+- Revisión estática de la app: dos fallos corregidos en §24.4 (origen del
+  enlace mágico tomado de cabeceras del cliente; redirección abierta con
+  `/\dominio` o tabulador), faltaban cabeceras HTTP de seguridad, y tres
+  endurecimientos SQL propuestos sin aplicar (§24.7).
+
+### 24.4 Cambios de la tanda de estabilización (confirmados el 2026-11-18, §24.9)
+
+| Fichero | Cambio |
+|---|---|
+| `apps/web/lib/config/origen.ts` | Nuevo. Origen canónico desde `TP_SITE_URL` (variable de **servidor**, sin `NEXT_PUBLIC_`): https, o http solo en localhost; sin credenciales, ruta, consulta ni fragmento. Obligatoria en producción; en `next dev`, si falta, `http://localhost:3000` (el origen único del lanzador). Nunca lee cabeceras |
+| `apps/web/actions/auth.ts` | `getOrigin()` (cabeceras `Host` / `x-forwarded-host`) eliminado; sin origen válido no se envía el enlace y se registra el motivo |
+| `apps/web/lib/validation/redirect.ts` | Validación con el analizador de URL WHATWG y mismo origen; rechaza barra invertida, caracteres de control, `//` (también tras normalizar `..`) y sus variantes codificadas |
+| `apps/web/next.config.mjs` | Cabeceras de seguridad: `nosniff`, `Referrer-Policy`, `X-Frame-Options: DENY`, `Permissions-Policy`, CSP aplicada mínima y CSP completa en `Report-Only` (solo producción). Sin HSTS hasta el dominio definitivo |
+| `apps/web/package.json`, `package-lock.json` | `next` 15.5.28 → **15.5.29** (exacto); `js-yaml` 4.3.1 → 4.3.2 (solo lockfile) |
+| `apps/web/.env.example` | Documenta `TP_SITE_URL` |
+| Tests | `test/config/origen.test.ts` (nuevo), `test/actions/auth.test.ts` y `test/validation/redirect.test.ts` ampliados |
+| Documentación | Este §24 y las correcciones de §1, §2, §9, §10, §23 y el prompt; `AGENTS.md`, `10_CURRENT_STATUS.md`, `07_SECURITY.md` (A.6, A.7), `09_DECISIONS.md` (DEC-014, DEC-015) |
+
+### 24.5 Pruebas de la tanda
+
+| Prueba | Resultado |
+|---|---|
+| Control: tests nuevos contra el código de `01a0105` | **30 fallan** (los de redirección y origen); con el código nuevo pasan todos |
+| `npm ci` con el lockfile nuevo | exit 0, lockfile sin cambios; 508 paquetes (ya no se instala `@next/swc-linux-x64-musl` en glibc: npm 11 añade `libc` al lockfile) |
+| Diff del lockfile | `next`, `@next/env`, los 8 `@next/swc-*` y `js-yaml`; metadatos `engines` (copia del `package.json` de la web) y `libc` de los binarios de Linux |
+| `npm run typecheck` / `npm run lint` | exit 0 / 214 ficheros, 0 errores, 0 avisos |
+| `npm run test` | **526/526** (49 ficheros): 456 + 70 nuevos |
+| `npm run build` | exit 0 · 20 rutas + middleware; `TP_SITE_URL` no aparece en los estáticos |
+| `next start` + `curl -I` | cabeceras presentes en páginas, redirección del middleware, redirección de `/auth/confirm` y estáticos |
+| Chromium contra `next start` | `/login` hidrata, **0 violaciones de CSP** (aplicada ni informe), 0 errores de consola; el formulario ejecuta la Server Action. Incrustada desde otro origen: `ERR_BLOCKED_BY_RESPONSE` (marco de control sí carga) |
+| `next start` sin `TP_SITE_URL` | «El acceso no está disponible…», sin llamar a Supabase; el servidor registra `ORIGEN_NO_CONFIGURADO` |
+| Suites SQL | No repetidas: ningún cambio toca SQL |
+
+### 24.6 Sin verificar
+
+- Login real contra Supabase (local o remoto) con `TP_SITE_URL`; páginas con
+  sesión bajo la CSP en informe (solo se recorrió `/login`).
+- Windows: `Abrir_TradePilot.bat` con estos cambios (`next dev` usa el origen
+  local por defecto, sin tocar `.env.local`).
+- Netlify/Vercel: que respeten las cabeceras de `next.config.mjs` y la versión
+  de npm que usen.
+
+### 24.7 Pendiente (cada paso con autorización)
+
+1. Revisar y confirmar esta tanda (commit en la rama de verificación).
+2. Migración de endurecimiento SQL (propuesta en el informe de la sesión 5, sin
+   crear): revocar `EXECUTE` a PUBLIC/anon y conceder solo a `authenticated`,
+   `pg_temp` en el `search_path` de `crear_intencion_de_gestion`.
+3. Al elegir dominio: `TP_SITE_URL`, Site URL y Redirect URLs exactas en
+   Supabase (sin comodines), HSTS, y pasar la CSP de informe a aplicada.
+4. Saltos mayores (vitest 4/5, typescript-eslint 8, next 16) en ramas aparte.
+
+### 24.8 2026-11-18 · Revisión final y cierre documental
+
+Misma rama, mismo árbol sin confirmar, `01a0105` sin cambios en origin. Sin
+commit, push, migraciones ni acceso a Supabase.
+
+- **Auditoría previa (solo lectura)**: la propuesta SQL de §24.7.2 tiene dos
+  defectos y **no** debe convertirse en migración tal cual:
+  (a) `alter default privileges in schema public revoke … from public` no
+  cierra las funciones futuras (el EXECUTE de PUBLIC es un privilegio por
+  defecto global: hay que usar `for role postgres` sin `in schema`; comprobado
+  en base desechable); (b) `scripts/windows/comprobar-funciones.ps1` llama a
+  `listar_empresas` y `listar_lotes_importacion` con la clave anónima y sin
+  usuario, así que revocar EXECUTE a `anon` pararía `Abrir_TradePilot.bat`
+  (deducido leyendo el script; no probado en Windows). Además: la app usa 26
+  RPC; las 29 funciones de trigger no necesitan EXECUTE (comprobado); limitar
+  `authenticated` a las 26 rompe las suites 03–14. La suite 17 `[2e]` debe
+  exigir `permission denied` para `anon` y conservar aparte la comprobación de
+  propiedad con un usuario sin sesión.
+- **Documentación**: DEC-014 y DEC-015 pasan a §3 de `09_DECISIONS.md`
+  («PENDIENTE DE DECISIÓN HUMANA»; no estaban aprobadas y su estado no era del
+  vocabulario del fichero). `TP_SITE_URL` añadida como nota fechada en §21.5 y
+  §22.7. `07_SECURITY.md` A.2: 13 funciones `SECURITY DEFINER` (10 invocables,
+  las 10 validan `auth.uid()`; 3 de trigger), comprobado en el código. Las 9
+  menciones de «sin commit» se mantuvieron en esa fase (eran ciertas); se
+  actualizaron con el commit de §24.9.
+- **Tests nuevos** (19): `test/auth/confirm.test.ts` (13: `next` con barra
+  invertida, tabulador, salto de línea y doble codificación en los flujos
+  `code` y `token_hash`, más un destino legítimo) y
+  `test/security/cabeceras.test.ts` (6: carga `next.config.mjs` real, resuelve
+  las cabeceras de cada ruta de `app/` con el comparador de Next.js y comprueba
+  la CSP por directivas en producción y desarrollo).
+- **Control**: con el saneador de `01a0105` fallan 12 de los 13 nuevos de
+  `/auth/confirm`; con el `next.config.mjs` de `01a0105` fallan 5 de 6; con una
+  CSP aplicada que bloquearía scripts fallan 2, y con un origen externo y
+  `unsafe-eval` en la política de informe falla 1.
+- **Resultados**: typecheck, lint, **545/545** tests (50 ficheros) y build;
+  detalle en el informe de la sesión.
+- **Sigue sin verificar**: que el servidor y la plataforma envíen las
+  cabeceras (solo `next start` a mano el 2026-11-17), login real, Windows y
+  Supabase remoto.
+
+### 24.9 2026-11-18 · Commit y push de la rama de verificación
+
+Autorizado por el usuario. Todo lo de §24.4 a §24.8 en un commit de la rama `claude/tradepilot-r-build024-verification`,
+publicada en origin con ese mismo nombre (rama nueva). La referencia
+`claude/tradepilot-r-build024-rescate` sigue en `01a0105`, sin cambios.
+Identificador del commit: `git log -1 --format=%h -- tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md`.
+
+**Nuevo criterio de avance (usuario, 2026-11-18)**: el proyecto se da por
+terminado cuando hay una URL HTTPS que el usuario puede abrir desde PC y móvil,
+iniciar sesión, crear sus Cuentas y guardar Operaciones, con datos
+persistentes y sin Claude, Docker, terminal ni `.bat`. Las dos Cuentas NYS se
+conservan: nada de reiniciar ni sustituir la base local sin copia y plan
+verificados.
+
+---
+
 ## PROMPT PARA REANUDAR MAÑANA
 
 ```text
@@ -1663,8 +1853,9 @@ nueva de Claude Code. No tienes acceso a la conversación anterior.
 
 Repositorio: %USERPROFILE%\Proyectos\tradepilot-r
 Aplicación:  %USERPROFILE%\Proyectos\tradepilot-r\tradepilot-r
-Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 198c360;
-             el commit de §23 es solo local)
+Rama:        claude/tradepilot-r-build024-rescate (en origin hasta 01a0105,
+             referencia protegida). Trabajo posterior en la rama
+             claude/tradepilot-r-build024-verification (§24)
 
 1. Lee primero tradepilot-r/docs/context/12_BUILD024_RESCUE_HANDOFF.md
    completo. Después tradepilot-r/AGENTS.md y los documentos de contexto que

@@ -4,9 +4,42 @@
 > coincide con el código, gana el código — y entonces este fichero está
 > desactualizado y hay que corregirlo.
 
-**Última verificación**: 2026-10-18 · importador de ficheros, fase 1, sobre
-`3961c27` (rama de trabajo `claude/ecstatic-planck-tg10r0`). La verificación
-anterior (2026-10-01, `c91e3af`) se conserva abajo donde no ha cambiado.
+**Última verificación**: 2026-11-17 · `01a0105` (publicado en
+`claude/tradepilot-r-build024-rescate`) en un entorno Linux aislado, y primera
+tanda de estabilización confirmada el 2026-11-18 en `claude/tradepilot-r-build024-verification`
+(detalle en `12_BUILD024_RESCUE_HANDOFF.md` §24). Las verificaciones anteriores
+se conservan abajo: 2026-10-18 · importador de ficheros, fase 1, sobre `3961c27`
+(rama de trabajo `claude/ecstatic-planck-tg10r0`), y 2026-10-01, `c91e3af`.
+
+### Verificación de BUILD024 y estabilización (2026-11-17)
+
+- **Verificación de `01a0105`** con Node 24.22.3 y `npm ci`: typecheck, lint
+  (212 ficheros, 0 errores, 0 avisos), build (20 rutas + middleware), suites
+  SQL 01–17 en PostgreSQL 16 desechable (156 errores esperados, carreras 11,
+  12 y 14 reales y correctas, suite 17 en verde) e inventario de 435 objetos
+  idéntico a `supabase/esquema-esperado.txt`.
+- **Estabilización (confirmada el 2026-11-18 en la rama de verificación)**:
+  - Origen del enlace mágico desde `TP_SITE_URL` (variable de servidor,
+    obligatoria en producción); ya no se toma de `Host` / `x-forwarded-host`.
+  - `sanitizeRedirectTarget` con validación WHATWG de mismo origen (cerraba
+    `/\dominio` y `/<TAB>/dominio`).
+  - Cabeceras HTTP de seguridad; CSP mínima aplicada y completa en informe.
+  - `next` 15.5.28 → 15.5.29 (tres avisos moderados) y `js-yaml` 4.3.2.
+- **Pendiente**: endurecimiento SQL de `EXECUTE` (propuesto, sin migración),
+  HSTS y CSP aplicada al elegir dominio, saltos mayores de herramientas de
+  desarrollo (vitest, typescript-eslint) y next 16. `npm audit`: 20 avisos
+  (21 antes; se cierra js-yaml). En producción siguen 4 (`next` por su
+  `postcss` 8.4.31, `postcss`, `exceljs`, `uuid`), ninguno explotable según la
+  auditoría de §24.3; los tres avisos propios de Next que corrige 15.5.29 aún
+  no los listaba `npm audit`.
+
+```
+Tests TypeScript: 456 verdes en 01a0105 · 526 verdes tras la estabilización
+(49 ficheros; +70: redirección, origen y acción de login) · 545 verdes el
+2026-11-18 (50 ficheros; +19: /auth/confirm con next malicioso y cabeceras HTTP)
+SQL: suites 01–17 verdes en 01a0105 (sin cambios de SQL después)
+Login real contra Supabase con TP_SITE_URL: SIN VERIFICAR
+```
 
 ### Diagnóstico, dependencias y Windows (2026-10-18, tercera tanda)
 

@@ -119,6 +119,50 @@ describe("GET /auth/confirm", () => {
     });
   });
 
+  // `next` llega en la URL del enlace del correo, codificado. Estas variantes
+  // pasaban el saneador anterior y el navegador las resuelve a otro dominio:
+  // `/\evil.example` (la barra invertida cuenta como `/`) y `/<TAB>/evil.example`
+  // (el tabulador se descarta). La ruta debe acabar en `/` en los dos flujos y,
+  // seguida como la sigue un navegador, quedarse en el propio origen.
+  describe("next malicioso tras un acceso válido (open redirect)", () => {
+    const ORIGEN = "https://app.tradepilot.example";
+    const casos: Array<[string, string]> = [
+      ["barra invertida", "%2F%5Cevil.example"],
+      ["barra invertida tras ruta", "%2F%5C%2Fevil.example%2Fphishing"],
+      ["tabulador", "%2F%09%2Fevil.example"],
+      ["salto de línea", "%2F%0A%2Fevil.example"],
+      ["barra invertida doblemente codificada", "%2F%255Cevil.example"],
+      ["tabulador doblemente codificado", "%2F%2509%2Fevil.example"],
+    ];
+
+    it.each(casos)("flujo PKCE: rechaza %s", async (_caso, next) => {
+      exchangeCodeForSessionMock.mockResolvedValueOnce({ data: { session: {} }, error: null });
+
+      const destino = await destinoDe(`?code=codigo-de-prueba&next=${next}`);
+
+      expect(exchangeCodeForSessionMock).toHaveBeenCalledTimes(1);
+      expect(destino).toBe("/");
+      expect(new URL(destino, `${ORIGEN}/auth/confirm`).origin).toBe(ORIGEN);
+    });
+
+    it.each(casos)("flujo token_hash: rechaza %s", async (_caso, next) => {
+      verifyOtpMock.mockResolvedValueOnce({ data: {}, error: null });
+
+      const destino = await destinoDe(`?token_hash=hash-de-prueba&type=email&next=${next}`);
+
+      expect(verifyOtpMock).toHaveBeenCalledTimes(1);
+      expect(destino).toBe("/");
+      expect(new URL(destino, `${ORIGEN}/auth/confirm`).origin).toBe(ORIGEN);
+    });
+
+    it("un next interno legítimo sigue funcionando en los dos flujos", async () => {
+      exchangeCodeForSessionMock.mockResolvedValueOnce({ data: { session: {} }, error: null });
+      expect(await destinoDe("?code=codigo-de-prueba&next=%2Fcuentas%2Fabc%2Foperaciones")).toBe("/cuentas/abc/operaciones");
+      verifyOtpMock.mockResolvedValueOnce({ data: {}, error: null });
+      expect(await destinoDe("?token_hash=hash-de-prueba&type=email&next=%2Fimportar")).toBe("/importar");
+    });
+  });
+
   describe("parámetros incorrectos", () => {
     it("sin parámetros va a la página de error sin llamar a Supabase", async () => {
       expect(await destinoDe("")).toBe("/auth/auth-code-error");

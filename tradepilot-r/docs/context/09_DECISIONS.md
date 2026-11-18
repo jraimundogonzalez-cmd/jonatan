@@ -211,6 +211,38 @@ fichero corresponde a la Cuenta de TradePilot; después no se admite otra, ni la
 misma cuenta externa en otra Cuenta. No se añade columna a `accounts`: el
 vínculo se deriva del primer lote, que es inmutable.
 
+### DEC-014 · El origen de los enlaces de correo es configuración del servidor
+**Planteada**: 2026-11-17 · **Estado**: **PENDIENTE DE DECISIÓN HUMANA**
+(implementada y confirmada el 2026-11-18 en `claude/tradepilot-r-build024-verification`,
+`12_BUILD024_RESCUE_HANDOFF.md` §24; la decisión sigue sin aprobación expresa)
+
+**Propuesta**: el enlace mágico usa `TP_SITE_URL` (variable de servidor, sin
+`NEXT_PUBLIC_`), nunca las cabeceras `Host` / `x-forwarded-host`. Obligatoria
+en producción; en `next dev` vale `http://localhost:3000` si falta.
+**Motivo**: las cabeceras las escribe el cliente; con un comodín en las
+redirecciones de Supabase permitían robar la sesión (`07_SECURITY.md` A.6). El
+valor por defecto de desarrollo evita tocar `.env.local`, que el lanzador de
+Windows gestiona con exactamente dos claves.
+**Impacto si se aprueba**: cada despliegue debe definir `TP_SITE_URL` (§21.5 y
+§22.7 del traspaso); sin ella el login no envía enlaces. Con PKCE, entrar por
+un dominio distinto de `TP_SITE_URL` hace fallar el enlace.
+**Para pasar a VIGENTE**: aprobación expresa.
+
+### DEC-015 · CSP en dos niveles hasta tener nonces
+**Planteada**: 2026-11-17 · **Estado**: **PENDIENTE DE DECISIÓN HUMANA**
+(implementada y confirmada el 2026-11-18 en `claude/tradepilot-r-build024-verification`;
+la decisión sigue sin aprobación expresa)
+
+**Propuesta**: se aplican solo las directivas que no pueden romper la app
+(`frame-ancestors`, `base-uri`, `form-action`, `object-src`) y la política
+completa va en `Content-Security-Policy-Report-Only`. HSTS no se fija hasta el
+dominio definitivo.
+**Motivo**: una CSP restrictiva sin comprobar sus efectos puede dejar la app
+inservible; las páginas con sesión aún no se han recorrido bajo la política.
+**Impacto si se aprueba**: pasar a aplicada exige recorrer la app con sesión;
+quitar `'unsafe-inline'` exige nonces y renderizado dinámico.
+**Para pasar a VIGENTE**: aprobación expresa.
+
 ---
 
 ## 4. Decisiones que NO se han tomado
