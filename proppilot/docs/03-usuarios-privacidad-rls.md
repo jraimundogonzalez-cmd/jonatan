@@ -109,9 +109,67 @@ create policy "docs_insert_own" on storage.objects for insert to authenticated
 - Bucket aparte `firm-logos` **público** solo para logotipos (no contienen datos privados).
 - Metadatos EXIF (GPS de fotos del móvil): ver decisión D8.
 
-## 7. Límite honesto: el administrador técnico y la base de datos
+## 6 bis. Revisión completa de superficie de acceso (mejora obligatoria 4)
 
-Tú pediste que el administrador técnico no tenga acceso automático a los datos financieros de los demás.
+### Tablas
+
+| Tabla | Clase | SELECT | INSERT | UPDATE | DELETE | Protección adicional |
+|-------|-------|--------|--------|--------|--------|----------------------|
+| `profiles` | privada | `id = uid` | trigger de alta | `id = uid` (solo `display_name`, `timezone`) | — | sin columna de rol |
+| `platform_roles` | control | `user_id = uid` | — | — | — | solo migración |
+| `invitations` | control | `created_by = uid` ∧ owner | owner | owner (`revoked_at`, `status`) | — | token solo como hash |
+| `prop_firms`, `firm_programs`, `account_products`, `product_options`, `rule_sets`, `rule_items`, `firm_aliases` | ref./privada | `global` ∨ `owner_id = uid` | privada: dueño · global: owner | ídem | — (archivar) | `scope` y `owner_id` inmutables |
+| `accounts` | privada | `owner_id = uid` | `owner_id = uid` | RPC con motivo | — | `status` solo vía historial; FK compuestas |
+| `account_selected_options` | privada | dueño | dueño | — | — | FK compuesta |
+| `evaluation_attempts` | privada | dueño | dueño | RPC con motivo | — | FK compuesta |
+| `account_status_history`, `payout_status_history` | privada append-only | dueño | dueño (valida trigger) | — | — | trigger rechaza UPD/DEL |
+| `transactions` | privada financiera | dueño | dueño / RPC | **solo RPC** con motivo | — | importes inmutables, auditoría |
+| `payouts` | privada financiera | dueño | dueño / RPC | **solo RPC** con motivo | — | auditoría |
+| `trades` | privada financiera | dueño | dueño / RPC | **solo RPC** con motivo | — (anular) | auditoría, fingerprint |
+| `strategies`, `instruments` (privados) | privada | dueño (+ globales en `instruments`) | dueño | dueño | — (archivar) | |
+| `documents`, `document_links` | privada | dueño | dueño | estado solo vía RPC | — | ruta con prefijo `uid` |
+| `document_extractions` | privada append-only | dueño | servidor con JWT del dueño | — | — | |
+| `import_batches`, `export_jobs` | privada | dueño | dueño | RPC | — | |
+| `record_changes`, `audit_log` | privada append-only | dueño | solo trigger | — | — | |
+| `currencies`, `rule_keys`, `fx_rates` | referencia | autenticados | — (migración / tarea FX) | — | — | |
+
+`uid` = `(select auth.uid())`; "owner" = `private.is_platform_owner()`. Toda tabla: `enable` + `force row level security`, `revoke all from anon`.
+
+### Funciones RPC previstas
+
+| Función | Seguridad | Comprobaciones |
+|---------|-----------|----------------|
+| `create_account_with_purchase`, `change_account_status`, `register_payout_*`, `rectify_transaction`, `void_transaction`, `update_*`, `void_trade`, `confirm_document`, `import_trades`, `revert_import`, `stats_*`, `request_export` | `SECURITY INVOKER` | RLS + `owner_id = auth.uid()` explícito + validación de que **todos** los IDs recibidos pertenecen al llamante (si no, el error es "no encontrado", sin revelar si existen) |
+| `private.is_platform_owner`, `private.check_invitation`, `private.consume_invitation`, `private.audit_trigger`, `private.status_history_trigger` | `SECURITY DEFINER`, `search_path = ''`, esquema no expuesto | `revoke execute from public, anon, authenticated` salvo las imprescindibles; no reciben `owner_id` como parámetro |
+
+**Regla de diseño:** ninguna RPC acepta `owner_id` o `user_id` como parámetro. El propietario siempre es `auth.uid()`.
+
+### Storage
+
+| Bucket | Público | Lectura | Escritura | Borrado |
+|--------|---------|---------|-----------|---------|
+| `documents` | no | carpeta `uid/` | carpeta `uid/` | nunca desde el cliente |
+| `documents` → `uid/exports/` | no | carpeta `uid/` | solo el servidor, con el JWT del usuario | limpieza automática a las 24 h |
+| `firm-logos` | sí | todos | solo el owner | solo el owner |
+
+### Exportaciones
+
+Se generan en servidor **con el JWT del usuario** (RLS aplica a cada consulta), nunca con `service_role`. El archivo se guarda en
+`uid/exports/` y se descarga por URL firmada de 60 s. Ver doc 05 M10.
+
+## 7. Límite aceptado: el administrador técnico y la base de datos (D4, **aprobada**)
+
+> **Decisión aprobada (D4):** se acepta que el propietario técnico de la infraestructura tenga capacidad de acceso administrativo a Supabase.
+> La aplicación garantiza que **ningún usuario**, incluido el propietario dentro de la app, pueda consultar datos privados de otro.
+
+**Texto que verán todos los usuarios en el onboarding y en Ajustes → Privacidad:**
+
+> *PropPilot aísla tus datos de los demás usuarios mediante seguridad en la base de datos: ningún otro usuario de la aplicación,
+> incluido su administrador, puede ver tus cuentas, movimientos, operaciones, payouts ni documentos desde la aplicación.
+> Sin embargo, la persona que administra la infraestructura (base de datos y copias de seguridad) tiene, por la naturaleza del servicio,
+> capacidad técnica de acceso administrativo a los datos almacenados. Se compromete a no utilizarla salvo para mantenimiento
+> o recuperación ante fallos, y ese acceso está protegido con doble factor.*
+
 Hay que distinguir dos cosas:
 
 1. **Dentro de la aplicación:** garantizado. No existe ruta, rol, política ni panel que muestre datos ajenos
@@ -129,7 +187,11 @@ Opciones:
 | C. Cifrado en el cliente con clave derivada de la contraseña del usuario | Sí | Rompe estadísticas en SQL, OCR en servidor, deduplicación y recuperación de contraseña (perder la contraseña = perder los datos). No recomendable para este producto |
 | D. Que otra persona de confianza (no usuario) sea la propietaria del proyecto Supabase | Parcial: desplaza la confianza | Operativo |
 
-**Es una decisión que debes tomar tú (D4)**, y conviene comunicarla a tu mujer y a tu amigo con claridad.
+**Resuelto: se adopta la opción A (D4 aprobada).** Medidas que la acompañan:
+- La cuenta de Supabase del propietario técnico con MFA obligatoria, sin credenciales compartidas.
+- No se crean usuarios de base de datos adicionales con `bypassrls`.
+- Las copias de seguridad van cifradas y la clave solo la tiene el propietario técnico (doc 11 §4).
+- La limitación se comunica por escrito a cada usuario (texto anterior) y cada usuario la acepta en su alta.
 
 ## 8. Otras medidas
 

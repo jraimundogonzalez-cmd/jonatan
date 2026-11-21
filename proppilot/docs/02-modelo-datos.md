@@ -27,7 +27,12 @@ erDiagram
   auth_users ||--o{ invitations : "crea"
 
   prop_firms ||--o{ firm_aliases : ""
-  prop_firms ||--o{ account_products : ""
+  prop_firms ||--o{ firm_programs : "línea + programa"
+  firm_programs ||--o{ account_products : "tamaño + plataforma"
+  account_products ||--o{ product_options : "opciones de compra"
+  accounts ||--o{ account_selected_options : ""
+  profiles ||--o{ record_changes : "auditoría financiera"
+  profiles ||--o{ export_jobs : ""
   prop_firms ||--o{ rule_sets : "versionadas"
   rule_sets ||--o{ rule_items : ""
   account_products ||--o{ rule_sets : ""
@@ -74,6 +79,7 @@ erDiagram
 - Estados: tipos `enum` de Postgres (añadir valores es no destructivo).
 - Sin `DELETE` físico en datos contables: `voided_at`, `void_reason`; los registros anulados no cuentan en estadísticas.
 - `archived_at` para ocultar entidades no contables sin perder historial.
+- Cambios en datos económicos solo mediante RPC con motivo obligatorio, auditados en `record_changes` (§4.10).
 
 ## 4. Tablas
 
@@ -136,27 +142,56 @@ create table firm_aliases (            -- ayuda al OCR a identificar la empresa 
   firm_id uuid references prop_firms(id), alias text not null, primary key (firm_id, alias)
 );
 
-create table account_products (        -- "Evaluación 50K", "Instant Funded 25K"...
-  id             uuid primary key default gen_random_uuid(),
-  firm_id        uuid not null references prop_firms(id),
-  name           text not null,
-  program_type   program_type not null,   -- evaluation_1step|evaluation_2step|instant_funded|other
-  nominal_size   numeric(18,2) not null check (nominal_size > 0),
-  currency       char(3) not null,
-  list_price     numeric(18,2),           -- null = no verificado
-  billing        text check (billing in ('one_time','monthly','unknown')),
-  platforms      text[],                  -- Rithmic, Tradovate, MT5... (texto libre controlado)
-  status         text not null default 'active'
+create table firm_programs (           -- "LucidFlex", "LucidPro", "NYS Futures · The Thunder", "NYS CFDs · One Trade"
+  id            uuid primary key default gen_random_uuid(),
+  firm_id       uuid not null references prop_firms(id),
+  business_line text not null,          -- 'futures' | 'cfd' | 'forex' | 'crypto' (NYS tiene CFDs y futuros)
+  name          text not null,
+  program_type  program_type not null,  -- evaluation_1step|evaluation_2step|instant_funded|direct_funded|other
+  access        text not null default 'public' check (access in ('public','invite_only','legacy')),
+  unique (firm_id, business_line, name)
 );
+
+create table account_products (        -- programa × tamaño × variante de plataforma: "LucidFlex 25K Rithmic"
+  id               uuid primary key default gen_random_uuid(),
+  firm_id          uuid not null references prop_firms(id),
+  program_id       uuid not null references firm_programs(id),
+  product_kind     text not null check (product_kind in ('account','reset','activation','add_on','subscription')),
+  name             text not null,
+  nominal_size     numeric(18,2) check (nominal_size > 0),
+  currency         char(3) not null,
+  platform_variant text,                 -- 'Rithmic', 'NT/TDV', 'MT5'... (puede cambiar reglas y precio)
+  list_price       numeric(18,2),        -- null = no verificado
+  price_verification rule_verification not null default 'pending',
+  price_source_url text,
+  price_checked_on date,
+  billing          text check (billing in ('one_time','monthly','unknown')),
+  status           text not null default 'active'
+);
+
+create table product_options (         -- opciones elegidas en la compra que alteran reglas
+  id          uuid primary key default gen_random_uuid(),
+  product_id  uuid not null references account_products(id),
+  option_key  text not null,           -- 'daily_loss_limit' | 'consistency_addon' ...
+  option_value text not null,          -- 'none' | 'fixed' | '50pct' ...
+  extra_price numeric(18,2),
+  verification_status rule_verification not null default 'pending',
+  source_url  text
+);
+
+create type rule_verification as enum ('pending','candidate','verified','outdated','disputed');  -- ver doc 10 §1
 
 create table rule_sets (                -- una versión de las reglas de un producto
   id                  uuid primary key default gen_random_uuid(),
   firm_id             uuid not null references prop_firms(id),
-  product_id          uuid references account_products(id),  -- null = reglas generales de la empresa
+  product_id          uuid references account_products(id),  -- null SOLO para reglas con rule_keys.firm_scope_allowed
+  option_filter       jsonb,             -- p. ej. {"daily_loss_limit":"fixed"}: solo aplica a cuentas con esa opción
   version             int not null,
   effective_from      date,
   effective_to        date,
-  verification_status rule_verification not null default 'pending', -- pending|verified|outdated|disputed
+  applies_to_purchases_from timestamptz, -- p. ej. LucidPro: condiciones distintas antes/después del 28/11/2025 15:00 EST
+  applies_to_purchases_to   timestamptz,
+  verification_status rule_verification not null default 'pending',
   source_url          text,
   source_document_id  uuid,              -- captura de la web de reglas, si se guardó
   last_reviewed_at    timestamptz,
@@ -172,12 +207,30 @@ create table rule_items (               -- cada regla individual, tipada y verif
   rule_key            text not null references rule_keys(key),
   value_numeric       numeric,
   value_text          text,
-  unit                text,                    -- 'USD','percent','days','trades'...
+  unit                text,                    -- 'USD','percent_of_initial_balance','percent_of_cycle_profit','days','contracts'...
   verification_status rule_verification not null default 'pending',
-  source_url          text,
-  notes               text
+  source_url          text,                    -- obligatoria salvo en 'pending'
+  source_accessed_on  date,                    -- fecha de consulta (obligatoria salvo en 'pending')
+  source_excerpt      text,                    -- texto literal de la fuente
+  source_document_id  uuid,                    -- captura de la página (obligatoria para 'verified')
+  verified_by         uuid references auth.users(id),
+  notes               text,
+  check (verification_status = 'pending' or (source_url is not null and source_accessed_on is not null)),
+  check (verification_status <> 'verified' or (source_document_id is not null and verified_by is not null))
+);
+
+create table account_selected_options (   -- qué opciones eligió el usuario al comprar (filtra reglas)
+  account_id uuid not null, owner_id uuid not null,
+  option_id  uuid not null references product_options(id),
+  primary key (account_id, option_id),
+  foreign key (account_id, owner_id) references accounts(id, owner_id)
 );
 ```
+
+**Resolución de reglas de una cuenta:** se toman las reglas de los `rule_sets` cuyo `product_id` es el de la cuenta,
+cuya ventana `applies_to_purchases_*` contiene la fecha de compra (o del último reset) y cuyo `option_filter` coincide con las
+opciones elegidas, más las reglas de empresa de claves con `firm_scope_allowed`. **No hay herencia entre programas, tamaños,
+variantes de plataforma ni líneas de negocio.** Solo las reglas `verified` alimentan cálculos y alertas.
 
 `rule_keys` es un catálogo extensible (sin tocar código) con claves como: `profit_target`, `max_drawdown`,
 `drawdown_type` (trailing/EOD/static), `daily_loss_limit`, `min_trading_days`, `min_winning_days`,
@@ -292,10 +345,20 @@ create table transactions (
   payment_method  text,
   description     text,
   document_id     uuid,
-  dedupe_key      text,                             -- nº de pedido/factura/referencia normalizada
+  document_item_key text,                           -- qué elemento del documento originó este movimiento ('total', 'line:2')
+  external_ref_type text check (external_ref_type in ('invoice','order','payment','payout','other')),
+  external_ref    text,                             -- nº de factura/pedido/transacción tal como aparece
+  dedupe_key      text,                             -- normalizado: firm_id + tipo ref + ref en mayúsculas sin espacios/guiones
+  fingerprint     text,                             -- hash(firm_id, kind, amount, currency, occurred_on) para avisos difusos
+  duplicate_override_reason text,                   -- obligatorio si el usuario confirma pese a un aviso de posible duplicado
+  -- rectificación y anulación trazables (ver §4.10)
   voided_at       timestamptz,
+  voided_by       uuid,
   void_reason     text,
+  replaces_transaction_id uuid,                     -- esta fila rectifica a otra (que queda anulada)
   unique (id, owner_id),
+  foreign key (replaces_transaction_id, owner_id) references transactions(id, owner_id),
+  check ((voided_at is null) = (void_reason is null)),
   foreign key (account_id, owner_id) references accounts(id, owner_id),
   foreign key (attempt_id, owner_id) references evaluation_attempts(id, owner_id),
   foreign key (payout_id,  owner_id) references payouts(id, owner_id),
@@ -307,11 +370,14 @@ create table transactions (
 );
 create unique index on transactions (owner_id, kind, dedupe_key) where dedupe_key is not null and voided_at is null;
 create unique index on transactions (payout_id) where kind = 'payout_receipt' and voided_at is null;  -- 1 cobro por payout
+create unique index on transactions (owner_id, document_id, document_item_key)
+  where document_id is not null and voided_at is null;   -- un mismo elemento de un justificante no genera 2 movimientos
+create unique index on transactions (replaces_transaction_id) where replaces_transaction_id is not null; -- 1 rectificación por fila
 ```
 
-Trigger de inmutabilidad: una vez creada, solo se permite modificar `description`, `payment_method`,
-`document_id` y anular (`voided_at`, `void_reason`). Para corregir un importe: anular y crear uno nuevo
-(queda rastro de ambos).
+Inmutabilidad de importes: una vez creado el movimiento, `amount`, `currency`, `kind`, `direction`, `occurred_on`, `fx_*` y `amount_eur`
+**no se pueden actualizar** (privilegio de columna + trigger). Para corregirlos se **rectifica**: el movimiento original se anula y se crea uno
+nuevo con `replaces_transaction_id`, todo en una transacción mediante la RPC `rectify_transaction` (ver §4.10). Ambos quedan visibles.
 
 ### 4.5 Payouts
 
@@ -386,13 +452,27 @@ create table trades (
   chart_document_id uuid,
   notes             text,
   import_batch_id   uuid,
-  external_trade_id text,                    -- dedupe en importaciones CSV
+  external_trade_id text,                    -- ID de la plataforma, si existe
+  trade_fingerprint text not null,           -- hash(account_id, symbol, direction, opened_at a segundo, closed_at, quantity, entry, exit)
+  voided_at         timestamptz,             -- las operaciones también se anulan, no se borran
+  void_reason       text,
   unique (id, owner_id),
   foreign key (account_id, owner_id)  references accounts(id, owner_id),
   foreign key (strategy_id, owner_id) references strategies(id, owner_id),
   check (closed_at is null or closed_at >= opened_at)
 );
-create unique index on trades (owner_id, account_id, external_trade_id) where external_trade_id is not null;
+create unique index on trades (owner_id, account_id, external_trade_id) where external_trade_id is not null and voided_at is null;
+create unique index on trades (owner_id, trade_fingerprint) where voided_at is null;  -- reimportar el mismo CSV no duplica
+
+create table import_batches (
+  id uuid primary key default gen_random_uuid(), owner_id uuid not null default auth.uid(),
+  source text not null,                      -- 'csv:tradovate', 'csv:rithmic', 'screenshot'...
+  file_document_id uuid,                     -- el CSV original queda en el centro de documentos (dedupe por sha256)
+  rows_total int, rows_imported int, rows_skipped_duplicate int, rows_rejected int,
+  status text not null check (status in ('preview','imported','reverted')),
+  reverted_at timestamptz, revert_reason text,
+  unique (id, owner_id)
+);
 ```
 
 El P&L de trading está en la divisa de la cuenta y **es capital nominal de la empresa, no tu dinero**. Por eso
@@ -454,14 +534,84 @@ create table fx_rates (
 );
 ```
 
-### 4.9 Auditoría
+### 4.9 Auditoría de acciones sensibles
 
 ```sql
-create table audit_log (                    -- acciones sensibles: invitaciones, anulaciones, exportaciones
+create table audit_log (                    -- acciones: invitaciones, exportaciones, inicios de sesión, baja de cuenta
   id bigint generated always as identity primary key,
   actor_id uuid, owner_id uuid, action text not null, entity_type text, entity_id uuid,
   details jsonb, created_at timestamptz not null default now()
-);  -- insert solo vía triggers SECURITY DEFINER; select solo de las propias filas; sin update/delete
+);  -- insert solo vía triggers/funciones SECURITY DEFINER; select solo de las propias filas; sin update/delete
+```
+
+### 4.10 Auditoría financiera de cambios (mejora obligatoria 1)
+
+Toda creación, modificación, anulación y rectificación de **compras y gastos** (`transactions`), **payouts**, **operaciones** (`trades`)
+y **datos económicos de cuentas** (`accounts`: precio, producto, tamaño, fechas) queda registrada campo a campo.
+
+```sql
+create table record_changes (               -- append-only
+  id            bigint generated always as identity primary key,
+  owner_id      uuid not null,               -- dueño del registro afectado (para RLS)
+  table_name    text not null,               -- 'transactions' | 'payouts' | 'trades' | 'accounts'
+  record_id     uuid not null,               -- identificador del registro afectado
+  operation     text not null check (operation in ('insert','update','void','rectify','revert_import','restore')),
+  changed_by    uuid not null,               -- usuario que hizo el cambio (auth.uid())
+  changed_at    timestamptz not null default now(),   -- fecha y hora
+  old_values    jsonb,                       -- solo las columnas que cambian (null en insert)
+  new_values    jsonb,                       -- solo las columnas que cambian
+  reason        text not null check (length(trim(reason)) >= 3),  -- motivo obligatorio (en insert: 'alta', 'alta desde documento X')
+  source        text not null check (source in ('form','document_review','csv_import','rpc','migration')),
+  document_id   uuid,                        -- evidencia, si la hay
+  related_record_id uuid,                    -- p. ej., la fila nueva que rectifica a la anulada
+  client_request_id uuid                     -- idempotencia de la petición que originó el cambio
+);
+create index on record_changes (owner_id, table_name, record_id, changed_at);
+```
+
+**Cómo se garantiza que no hay cambios sin registro ni sin motivo:**
+
+1. El rol `authenticated` **no tiene privilegio `UPDATE` directo** sobre las columnas económicas de estas tablas.
+   Las modificaciones pasan por RPC (`update_transaction_metadata`, `rectify_transaction`, `void_transaction`, `update_payout`, `update_trade`, `void_trade`…),
+   todas `SECURITY INVOKER` (RLS aplica), y todas exigen `p_reason`.
+2. Cada RPC hace `set_config('proppilot.change_reason', p_reason, true)` (local a la transacción) antes de escribir.
+3. Un trigger `AFTER INSERT OR UPDATE` en cada tabla auditada escribe en `record_changes` el diff OLD→NEW, `auth.uid()` y el motivo
+   leído de `proppilot.change_reason`. **Si el motivo está vacío, el trigger lanza una excepción y la transacción entera se deshace.**
+   Así, aunque en el futuro alguien añadiera un `UPDATE` directo por error, fallaría en vez de quedar sin auditar.
+4. Sin política `DELETE` en ninguna tabla financiera, y un trigger `BEFORE DELETE` que lanza una excepción para cualquier rol de la aplicación.
+5. `record_changes`: RLS `select` solo `owner_id = auth.uid()`; insert únicamente desde el trigger (`SECURITY DEFINER` en el esquema `private`);
+   sin update/delete (trigger de rechazo).
+
+**Rectificación y anulación trazables:**
+
+```mermaid
+flowchart LR
+  A["Movimiento A<br/>120,00 $ · compra"] -->|"rectify_transaction(A, {amount: 102.00}, 'descuento no aplicado')"| B["Movimiento B<br/>102,00 $ · replaces_transaction_id = A"]
+  A -.->|"queda voided_at, void_reason, voided_by"| A2["A anulado<br/>visible tachado"]
+```
+
+- **Anular** (`void_transaction`): marca `voided_at`, `voided_by` y `void_reason`, y registra `operation = 'void'`. El registro sigue visible en el historial y deja de contar en los totales.
+- **Rectificar** (`rectify_transaction`): en una sola transacción anula A y crea B con `replaces_transaction_id = A`. Registra `operation = 'rectify'` con `related_record_id = B`.
+- **Metadatos no económicos** (descripción, método de pago, nota): se pueden editar con la RPC y motivo, y el diff queda registrado.
+- **Payouts:** los importes aprobado y solicitado solo se corrigen por RPC con motivo. Si el payout ya está cobrado, la corrección del importe recibido rectifica el movimiento `payout_receipt`.
+- **Operaciones:** la edición por RPC con motivo genera un diff. "Eliminar" una operación es en realidad anularla (`voided_at`). Revertir una importación anula todas las operaciones del lote con `operation = 'revert_import'`.
+- La UI muestra en cada registro una pestaña **Historial de cambios** (quién, cuándo, antes → después, motivo, evidencia).
+
+### 4.11 Exportaciones
+
+```sql
+create table export_jobs (
+  id           uuid primary key default gen_random_uuid(),
+  owner_id     uuid not null default auth.uid(),
+  format       text not null check (format in ('csv','xlsx','zip_documents','full_archive')),
+  scope        text[] not null,               -- {'transactions','accounts','trades','payouts','record_changes'}
+  filters      jsonb,                         -- rango de fechas, empresa…
+  status       text not null check (status in ('queued','running','ready','failed','expired')),
+  storage_path text check (storage_path like owner_id::text || '/exports/%'),
+  expires_at   timestamptz,                   -- el archivo generado se borra a las 24 h
+  created_at   timestamptz not null default now(),
+  unique (id, owner_id)
+);
 ```
 
 ## 5. Divisas: reglas de almacenamiento

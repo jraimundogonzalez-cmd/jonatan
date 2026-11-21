@@ -26,7 +26,7 @@
 | Tablas | **TanStack Table** | Ordenar, filtrar, paginar en servidor |
 | Formularios/validación | **React Hook Form + Zod** | Mismos esquemas Zod validan en cliente, en servidor y la salida de la IA |
 | Dinero en TS | **decimal.js** (o enteros en minor units) | Nunca `number` para sumar importes |
-| OCR/IA | **Adaptador `DocumentExtractor`**; proveedor inicial: modelo multimodal vía API (p. ej. Claude) con salida estructurada | Ver §5. Intercambiable sin tocar el resto |
+| OCR/IA | **Adaptador `DocumentExtractor`**. Proveedor: **sin elegir (D3 pendiente)**; comparativa en el doc 11 §3 | Ver §5. Intercambiable sin tocar el resto |
 | Tipos de cambio | **Adaptador `FxProvider`**; inicial: tipos de referencia del BCE | Gratuito, oficial, diario |
 | Hosting web | **Vercel** (región UE, `fra1`) | Integración nativa con Next.js, HTTPS, previews por rama |
 | Hosting datos | **Supabase Cloud, región UE (Frankfurt)** | Datos en la UE (RGPD) |
@@ -148,11 +148,15 @@ Reglas del extractor:
 
 ## 6. Despliegue y entornos
 
+**Repositorio:** privado e independiente, `proppilot` (D1 aprobada). No comparte código, CI ni secretos con FitPro ni con TradePilot R.
+La documentación de esta carpeta se moverá allí cuando se cree el repositorio.
+
+
 | Entorno | Web | Base de datos | Uso |
 |---------|-----|---------------|-----|
 | Local/CI | `next dev` en el runner | Supabase local (Docker en el runner de CI) | Pruebas automáticas con datos sintéticos |
 | Preview | Vercel preview por PR | Proyecto Supabase **staging** separado | Revisión visual, datos ficticios |
-| Producción | Vercel producción (dominio propio o `*.vercel.app`) | Proyecto Supabase **producción** | Uso real |
+| Producción | Vercel producción en **dominio propio** (D9 aprobada), p. ej. `app.<dominio>`; correo desde el mismo dominio con SPF/DKIM/DMARC | Proyecto Supabase **producción** (Pro) | Uso real |
 
 - Las migraciones se aplican a producción solo desde CI tras pasar todas las pruebas, y nunca son destructivas sin aprobación explícita.
 - Secretos en variables de entorno de Vercel/GitHub; `.env*` en `.gitignore`; escaneo de secretos en CI.
@@ -165,7 +169,8 @@ Reglas del extractor:
 | Requisito | Objetivo |
 |-----------|----------|
 | Disponibilidad | La de Vercel + Supabase (sin infraestructura propia) |
-| Copias de seguridad | Diarias (plan Supabase Pro) + exportación manual por usuario (CSV/JSON) |
+| Copias de seguridad | Diarias de Supabase Pro (D2 aprobada) + copia lógica propia cifrada de BD **y Storage** + ensayo de restauración trimestral (doc 11 §4) |
+| Coste | ≈ 27–40 $/mes según escenario (doc 11 §2) |
 | Rendimiento | Dashboard < 1,5 s con 10 000 operaciones por usuario (vistas agregadas + índices por `owner_id`) |
 | Idioma / formato | Español; números `es-ES` (1.234,56 €); zona horaria `Europe/Madrid` para fechas contables |
 | Accesibilidad | WCAG 2.1 AA en contraste (crítico en tema oscuro) |

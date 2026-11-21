@@ -61,6 +61,72 @@ $$, 'Todas las tablas públicas tienen RLS forzado');
 -- Falla si existe una vista materializada en 'public'
 ```
 
+## 3 bis. Suite de ataque con identificadores conocidos (mejora obligatoria 4)
+
+Supuesto pesimista: **Bob conoce todos los UUID de Alice** (cuentas, movimientos, payouts, operaciones, documentos, rutas de Storage,
+exportaciones). La suite crea los datos de Alice, se los pasa a Bob y verifica que cada intento falla. Se ejecuta como pgTAP (BD)
+y como Vitest con `supabase-js` autenticado como Bob (API/Storage real del stack local).
+
+| # | Ataque de Bob con el ID de Alice | Resultado exigido |
+|---|----------------------------------|-------------------|
+| A1 | `select * from <tabla> where id = '<id-alice>'` (para **cada** tabla privada, generado automáticamente desde el catálogo) | 0 filas |
+| A2 | `update <tabla> set … where id = '<id-alice>'` | 0 filas afectadas; los datos de Alice no cambian (se verifica después como Alice) |
+| A3 | `delete from <tabla> where id = '<id-alice>'` | 0 filas / excepción; la fila sigue existiendo |
+| A4 | `insert` con `owner_id = '<uid-alice>'` | Error RLS (`42501`) |
+| A5 | Crear hijo (operación, payout, movimiento, documento vinculado, opción) que referencia el padre de Alice | Error FK (`23503`) |
+| A6 | Cada RPC llamada con IDs de Alice (`rectify_transaction`, `void_transaction`, `change_account_status`, `confirm_document`, `register_payout_received`, `revert_import`, `update_trade`…) | Error "no encontrado"; ninguna fila de Alice cambia; nada nuevo en `record_changes` de Alice |
+| A7 | `stats_*` y vistas: comparar el resultado con y sin datos de Alice en la BD | Idéntico (los datos de Alice no influyen en los números de Bob) |
+| A8 | `storage.download('documents', '<uid-alice>/<doc>.jpg')` | Denegado |
+| A9 | `createSignedUrl` sobre una ruta de Alice | Denegado |
+| A10 | `upload` a `<uid-alice>/…` y sobrescritura de un objeto de Alice | Denegado |
+| A11 | Descarga de `<uid-alice>/exports/<job>.xlsx` y `select` en `export_jobs` de Alice | Denegado / 0 filas |
+| A12 | Exportar con filtros manipulados (`owner_id`, `firm_id` de una empresa privada de Alice) | El archivo solo contiene filas de Bob (se parsea el CSV/XLSX generado y se comprueba cada fila) |
+| A13 | Leer `record_changes`, `audit_log`, `document_extractions` de Alice por `record_id` | 0 filas |
+| A14 | Bob es `platform_owner` y repite A1–A13 | Mismos resultados: el rol no da acceso a datos privados |
+| A15 | Peticiones a Route Handlers con IDs de Alice en la URL o el cuerpo (`/api/documents/<id-alice>/extract`, `/confirm`, `/export`) | 404 genérico; el proveedor de IA **no** recibe ninguna llamada (verificado con el mock) |
+| A16 | Llamadas con `anon` (sin sesión) y con JWT caducado o manipulado | Denegado |
+
+La lista de tablas para A1–A5 se **genera desde `information_schema`**. Así, una tabla nueva sin cubrir hace fallar la prueba ("tabla privada sin caso de ataque").
+
+## 3 ter. Auditoría financiera (mejora obligatoria 1)
+
+| Caso | Esperado |
+|------|----------|
+| Alta de movimiento, payout u operación | Fila en `record_changes` (`insert`) con usuario, fecha y motivo |
+| Rectificar un importe con `rectify_transaction` | Original anulado + nuevo con `replaces_transaction_id`; `record_changes` con valor anterior, valor nuevo, motivo y usuario; totales correctos |
+| Anular sin motivo | Excepción; nada cambia |
+| `update transactions set amount = …` directo | Denegado (privilegio de columna) |
+| UPDATE que llega a la tabla sin `proppilot.change_reason` (simulando un fallo de código) | El trigger lanza excepción y se hace rollback |
+| `delete` en `transactions`, `payouts`, `trades` y `record_changes` | Denegado para `authenticated` |
+| `update`/`delete` en `record_changes` | Denegado |
+| Revertir una importación | Todas las operaciones del lote anuladas + un `record_changes` por fila |
+| Diff | `old_values`/`new_values` contienen solo las columnas cambiadas y sus valores exactos |
+
+## 3 quater. Duplicados (mejora obligatoria 3)
+
+| Caso | Esperado |
+|------|----------|
+| Subir el mismo archivo dos veces | Bloqueado por sha256 |
+| Misma captura recomprimida | Aviso de casi-duplicado |
+| Dos facturas distintas con el mismo nº de factura y empresa | Segunda bloqueada |
+| Misma compra sin nº de factura (mismo importe y fecha ±2 días) | Aviso; solo se guarda con motivo, que queda auditado |
+| `confirm_document` dos veces (secuencial y concurrente) | Un solo movimiento |
+| Dos documentos distintos del mismo payout | Un solo `payout_receipt` |
+| Reimportar el mismo CSV | 0 operaciones nuevas, todas reportadas como duplicadas |
+| CSV con solapamiento parcial | Solo se importan las nuevas |
+| `MockExtractor` devuelve los mismos datos para dos imágenes distintas del mismo justificante | El segundo movimiento choca con `dedupe_key` |
+| Reintento de red con el mismo `client_request_id` | Idempotente |
+
+## 3 quinquies. Exportación (mejora obligatoria 2)
+
+| Caso | Esperado |
+|------|----------|
+| Exportar CSV y XLSX de cada conjunto | Columnas y tipos correctos; los totales del archivo coinciden con `stats_finance` |
+| Celda con `=HYPERLINK(...)` procedente del OCR | Escapada en CSV y XLSX |
+| ZIP de documentos | Solo objetos `uid/`; `manifest.csv` con un sha256 por archivo que coincide con el contenido |
+| Archivo exportado pasadas 24 h | Borrado y URL inválida |
+| Exportación con dos usuarios con datos | Cero filas ajenas (A12) |
+
 ## 4. Storage
 
 | Caso | Esperado |
@@ -141,3 +207,15 @@ Cada fórmula se verifica en **SQL y en la implementación de referencia TS**; a
 5. Playwright E2E.
 6. Security Advisors sin errores, gitleaks sin hallazgos, `npm audit` sin vulnerabilidades altas.
 7. Revisión de migraciones: cualquier `drop`, `truncate`, `delete` o `alter ... type` requiere etiqueta de aprobación explícita.
+8. Suite de ataque A1–A16 y prueba de cobertura "toda tabla privada tiene casos de ataque".
+9. Ensayo de restauración (trimestral y antes de producción): ver doc 11 §4.3.
+
+## 11. Reglas de empresas
+
+| Caso | Esperado |
+|------|----------|
+| Regla `candidate` o `verified` sin URL o fecha de consulta | Rechazada por CHECK |
+| Regla `verified` sin captura ni verificador | Rechazada |
+| Cuenta LucidFlex 25K Rithmic | Solo resuelve reglas de ese producto; ninguna de LucidPro ni de otro tamaño |
+| Cuenta comprada antes y después de una fecha de corte | Cada una resuelve su versión |
+| Cálculos y alertas con reglas no `verified` | No se usan |

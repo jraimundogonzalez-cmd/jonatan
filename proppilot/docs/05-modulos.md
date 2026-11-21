@@ -30,9 +30,12 @@ con pestañas *Productos*, *Reglas*, *Enlaces*, *Historial de versiones*.
 - Editar reglas crea una **nueva versión**; las cuentas existentes siguen apuntando a la versión con la que se compraron.
 - Aviso automático si la última revisión de reglas tiene más de 90 días.
 
-**Carga inicial:** NYS Markets y Lucid Trading se crearán como empresas con **todas las reglas en estado `pending`**,
-sin valores, hasta que tú (o yo, con tu permiso, consultando sus webs oficiales) las verifiquemos con fuente y fecha.
-No se asumirá que ambas comparten condiciones.
+**Estructura:** Empresa → **Línea de negocio** (futuros / CFDs…) → **Programa** (LucidFlex, The Thunder…) → **Producto** (tamaño × variante de plataforma) → **Opciones de compra** (con o sin límite diario, complemento de consistencia…) → **Versiones de reglas**.
+Las reglas se asignan siempre a un producto concreto, y opcionalmente a una opción o a una ventana de fechas de compra. Las de un programa o tamaño **nunca se aplican a otro**.
+
+**Carga inicial:** NYS Markets y Lucid Trading se cargarán con los programas y valores investigados en el **doc 10**. Ninguno está verificado:
+entran como `candidate` (con URL oficial, fecha de consulta y extracto) o como `pending`. Una regla solo pasa a `verified`
+con lectura directa de la fuente oficial y captura guardada. Solo las reglas `verified` se usan en cálculos y alertas.
 
 ---
 
@@ -70,8 +73,8 @@ Se registra automáticamente usuario y momento del registro.
 En el caso "cuenta nueva", el asistente crea la cuenta funded con `source_account_id` apuntando a la evaluación,
 y la evaluación pasa a `closed` con motivo "Convertida a funded".
 
-**Payout pendiente / recibido:** se muestran como **insignias derivadas** de la tabla de payouts (una cuenta puede
-tener varios payouts a la vez). Ver decisión D10.
+**Payout pendiente / recibido:** **D10 aprobada**: los payouts son entidades independientes de los estados de la cuenta.
+En la cuenta se muestran solo como **insignias derivadas** ("1 payout pendiente", "3 cobrados"), porque una cuenta puede tener varios a la vez.
 
 **Quemar una cuenta no borra nada:** la cuenta, sus intentos, movimientos, operaciones y documentos permanecen.
 
@@ -147,7 +150,29 @@ stateDiagram-v2
 
 **Historial de operaciones por captura:** se extraen filas candidatas a `trades`; se revisan en tabla editable antes de importar; dedupe por `external_trade_id` o por (cuenta, símbolo, apertura, cierre, cantidad, precio).
 
-**Proveedor:** ver decisión D3. Detrás de `DocumentExtractor`, con `MockExtractor` para pruebas.
+**Proveedor:** **D3 pendiente**; la comparativa está en el doc 11 §3. Va detrás de `DocumentExtractor`, con `MockExtractor` para pruebas.
+
+---
+
+## Prevención de duplicados (transversal, mejora obligatoria 3)
+
+| Caso | Detección | Respuesta |
+|------|-----------|-----------|
+| **Captura ya procesada** (mismo archivo) | `unique(owner_id, sha256)` en `documents`, calculado en el cliente antes de subir y recomprobado en servidor | **Bloqueo**: "Ya subiste este archivo el [fecha]", con enlace al documento |
+| **Captura casi idéntica** (recortada, recomprimida o reenviada por WhatsApp) | Hash perceptual (distancia de Hamming ≤ umbral) frente a los documentos del usuario | Aviso; para continuar hay que marcar "Es un documento distinto" con motivo |
+| **Factura repetida** | `dedupe_key` = empresa + tipo de referencia + nº de factura normalizado → índice único | **Bloqueo** con enlace al movimiento existente |
+| **Compra duplicada sin nº de factura** | `fingerprint` (empresa, tipo, importe, divisa) con fecha ±2 días | Aviso; para confirmar hace falta `duplicate_override_reason`, que queda auditado |
+| **Payout contabilizado dos veces** | Índice único: un `payout_receipt` no anulado por payout · `dedupe_key` con el ID de transacción de la plataforma de pago · fingerprint importe+fecha+empresa | Bloqueo / aviso |
+| **Operación importada de nuevo** | `trade_fingerprint` único + `external_trade_id` único por cuenta + sha256 del CSV | Las filas repetidas se **omiten** y se informa ("38 nuevas, 12 ya existían") |
+| **Misma confirmación enviada dos veces** (doble clic, reintento de red) | `client_request_id` (UUID por envío de formulario) único en `record_changes` + bloqueo de fila del documento (`select … for update`) + estado `confirmed` | La segunda petición devuelve el resultado de la primera, sin crear nada |
+
+**Garantía específica para la IA.** Leer dos veces el mismo justificante **nunca** genera un segundo movimiento:
+
+1. Si es el mismo archivo, se bloquea antes de llegar a la IA (sha256).
+2. Si es el mismo documento con otro archivo: la IA extrae el nº de factura, pedido o referencia, y la confirmación choca con el índice único de `dedupe_key`.
+3. Si es el mismo documento confirmado dos veces: `confirm_document` comprueba `status = 'needs_review'` con bloqueo de fila, y el índice único `(document_id, document_item_key)` impide un segundo movimiento por el mismo elemento.
+4. Si es una nueva extracción del mismo documento (por ejemplo, al cambiar de proveedor): crea otra fila en `document_extractions`, que es solo una propuesta, y **no toca** los movimientos ya confirmados.
+5. La IA **nunca escribe** en tablas financieras: solo propone. Toda escritura pasa por la confirmación del usuario.
 
 ---
 
@@ -179,10 +204,31 @@ Separación visual obligatoria:
 
 ---
 
-## M10 — Ajustes y datos
+## M10 — Ajustes, exportación y datos
 
-Perfil, divisa base (EUR por defecto), zona horaria, MFA, sesiones activas, exportación completa (CSV + JSON + ZIP de documentos),
-eliminación de cuenta (proceso explícito, ver D11). Solo `platform_owner`: invitaciones y catálogo global de empresas.
+Perfil, divisa base (EUR por defecto), zona horaria, MFA, sesiones activas, texto de privacidad (D4) y eliminación de cuenta (proceso explícito, D11 pendiente).
+Solo `platform_owner`: invitaciones y catálogo global de empresas.
+
+### Exportación de datos (mejora obligatoria 2)
+
+Cada usuario exporta **exclusivamente sus propios datos**:
+
+| Conjunto | CSV | Excel (.xlsx) | Contenido |
+|----------|-----|---------------|-----------|
+| Movimientos | ✔ | ✔ | Todos los campos, incluido el importe original, la divisa, el tipo de cambio, la fecha y fuente del cambio, el importe en EUR, el estado (anulado/rectificado) y la referencia de rectificación |
+| Cuentas | ✔ | ✔ | Cuenta, empresa, programa, producto, opciones, estado, fechas, historial de estados (hoja aparte en Excel) |
+| Operaciones | ✔ | ✔ | Todas, con R, estrategia y lote de importación; las anuladas van marcadas |
+| Payouts | ✔ | ✔ | Las 4 cifras, estados, fechas, comisiones, EUR final, historial de estados |
+| Historial de cambios | ✔ | ✔ (hoja) | `record_changes` del usuario |
+| Documentos | — | — | ZIP con los originales organizados por carpeta y tipo, más un `manifest.csv` (id, tipo, fecha, sha256, entidades vinculadas) |
+| Archivo completo | — | — | ZIP con todo lo anterior + JSON legible por máquina |
+
+- Filtros opcionales: rango de fechas y empresa. Las anuladas se incluyen por defecto, con una columna de estado.
+- Excel: una hoja por conjunto, cabeceras en español, números como números (no texto), formato `es-ES`, importes con 2 decimales y fechas reales de Excel.
+- Generación en servidor **con el JWT del usuario** (RLS aplica): una exportación nunca puede contener filas de otro `owner_id`, aunque falle el filtro de la aplicación.
+- Las exportaciones grandes se generan como trabajo (`export_jobs`), se guardan en `uid/exports/`, se descargan por URL firmada de 60 s y **se borran a las 24 h**.
+- Protección contra inyección de fórmulas en CSV/Excel: toda celda de texto que empiece por `=`, `+`, `-` o `@` se escapa. Importa porque los datos pueden venir del OCR de una captura.
+- Cada exportación queda en `audit_log` (quién, cuándo, qué conjuntos).
 
 ---
 

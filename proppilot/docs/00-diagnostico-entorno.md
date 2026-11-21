@@ -23,9 +23,11 @@ Mezclar PropPilot en él supondría:
 **Acción tomada:** la documentación de Fase 1 se ha escrito en una carpeta aislada `proppilot/docs/`
 en la rama de trabajo. No se ha modificado ningún archivo de FitPro. Esta rama no dispara el workflow de despliegue.
 
-**Recomendación (decisión D1):** crear un repositorio nuevo y privado `proppilot` para la Fase 3
-y mover allí esta documentación. Desde esta sesión no puedo crear repositorios; lo creas tú en GitHub
-(un clic) y lo añadimos a la sesión.
+**D1 aprobada:** PropPilot tendrá un repositorio nuevo, privado e independiente llamado `proppilot`, sin mezclarse con FitPro ni con TradePilot R.
+Todavía no se ha creado: es infraestructura y se hará cuando autorices la Fase 0. Esta documentación se moverá allí.
+
+**Acceso a red de la sesión (2026-11-21):** el entorno de trabajo no puede abrir las webs de NYS Markets, Lucid Trading, Supabase ni Vercel
+(las bloquea su política de red). Solo funciona el buscador web. Esto condiciona la verificación de reglas (doc 10 §1) y de precios (doc 11).
 
 ## 3. Observación sobre el proyecto existente (no se ha modificado)
 
